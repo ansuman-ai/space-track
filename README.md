@@ -42,6 +42,16 @@ Following inspection of Copernicus EMS EMSR927 validation results (AOI01 Syabru 
 
 ---
 
+## Layer 2.4 Final Detector: Variant C Selection & Validation Caveat
+
+Following a 5-way ablation study (Variants A–E), Variant C was selected as the final Layer 2 pipeline configuration:
+- **Components**: Original D8 HAND (unmodified, non-pit-filled) + Built-up Change Vector Magnitude (CVM over B2, B3, B4, B8, B11, B12 on OSM building footprints) + Intact-Vegetation Filter (`post_ndvi >= 0.40` and `|d_ndvi| <= 0.20` in hydraulic fill).
+- **Ablation Findings**: Native DEM pit-filling (Variant D/E) artificially split reaches and suppressed confluence flood stages while admitting false forest patches; Variant C eliminates false valley-wall fills while preserving the complete confluence flood stage (Strict IoU: 0.570, F1: 0.726, Precision: 0.958; 20m IoU: 0.712, F1: 0.863, Precision: 0.989).
+- **Scientific Integrity Caveat**: *Variant C was selected by an ablation that used EMSR927 metrics, so it must be confirmed on other events.*
+- **Independent Verification Artifacts**: Verification script `validation/verify_metrics.py` and visual comparison `validation/verify_A_vs_C.png` are maintained in the repository.
+
+---
+
 ## Required Data Attribution
 
 - *"Contains modified Copernicus Sentinel data 2026."*
