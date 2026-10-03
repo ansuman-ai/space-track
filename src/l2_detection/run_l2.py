@@ -178,6 +178,7 @@ def run_layer2(
     inferred_hand_percentile: float = 90.0,
     inferred_min_observed_pixels: int = 20,
     building_buffer_m: float = 10.0,
+    building_damage_proximity_m: float = 50.0,
     intact_min_post_ndvi: float = 0.40,
     intact_max_abs_d_ndvi: float = 0.20
 ) -> Dict[str, Any]:
@@ -334,9 +335,8 @@ def run_layer2(
     s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
     ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_event'] > t_channel)
     s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
-    b_ev_cand = s2_event_valid & (builtup_mask == 1) & hand_corridor & (cvm_ev > t_builtup)
 
-    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand | b_ev_cand).astype(np.uint8)
+    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
 
     aff_ev_clean, n_blobs_ev = filter_stream_connected_blobs(
         candidate_mask=ev_cand_total,
@@ -345,6 +345,18 @@ def run_layer2(
         proximity_m=stream_proximity_m,
         min_pixels=min_area_pixels
     )
+
+    # Built-up CVA: applied to OSM building footprints within D metres of observed class-2 damage, REGARDLESS of HAND
+    # Iteratively propagates through adjacent damaged building footprints
+    c2_ev_total = (aff_ev_clean == 1)
+    while True:
+        dist_to_c2 = distance_transform_edt(~c2_ev_total) * dx
+        new_b_cand = s2_event_valid & (builtup_mask == 1) & (dist_to_c2 <= building_damage_proximity_m) & (cvm_ev > t_builtup) & (~c2_ev_total)
+        if np.sum(new_b_cand) == 0:
+            break
+        c2_ev_total |= new_b_cand
+
+    aff_ev_clean = c2_ev_total.astype(np.uint8)
 
     # In-channel changed pixels become Class 2 (sub-label "channel")
     # Built-up affected pixels (sub-label "built-up")
@@ -394,9 +406,8 @@ def run_layer2(
     s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
     ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_ctrl'] > t_channel)
     s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
-    b_ctrl_cand = s2_ctrl_valid & (builtup_mask == 1) & hand_corridor & (cvm_ctrl > t_builtup)
 
-    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand | b_ctrl_cand).astype(np.uint8)
+    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
 
     aff_ctrl_clean, n_blobs_ctrl = filter_stream_connected_blobs(
         candidate_mask=ctrl_cand_total,
@@ -405,6 +416,16 @@ def run_layer2(
         proximity_m=stream_proximity_m,
         min_pixels=min_area_pixels
     )
+
+    c2_ctrl_total = (aff_ctrl_clean == 1)
+    while True:
+        dist_to_c2_ctrl = distance_transform_edt(~c2_ctrl_total) * dx
+        new_b_ctrl = s2_ctrl_valid & (builtup_mask == 1) & (dist_to_c2_ctrl <= building_damage_proximity_m) & (cvm_ctrl > t_builtup) & (~c2_ctrl_total)
+        if np.sum(new_b_ctrl) == 0:
+            break
+        c2_ctrl_total |= new_b_ctrl
+
+    aff_ctrl_clean = c2_ctrl_total.astype(np.uint8)
 
     ctrl_s2_count = int(np.sum((aff_ctrl_clean == 1) & s2_ctrl_valid))
     ctrl_s1_count = int(np.sum((aff_ctrl_clean == 1) & (~s2_ctrl_valid)))
@@ -602,6 +623,7 @@ def main():
     inferred_hand_percentile = 90.0
     inferred_min_observed_pixels = 20
     building_buffer_m = 10.0
+    building_damage_proximity_m = 50.0
     intact_min_post_ndvi = 0.40
     intact_max_abs_d_ndvi = 0.20
 
@@ -619,6 +641,7 @@ def main():
         inferred_hand_percentile = float(det_cfg.get("inferred_hand_percentile", inferred_hand_percentile))
         inferred_min_observed_pixels = int(det_cfg.get("inferred_min_observed_pixels", inferred_min_observed_pixels))
         building_buffer_m = float(det_cfg.get("building_buffer_m", building_buffer_m))
+        building_damage_proximity_m = float(det_cfg.get("building_damage_proximity_m", building_damage_proximity_m))
         intact_min_post_ndvi = float(det_cfg.get("intact_min_post_ndvi", intact_min_post_ndvi))
         intact_max_abs_d_ndvi = float(det_cfg.get("intact_max_abs_d_ndvi", intact_max_abs_d_ndvi))
 
@@ -641,6 +664,7 @@ def main():
         inferred_hand_percentile=inferred_hand_percentile,
         inferred_min_observed_pixels=inferred_min_observed_pixels,
         building_buffer_m=building_buffer_m,
+        building_damage_proximity_m=building_damage_proximity_m,
         intact_min_post_ndvi=intact_min_post_ndvi,
         intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
