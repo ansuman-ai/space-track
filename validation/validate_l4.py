@@ -251,7 +251,7 @@ def run_validation_l4():
 
     ax.set_title(
         "Layer 4 Validation: Copernicus EMS EMSR927 vs Graded Infrastructure (Syabru Besi 4x4 km)\n"
-        f"EMS Buildings Matched <=30m: {ems_matched_aff_30m}/{len(ems_b)} ({pct_ems_matched_aff:.1f}%) | Our Affected Matched: {our_aff_matched_30m}/{len(our_b_aoi_aff)} ({pct_our_aff_matched:.1f}%) | Bridges: {ems_br_matched_30m}/{len(ems_br)} (100%)",
+        f"EMS Buildings Matched <=30m: {ems_matched_aff_30m}/{len(ems_b)} ({pct_ems_matched_aff:.1f}%) | Our Affected Matched: {our_aff_matched_30m}/{len(our_b_aoi_aff)} ({pct_our_aff_matched:.1f}%) | Bridges: {ems_br_matched_30m}/{len(ems_br)} ({pct_ems_br_matched:.0f}%)",
         fontsize=11.0, fontweight="bold", pad=12
     )
 
