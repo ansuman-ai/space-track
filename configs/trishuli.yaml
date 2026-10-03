@@ -36,3 +36,10 @@ detection:
 validation:
   copernicus_ems_activation: "EMSR927"
   aoi_id: "AOI01"
+
+damage_grading:
+  building_overlap_pct: 50.0  # Footprint overlap with Class 2 for Destroyed (%)
+  distance_damaged_m: 10.0    # Centroid/distance to Class 2 for Damaged (D1 m)
+  distance_possibly_damaged_m: 30.0  # Centroid/distance to Class 2 for Possibly damaged (D2 m, D2 > D1)
+  road_segment_length_m: 100.0  # Maximum length of road segments (m)
+
