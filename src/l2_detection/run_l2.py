@@ -29,6 +29,7 @@ from .thresholds import (
 )
 from .s2_composite import prepare_s2_event_and_control_composites
 from .water import detect_permanent_water
+from .hydraulic_fill import compute_inferred_flood_corridor
 from .vectorizer import vectorize_hazard_classes
 from .quicklook import render_layer2_quicklook
 
@@ -168,7 +169,10 @@ def run_layer2(
     stream_proximity_m: float = 100.0,
     min_area_pixels: int = 20,
     cloud_dilation_buffer_m: float = 60.0,
-    simplify_tol_m: float = 8.0
+    simplify_tol_m: float = 8.0,
+    reach_length_m: float = 250.0,
+    inferred_hand_percentile: float = 90.0,
+    inferred_min_observed_pixels: int = 20
 ) -> Dict[str, Any]:
 
     in_path = Path(interim_dir)
@@ -326,6 +330,22 @@ def run_layer2(
     ev_s1_km2 = round(ev_s1_count * pixel_area_km2, 4)
     ev_aff_km2 = round(ev_aff_count * pixel_area_km2, 4)
 
+    # 5b. Class 3: Inferred Flooded Corridor (HAND-based hydraulic fill along stream reaches)
+    logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (EVENT)...")
+    inferred_ev_clean, inferred_ev_stats = compute_inferred_flood_corridor(
+        hand=hand,
+        stream_mask=stream_mask,
+        observed_class2_mask=(aff_ev_clean == 1),
+        pixel_size_m=dx,
+        reach_length_m=reach_length_m,
+        hand_percentile=inferred_hand_percentile,
+        min_observed_pixels=inferred_min_observed_pixels,
+        touch_distance_m=stream_proximity_m,
+        max_hand_corridor_m=max_hand_corridor_m
+    )
+    ev_inf_km2 = inferred_ev_stats["inferred_km2"]
+    ev_inf_count = inferred_ev_stats["inferred_pixels"]
+
     # 6. Evaluate CONTROL pair with the exact same detector
     logger.info("Evaluating CONTROL pair with the exact same multi-sensor detector...")
     s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
@@ -350,13 +370,29 @@ def run_layer2(
     ctrl_s1_km2 = round(ctrl_s1_count * pixel_area_km2, 4)
     ctrl_aff_km2 = round(ctrl_aff_count * pixel_area_km2, 4)
 
-    logger.info(f"EVENT Affected:   {ev_aff_km2} km² (S2: {ev_s2_km2} km², S1: {ev_s1_km2} km²)")
-    logger.info(f"CONTROL Affected: {ctrl_aff_km2} km² (S2: {ctrl_s2_km2} km², S1: {ctrl_s1_km2} km²)")
+    logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (CONTROL)...")
+    inferred_ctrl_clean, inferred_ctrl_stats = compute_inferred_flood_corridor(
+        hand=hand,
+        stream_mask=stream_mask,
+        observed_class2_mask=(aff_ctrl_clean == 1),
+        pixel_size_m=dx,
+        reach_length_m=reach_length_m,
+        hand_percentile=inferred_hand_percentile,
+        min_observed_pixels=inferred_min_observed_pixels,
+        touch_distance_m=stream_proximity_m,
+        max_hand_corridor_m=max_hand_corridor_m
+    )
+    ctrl_inf_km2 = inferred_ctrl_stats["inferred_km2"]
+    ctrl_inf_count = inferred_ctrl_stats["inferred_pixels"]
 
-    # 7. Synthesize Hazard Rasters (0=Background, 1=Permanent Water, 2=Flood/Debris Affected)
+    logger.info(f"EVENT Affected:   {ev_aff_km2} km² (S2: {ev_s2_km2} km², S1: {ev_s1_km2} km²), Inferred: {ev_inf_km2} km²")
+    logger.info(f"CONTROL Affected: {ctrl_aff_km2} km² (S2: {ctrl_s2_km2} km², S1: {ctrl_s1_km2} km²), Inferred: {ctrl_inf_km2} km²")
+
+    # 7. Synthesize Hazard Rasters (0=Background, 1=Permanent Water, 2=Flood/Debris Affected, 3=Inferred Flooded)
     hazard_raster = np.zeros((h, w), dtype=np.uint8)
     hazard_raster[perm_water_unchanged == 1] = 1
-    hazard_raster[aff_ev_clean == 1] = 2
+    hazard_raster[inferred_ev_clean == 1] = 3
+    hazard_raster[aff_ev_clean == 1] = 2  # class 2 preserved unconditionally
 
     # Save EVENT GeoTIFFs
     out_tif = str(out_path / "hazard_classes.tif")
@@ -381,7 +417,8 @@ def run_layer2(
     out_quicklook = str(out_path / "quicklook_layer2.png")
     stats_dict = {
         "perm_water_km2": perm_km2,
-        "affected_km2": ev_aff_km2
+        "affected_km2": ev_aff_km2,
+        "inferred_km2": ev_inf_km2
     }
     render_layer2_quicklook(
         post_vv=post_vv,
@@ -395,6 +432,7 @@ def run_layer2(
     # Control Outputs
     ctrl_hazard_raster = np.zeros((h, w), dtype=np.uint8)
     ctrl_hazard_raster[(perm_water_raw == 1) & (aff_ctrl_clean != 1)] = 1
+    ctrl_hazard_raster[inferred_ctrl_clean == 1] = 3
     ctrl_hazard_raster[aff_ctrl_clean == 1] = 2
 
     ctrl_out_tif = str(ctrl_out_path / "hazard_classes.tif")
@@ -414,7 +452,7 @@ def run_layer2(
         post_vv=post_vv,
         hazard_raster=ctrl_hazard_raster,
         output_png_path=ctrl_quicklook,
-        stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2},
+        stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2, "inferred_km2": ctrl_inf_km2},
         post_vis=post_comp['vis'],
         zoom_center=(992, 431)
     )
@@ -435,7 +473,10 @@ def run_layer2(
             "max_hand_corridor_m": float(max_hand_corridor_m),
             "stream_proximity_m": float(stream_proximity_m),
             "min_area_pixels": int(min_area_pixels),
-            "cloud_dilation_buffer_m": float(cloud_dilation_buffer_m)
+            "cloud_dilation_buffer_m": float(cloud_dilation_buffer_m),
+            "reach_length_m": float(reach_length_m),
+            "inferred_hand_percentile": float(inferred_hand_percentile),
+            "inferred_min_observed_pixels": int(inferred_min_observed_pixels)
         },
         "areas_km2": {
             "class_1_permanent_water": perm_km2,
@@ -443,18 +484,22 @@ def run_layer2(
             "event_channel_affected": round(int(np.sum(ch_ev_affected)) * pixel_area_km2, 4),
             "event_s2_affected": ev_s2_km2,
             "event_s1_affected": ev_s1_km2,
+            "event_inferred_affected": ev_inf_km2,
             "control_total_affected": ctrl_aff_km2,
             "control_s2_affected": ctrl_s2_km2,
-            "control_s1_affected": ctrl_s1_km2
+            "control_s1_affected": ctrl_s1_km2,
+            "control_inferred_affected": ctrl_inf_km2
         },
         "pixel_counts": {
             "permanent_water": perm_count,
             "event_affected": ev_aff_count,
             "event_s2": ev_s2_count,
             "event_s1": ev_s1_count,
+            "event_inferred": ev_inf_count,
             "control_affected": ctrl_aff_count,
             "control_s2": ctrl_s2_count,
-            "control_s1": ctrl_s1_count
+            "control_s1": ctrl_s1_count,
+            "control_inferred": ctrl_inf_count
         },
         "outputs": {
             "hazard_raster": out_tif,
@@ -497,6 +542,9 @@ def main():
     min_area_pixels = 20
     cloud_dilation_buffer_m = 60.0
     simplify_tol_m = 8.0
+    reach_length_m = 250.0
+    inferred_hand_percentile = 90.0
+    inferred_min_observed_pixels = 20
 
     if args.config and os.path.exists(args.config):
         with open(args.config, "r") as f:
@@ -508,6 +556,9 @@ def main():
         min_area_pixels = int(det_cfg.get("min_area_pixels", min_area_pixels))
         cloud_dilation_buffer_m = float(det_cfg.get("cloud_dilation_buffer_m", cloud_dilation_buffer_m))
         simplify_tol_m = float(det_cfg.get("simplify_tolerance_m", simplify_tol_m))
+        reach_length_m = float(det_cfg.get("reach_length_m", reach_length_m))
+        inferred_hand_percentile = float(det_cfg.get("inferred_hand_percentile", inferred_hand_percentile))
+        inferred_min_observed_pixels = int(det_cfg.get("inferred_min_observed_pixels", inferred_min_observed_pixels))
 
     results = run_layer2(
         interim_dir=args.interim_dir,
@@ -522,7 +573,10 @@ def main():
         stream_proximity_m=stream_proximity_m,
         min_area_pixels=min_area_pixels,
         cloud_dilation_buffer_m=cloud_dilation_buffer_m,
-        simplify_tol_m=simplify_tol_m
+        simplify_tol_m=simplify_tol_m,
+        reach_length_m=reach_length_m,
+        inferred_hand_percentile=inferred_hand_percentile,
+        inferred_min_observed_pixels=inferred_min_observed_pixels
     )
 
     print("\n================== FINAL LAYER 2 DETECTION SUMMARY ==================")
@@ -532,6 +586,7 @@ def main():
     print(f"Thresholds: ΔNDVI < {results['thresholds_used']['s2_d_ndvi']:.4f}, ΔBSI > +{results['thresholds_used']['s2_d_bsi']:.4f}, S1 z < {results['thresholds_used']['s1_z_vv_asc']:.4f}, S1 O19 < {results['thresholds_used']['s1_lr_o19_db']} dB")
     print(f"Permanent Water: {results['areas_km2']['class_1_permanent_water']} km²")
     print(f"EVENT Affected:   {results['areas_km2']['event_total_affected']} km² (S2: {results['areas_km2']['event_s2_affected']} km², S1: {results['areas_km2']['event_s1_affected']} km²)")
+    print(f"Inferred Flooded: EVENT {results['areas_km2']['event_inferred_affected']} km² vs CONTROL {results['areas_km2']['control_inferred_affected']} km²")
     print(f"CONTROL Affected: {results['areas_km2']['control_total_affected']} km² (S2: {results['areas_km2']['control_s2_affected']} km², S1: {results['areas_km2']['control_s1_affected']} km²)")
     print(f"Quicklook: {results['outputs']['quicklook']}")
 

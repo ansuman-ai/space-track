@@ -32,14 +32,15 @@ def render_layer2_quicklook(
 
     fig, axes = plt.subplots(1, 2, figsize=(22, 11), constrained_layout=True)
 
-    # Colormap: 0=transparent, 1=blue (Permanent Water), 2=amber/orange (Flood/Debris Affected)
+    # Colormap: 0=transparent, 1=blue (Permanent Water), 2=red/amber (Observed Affected), 3=orange (Inferred Flooded)
     colors = [
         (0.0, 0.0, 0.0, 0.0),       # 0: Background
         (0.12, 0.45, 0.95, 0.85),   # 1: Permanent Water
-        (0.98, 0.35, 0.08, 0.90),   # 2: Flood / Debris Affected
+        (0.98, 0.15, 0.08, 0.90),   # 2: Observed Flood / Debris Affected
+        (1.0, 0.55, 0.0, 0.85),     # 3: Inferred Flooded
     ]
     cmap = ListedColormap(colors)
-    norm = BoundaryNorm([-0.5, 0.5, 1.5, 2.5], 3)
+    norm = BoundaryNorm([-0.5, 0.5, 1.5, 2.5, 3.5], 4)
 
     h, w = hazard_raster.shape
 
@@ -66,19 +67,22 @@ def render_layer2_quicklook(
     axes[0].set_title(
         f"Full AOI Hazard Classification ({w}x{h})\n"
         f"Permanent Water: {stats.get('perm_water_km2', 0):.3f} km² | "
-        f"Flood/Debris Affected: {stats.get('affected_km2', 0):.3f} km²",
+        f"Observed: {stats.get('affected_km2', 0):.3f} km² | "
+        f"Inferred: {stats.get('inferred_km2', 0):.3f} km²",
         fontsize=13, fontweight="bold"
     )
     axes[0].axis("off")
 
     legend_patches = [
         mpatches.Patch(color=(0.12, 0.45, 0.95, 0.85), label=f"Class 1: Permanent Water ({stats.get('perm_water_km2', 0):.3f} km²)"),
-        mpatches.Patch(color=(0.98, 0.35, 0.08, 0.90), label=f"Class 2: Flood / Debris Affected ({stats.get('affected_km2', 0):.3f} km²)"),
+        mpatches.Patch(color=(0.98, 0.15, 0.08, 0.90), label=f"Class 2: Observed Affected ({stats.get('affected_km2', 0):.3f} km²)"),
+        mpatches.Patch(color=(1.0, 0.55, 0.0, 0.85), label=f"Class 3: Inferred Flooded ({stats.get('inferred_km2', 0):.3f} km²)"),
     ]
     axes[0].legend(handles=legend_patches, loc="lower left", framealpha=0.9, fontsize=11)
 
-    # --- Panel 2: Syabru Besi 4x4 km Zoom with S2 Post True Colour + Affected Outline ---
+    # --- Panel 2: Syabru Besi 4x4 km Zoom with S2 Post True Colour + Outlines ---
     sub_aff = (hazard_raster[r1:r2, c1:c2] == 2).astype(np.uint8)
+    sub_inf = (hazard_raster[r1:r2, c1:c2] == 3).astype(np.uint8)
     sub_wat = (hazard_raster[r1:r2, c1:c2] == 1).astype(np.uint8)
 
     if post_vis is not None:
@@ -90,11 +94,18 @@ def render_layer2_quicklook(
     else:
         axes[1].imshow(post_vv[r1:r2, c1:c2], cmap="gray", vmin=-25.0, vmax=5.0)
 
-    # Contours & Translucent Fill
+    # Inferred Flooded (Class 3) Orange contour + fill
+    if np.sum(sub_inf) > 0:
+        axes[1].contour(sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--')
+        inf_rgba = np.zeros((*sub_inf.shape, 4), dtype=np.float32)
+        inf_rgba[sub_inf == 1] = [1.0, 0.55, 0.0, 0.35]
+        axes[1].imshow(inf_rgba)
+
+    # Observed Affected (Class 2) Red contour + fill
     if np.sum(sub_aff) > 0:
         axes[1].contour(sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2)
         aff_rgba = np.zeros((*sub_aff.shape, 4), dtype=np.float32)
-        aff_rgba[sub_aff == 1] = [1.0, 0.2, 0.0, 0.40]
+        aff_rgba[sub_aff == 1] = [1.0, 0.15, 0.0, 0.40]
         axes[1].imshow(aff_rgba)
 
     if np.sum(sub_wat) > 0:
@@ -113,18 +124,20 @@ def render_layer2_quicklook(
     )
 
     zoom_aff_km2 = np.sum(sub_aff) * 0.0001
+    zoom_inf_km2 = np.sum(sub_inf) * 0.0001
     zoom_wat_km2 = np.sum(sub_wat) * 0.0001
 
     axes[1].set_title(
         f"Syabru Besi 4x4 km Zoom (Rows {r1}:{r2}, Cols {c1}:{c2})\n"
-        f"Sentinel-2 Post True Colour + Affected Class Outline (red)",
+        f"Sentinel-2 Post True Colour + Observed (red) & Inferred (orange) Outlines",
         fontsize=13, fontweight="bold"
     )
     axes[1].axis("off")
 
     zoom_legend = [
-        Line2D([0], [0], color='#ff2200', lw=2.5, label=f"Class 2: Affected Outline ({zoom_aff_km2:.3f} km²)"),
-        Line2D([0], [0], color='#00c0ff', lw=2.0, label=f"Class 1: Permanent Water ({zoom_wat_km2:.3f} km²)"),
+        Line2D([0], [0], color='#ff2200', lw=2.5, label=f"Class 2: Observed ({zoom_aff_km2:.3f} km²)"),
+        Line2D([0], [0], color='#ff8800', lw=2.0, linestyle='--', label=f"Class 3: Inferred ({zoom_inf_km2:.3f} km²)"),
+        Line2D([0], [0], color='#00c0ff', lw=1.8, label=f"Class 1: Water ({zoom_wat_km2:.3f} km²)"),
         Line2D([0], [0], marker='*', color='w', markeredgecolor='black', markersize=12, label="Town Center", linestyle="None")
     ]
     axes[1].legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=11)
@@ -146,6 +159,9 @@ def render_layer2_quicklook(
         else:
             ax_z.imshow(post_vv[r1:r2, c1:c2], cmap="gray", vmin=-25.0, vmax=5.0)
 
+        if np.sum(sub_inf) > 0:
+            ax_z.contour(sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--')
+            ax_z.imshow(inf_rgba)
         if np.sum(sub_aff) > 0:
             ax_z.contour(sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2)
             ax_z.imshow(aff_rgba)

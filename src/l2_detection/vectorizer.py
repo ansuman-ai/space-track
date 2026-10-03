@@ -14,7 +14,8 @@ from shapely.ops import transform
 
 CLASS_NAMES = {
     1: "Permanent Water",
-    2: "Flood / Debris Affected"
+    2: "Flood / Debris Affected",
+    3: "Inferred Flooded"
 }
 
 
