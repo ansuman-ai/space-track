@@ -33,6 +33,15 @@ A dynamic, reproducible geospatial pipeline to detect flood extent, identify deb
 
 ---
 
+## Layer 2.1 In-Channel Change Detection Update & Scientific Caveat
+
+Following inspection of Copernicus EMS EMSR927 validation results (AOI01 Syabru Besi), an in-channel change detector was added to Layer 2 to capture debris-filled central river channels:
+- **Detector**: Change vector magnitude over Sentinel-2 bands (B2, B3, B4, B8, B11, B12 post vs. pre) plus $\Delta\text{NDWI}$ and $\Delta\text{BSI}$, applied inside the pre-event river bed and HAND corridor.
+- **Thresholding**: Thresholds are computed adaptively from the clear CONTROL Sentinel-2 pair (99th percentile) with zero ground-truth leakage or manual tuning on EMS.
+- **Scientific Integrity Caveat**: *This detector update was made after seeing validation data on the Trishuli/Syabru Besi event. While thresholds were strictly derived from the control scene rather than tuned to EMS, this methodological addition must be independently confirmed and evaluated on other flood/GLOF events.*
+
+---
+
 ## Required Data Attribution
 
 - *"Contains modified Copernicus Sentinel data 2026."*

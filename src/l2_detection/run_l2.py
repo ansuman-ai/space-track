@@ -24,6 +24,7 @@ import yaml
 from .thresholds import (
     compute_s2_control_thresholds,
     compute_s1_zscore_control_threshold,
+    compute_in_channel_control_threshold,
     smooth_log_ratio_mean
 )
 from .s2_composite import prepare_s2_event_and_control_composites
@@ -238,11 +239,33 @@ def run_layer2(
     o19_lr_event = s1_data['o19_lr_event']
     post_vv = s1_data['post_vv']
 
-    # 4. Compute thresholds on CONTROL pair inside active HAND corridor
+    # 4. Class 1 Baseline: Pre-event Permanent Water / River-bed (Pre NDWI + OSM)
+    logger.info("Detecting baseline pre-event permanent water / river-bed (Pre NDWI + OSM)...")
+    perm_water_raw, _ = detect_permanent_water(
+        pre_vv=post_vv,
+        hand=hand,
+        shadow_mask=shadow_mask,
+        osm_waterways_path=osm_waterways_path,
+        transform_matrix=transform_mat,
+        crs=crs,
+        hand_corridor_m=15.0,
+        pre_ndwi=pre_comp['ndwi']
+    )
+
+    # Compute adaptive thresholds from CONTROL pair inside active HAND corridor
     logger.info("Computing adaptive thresholds from CONTROL pair inside HAND corridor...")
     t_d_ndvi, t_d_bsi = compute_s2_control_thresholds(
         d_ndvi_ctrl=d_ndvi_ctrl,
         d_bsi_ctrl=d_bsi_ctrl,
+        ctrl_valid=s2_ctrl_valid,
+        hand=hand,
+        max_hand_m=max_hand_corridor_m,
+        false_alarm_rate_pct=false_alarm_rate_pct
+    )
+
+    t_channel = compute_in_channel_control_threshold(
+        in_channel_change_ctrl=s2_data['in_channel_change_ctrl'],
+        perm_water_mask=perm_water_raw,
         ctrl_valid=s2_ctrl_valid,
         hand=hand,
         max_hand_m=max_hand_corridor_m,
@@ -260,32 +283,19 @@ def run_layer2(
     t_lr_o19 = -3.5  # dB threshold for descending S1
 
     print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR) ---")
-    print(f"  Sentinel-2 ΔNDVI threshold: {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")
-    print(f"  Sentinel-2 ΔBSI threshold:  +{t_d_bsi:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
+    print(f"  Sentinel-2 ΔNDVI threshold:          {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")
+    print(f"  Sentinel-2 ΔBSI threshold:           +{t_d_bsi:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
+    print(f"  In-channel S2 change vector threshold: {t_channel:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
     print(f"  Sentinel-1 Ascending z-score threshold: {t_z_asc:.4f}")
     print(f"  Sentinel-1 Descending O19 log-ratio threshold: {t_lr_o19:.4f} dB")
 
-    # 5. Class 1: Permanent Water (Pre NDWI + OSM)
-    logger.info("Detecting Class 1: Permanent Water (Pre-event NDWI + OSM)...")
-    perm_water, _ = detect_permanent_water(
-        pre_vv=post_vv,
-        hand=hand,
-        shadow_mask=shadow_mask,
-        osm_waterways_path=osm_waterways_path,
-        transform_matrix=transform_mat,
-        crs=crs,
-        hand_corridor_m=15.0,
-        pre_ndwi=pre_comp['ndwi']
-    )
-    perm_count = int(np.sum(perm_water == 1))
-    perm_km2 = round(perm_count * pixel_area_km2, 4)
-
-    # 6. Class 2: Flood / Debris Affected (EVENT)
-    logger.info("Detecting Class 2: Flood / Debris Affected on EVENT...")
+    # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour)
+    logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel)...")
     s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
+    ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_event'] > t_channel)
     s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
 
-    ev_cand_total = (s2_ev_cand | s1_ev_cand).astype(np.uint8)
+    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
 
     aff_ev_clean, n_blobs_ev = filter_stream_connected_blobs(
         candidate_mask=ev_cand_total,
@@ -294,8 +304,14 @@ def run_layer2(
         proximity_m=stream_proximity_m,
         min_pixels=min_area_pixels
     )
-    # Strictly mutually exclusive with permanent water
-    aff_ev_clean[perm_water == 1] = 0
+
+    # In-channel changed pixels become Class 2 (sub-label "channel")
+    # Unchanged baseline water remains Class 1
+    ch_ev_affected = (perm_water_raw == 1) & (aff_ev_clean == 1)
+    perm_water_unchanged = (perm_water_raw == 1) & (aff_ev_clean != 1)
+
+    perm_count = int(np.sum(perm_water_unchanged == 1))
+    perm_km2 = round(perm_count * pixel_area_km2, 4)
 
     # Source attribution: S2 vs S1
     source_mask_ev = np.zeros((h, w), dtype=np.uint8)
@@ -310,12 +326,13 @@ def run_layer2(
     ev_s1_km2 = round(ev_s1_count * pixel_area_km2, 4)
     ev_aff_km2 = round(ev_aff_count * pixel_area_km2, 4)
 
-    # 7. Evaluate CONTROL pair with the exact same detector
+    # 6. Evaluate CONTROL pair with the exact same detector
     logger.info("Evaluating CONTROL pair with the exact same multi-sensor detector...")
     s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
+    ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_ctrl'] > t_channel)
     s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
 
-    ctrl_cand_total = (s2_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
+    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
 
     aff_ctrl_clean, n_blobs_ctrl = filter_stream_connected_blobs(
         candidate_mask=ctrl_cand_total,
@@ -324,7 +341,6 @@ def run_layer2(
         proximity_m=stream_proximity_m,
         min_pixels=min_area_pixels
     )
-    aff_ctrl_clean[perm_water == 1] = 0
 
     ctrl_s2_count = int(np.sum((aff_ctrl_clean == 1) & s2_ctrl_valid))
     ctrl_s1_count = int(np.sum((aff_ctrl_clean == 1) & (~s2_ctrl_valid)))
@@ -337,9 +353,9 @@ def run_layer2(
     logger.info(f"EVENT Affected:   {ev_aff_km2} km² (S2: {ev_s2_km2} km², S1: {ev_s1_km2} km²)")
     logger.info(f"CONTROL Affected: {ctrl_aff_km2} km² (S2: {ctrl_s2_km2} km², S1: {ctrl_s1_km2} km²)")
 
-    # 8. Synthesize Hazard Rasters (0=Background, 1=Permanent Water, 2=Flood/Debris Affected)
+    # 7. Synthesize Hazard Rasters (0=Background, 1=Permanent Water, 2=Flood/Debris Affected)
     hazard_raster = np.zeros((h, w), dtype=np.uint8)
-    hazard_raster[perm_water == 1] = 1
+    hazard_raster[perm_water_unchanged == 1] = 1
     hazard_raster[aff_ev_clean == 1] = 2
 
     # Save EVENT GeoTIFFs
@@ -357,7 +373,8 @@ def run_layer2(
         crs=crs,
         out_geojson_path=out_geojson,
         simplify_tolerance_m=simplify_tol_m,
-        min_area_m2=pixel_area_m2 * min_area_pixels
+        min_area_m2=pixel_area_m2 * min_area_pixels,
+        channel_affected_mask=ch_ev_affected
     )
 
     # Render EVENT Quicklook (Full AOI + Syabru Besi 4x4 km zoom with S2 post true colour + affected outline)
@@ -377,7 +394,7 @@ def run_layer2(
 
     # Control Outputs
     ctrl_hazard_raster = np.zeros((h, w), dtype=np.uint8)
-    ctrl_hazard_raster[perm_water == 1] = 1
+    ctrl_hazard_raster[(perm_water_raw == 1) & (aff_ctrl_clean != 1)] = 1
     ctrl_hazard_raster[aff_ctrl_clean == 1] = 2
 
     ctrl_out_tif = str(ctrl_out_path / "hazard_classes.tif")
@@ -389,7 +406,8 @@ def run_layer2(
         crs=crs,
         out_geojson_path=ctrl_out_geojson,
         simplify_tolerance_m=simplify_tol_m,
-        min_area_m2=pixel_area_m2 * min_area_pixels
+        min_area_m2=pixel_area_m2 * min_area_pixels,
+        channel_affected_mask=(aff_ctrl_clean == 1) & (perm_water_raw == 1)
     )
     ctrl_quicklook = str(ctrl_out_path / "quicklook_layer2.png")
     render_layer2_quicklook(
@@ -410,6 +428,7 @@ def run_layer2(
         "thresholds_used": {
             "s2_d_ndvi": round(float(t_d_ndvi), 4),
             "s2_d_bsi": round(float(t_d_bsi), 4),
+            "s2_in_channel_cvm": round(float(t_channel), 4),
             "s1_z_vv_asc": round(float(t_z_asc), 4),
             "s1_lr_o19_db": round(float(t_lr_o19), 2),
             "false_alarm_rate_pct": float(false_alarm_rate_pct),
@@ -421,6 +440,7 @@ def run_layer2(
         "areas_km2": {
             "class_1_permanent_water": perm_km2,
             "event_total_affected": ev_aff_km2,
+            "event_channel_affected": round(int(np.sum(ch_ev_affected)) * pixel_area_km2, 4),
             "event_s2_affected": ev_s2_km2,
             "event_s1_affected": ev_s1_km2,
             "control_total_affected": ctrl_aff_km2,

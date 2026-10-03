@@ -1,0 +1,12 @@
+{
+"type": "FeatureCollection",
+"name": "EMSR927_AOI01_GRA_PRODUCT_transportationP_v1",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "obj_type": "214-Bridges, Elevated Highways, Tunnels and Subways", "name": "Unknown", "info": "2141-Bridges and elevated highways", "simplified": "Bridges and elevated highways", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Point", "coordinates": [ 85.34372165, 28.16345536 ] } },
+{ "type": "Feature", "properties": { "obj_type": "214-Bridges, Elevated Highways, Tunnels and Subways", "name": "Unknown", "info": "2141-Bridges and elevated highways", "simplified": "Bridges and elevated highways", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Point", "coordinates": [ 85.33998298, 28.16423501 ] } },
+{ "type": "Feature", "properties": { "obj_type": "214-Bridges, Elevated Highways, Tunnels and Subways", "name": "Unknown", "info": "2141-Bridges and elevated highways", "simplified": "Bridges and elevated highways", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Point", "coordinates": [ 85.34262658, 28.16591849 ] } },
+{ "type": "Feature", "properties": { "obj_type": "214-Bridges, Elevated Highways, Tunnels and Subways", "name": "Unknown", "info": "2141-Bridges and elevated highways", "simplified": "Bridges and elevated highways", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Point", "coordinates": [ 85.34225393, 28.18155093 ] } },
+{ "type": "Feature", "properties": { "obj_type": "214-Bridges, Elevated Highways, Tunnels and Subways", "name": "Unknown", "info": "2141-Bridges and elevated highways", "simplified": "Bridges and elevated highways", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Point", "coordinates": [ 85.34336011, 28.1827942 ] } }
+]
+}

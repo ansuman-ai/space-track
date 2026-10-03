@@ -70,6 +70,27 @@ def compute_s2_control_thresholds(
     return t_d_ndvi, t_d_bsi
 
 
+def compute_in_channel_control_threshold(
+    in_channel_change_ctrl: np.ndarray,
+    perm_water_mask: np.ndarray,
+    ctrl_valid: np.ndarray,
+    hand: np.ndarray,
+    max_hand_m: float = 40.0,
+    false_alarm_rate_pct: float = 1.0
+) -> float:
+    """
+    Computes in-channel change threshold from CONTROL S2 pair
+    inside the pre-event water area and HAND corridor.
+    """
+    valid = (perm_water_mask == 1) & (hand <= max_hand_m) & (hand >= 0) & ctrl_valid & np.isfinite(in_channel_change_ctrl)
+    vals = in_channel_change_ctrl[valid]
+    if vals.size < 50:
+        return 0.15
+
+    t_val = float(np.percentile(vals, 100.0 - false_alarm_rate_pct))
+    return t_val
+
+
 def compute_s1_zscore_control_threshold(
     z_vv_asc_ctrl: np.ndarray,
     hand: np.ndarray,

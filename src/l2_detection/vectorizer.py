@@ -24,11 +24,13 @@ def vectorize_hazard_classes(
     crs: Any,
     out_geojson_path: str,
     simplify_tolerance_m: float = 8.0,
-    min_area_m2: float = 500.0
+    min_area_m2: float = 500.0,
+    channel_affected_mask: Any = None
 ) -> Dict[str, Any]:
     """
     Vectorize 2D hazard classification raster into simplified GeoJSON polygons.
     Simplifies geometry via Douglas-Peucker to eliminate raster staircasing.
+    Assigns sub_label ('channel' or 'valley') to class 2 polygons.
     """
     os.makedirs(os.path.dirname(os.path.abspath(out_geojson_path)), exist_ok=True)
 
@@ -61,6 +63,20 @@ def vectorize_hazard_classes(
 
             class_areas_m2[class_id] += area_m2
 
+            # Determine sub-label (channel vs valley)
+            sub_label = "valley" if class_id == 2 else ("river" if class_id == 1 else "other")
+            if class_id == 2 and channel_affected_mask is not None:
+                minx, miny, maxx, maxy = poly.bounds
+                inv_trans = ~transform_matrix
+                c1, r2 = inv_trans * (minx, miny)
+                c2, r1 = inv_trans * (maxx, maxy)
+                r_start = max(0, int(np.floor(min(r1, r2))))
+                r_end = min(hazard_raster.shape[0], int(np.ceil(max(r1, r2))))
+                c_start = max(0, int(np.floor(min(c1, c2))))
+                c_end = min(hazard_raster.shape[1], int(np.ceil(max(c1, c2))))
+                if np.any(channel_affected_mask[r_start:r_end, c_start:c_end] == 1):
+                    sub_label = "channel"
+
             # Smooth polygon edges to eliminate staircase artifacts
             smoothed_poly = poly.simplify(tolerance=simplify_tolerance_m, preserve_topology=True)
             if not smoothed_poly.is_valid:
@@ -78,6 +94,7 @@ def vectorize_hazard_classes(
                 "properties": {
                     "class": int(class_id),
                     "class_name": CLASS_NAMES.get(class_id, "Unknown"),
+                    "sub_label": sub_label,
                     "area_m2": round(area_m2, 1),
                     "area_km2": round(area_m2 / 1e6, 5)
                 }

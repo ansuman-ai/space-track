@@ -70,13 +70,14 @@ def process_s2_features(
     b04 = bands['B04'].astype(np.float32)
     b08 = bands['B08'].astype(np.float32)
     b11 = bands['B11'].astype(np.float32)
+    b12 = bands.get('B12', bands.get('b12', b11)).astype(np.float32)
     scl = bands['SCL']
     vis = bands['visual']
 
     # SCL invalid classes:
     # 0: NoData, 1: Saturated/Defective, 3: Cloud Shadows, 8: Cloud Medium Prob,
     # 9: Cloud High Prob, 10: Thin Cirrus, 11: Snow
-    raw_cloud = np.isin(scl, [0, 1, 3, 8, 9, 10, 11]) | (b04 <= 0) | (b08 <= 0) | (b02 <= 0) | (b11 <= 0)
+    raw_cloud = np.isin(scl, [0, 1, 3, 8, 9, 10, 11]) | (b04 <= 0) | (b08 <= 0) | (b02 <= 0) | (b11 <= 0) | (b12 <= 0)
 
     # Dilate cloud mask by buffer (removes false edge artifacts)
     radius_pixels = max(1.0, dilation_buffer_m / pixel_size_m)
@@ -93,6 +94,12 @@ def process_s2_features(
         'ndvi': ndvi,
         'bsi': bsi,
         'ndwi': ndwi,
+        'b02': b02,
+        'b03': b03,
+        'b04': b04,
+        'b08': b08,
+        'b11': b11,
+        'b12': b12,
         'vis': vis
     }
 
@@ -112,6 +119,12 @@ def composite_scenes(
     composite_ndvi = np.zeros((h, w), dtype=np.float32)
     composite_bsi = np.zeros((h, w), dtype=np.float32)
     composite_ndwi = np.zeros((h, w), dtype=np.float32)
+    composite_b02 = np.zeros((h, w), dtype=np.float32)
+    composite_b03 = np.zeros((h, w), dtype=np.float32)
+    composite_b04 = np.zeros((h, w), dtype=np.float32)
+    composite_b08 = np.zeros((h, w), dtype=np.float32)
+    composite_b11 = np.zeros((h, w), dtype=np.float32)
+    composite_b12 = np.zeros((h, w), dtype=np.float32)
     composite_vis = np.zeros((3, h, w), dtype=np.uint8)
 
     filled = np.zeros((h, w), dtype=bool)
@@ -123,6 +136,12 @@ def composite_scenes(
             composite_ndvi[to_fill] = sc['ndvi'][to_fill]
             composite_bsi[to_fill] = sc['bsi'][to_fill]
             composite_ndwi[to_fill] = sc['ndwi'][to_fill]
+            composite_b02[to_fill] = sc['b02'][to_fill]
+            composite_b03[to_fill] = sc['b03'][to_fill]
+            composite_b04[to_fill] = sc['b04'][to_fill]
+            composite_b08[to_fill] = sc['b08'][to_fill]
+            composite_b11[to_fill] = sc['b11'][to_fill]
+            composite_b12[to_fill] = sc['b12'][to_fill]
             composite_vis[:, to_fill] = sc['vis'][:, to_fill]
             filled[to_fill] = True
             composite_clear[to_fill] = True
@@ -133,6 +152,12 @@ def composite_scenes(
         composite_ndvi[unfilled] = scenes[0]['ndvi'][unfilled]
         composite_bsi[unfilled] = scenes[0]['bsi'][unfilled]
         composite_ndwi[unfilled] = scenes[0]['ndwi'][unfilled]
+        composite_b02[unfilled] = scenes[0]['b02'][unfilled]
+        composite_b03[unfilled] = scenes[0]['b03'][unfilled]
+        composite_b04[unfilled] = scenes[0]['b04'][unfilled]
+        composite_b08[unfilled] = scenes[0]['b08'][unfilled]
+        composite_b11[unfilled] = scenes[0]['b11'][unfilled]
+        composite_b12[unfilled] = scenes[0]['b12'][unfilled]
         composite_vis[:, unfilled] = scenes[0]['vis'][:, unfilled]
 
     return {
@@ -140,8 +165,35 @@ def composite_scenes(
         'ndvi': composite_ndvi,
         'bsi': composite_bsi,
         'ndwi': composite_ndwi,
+        'b02': composite_b02,
+        'b03': composite_b03,
+        'b04': composite_b04,
+        'b08': composite_b08,
+        'b11': composite_b11,
+        'b12': composite_b12,
         'vis': composite_vis
     }
+
+
+def compute_in_channel_change_vector(
+    pre_composite: Dict[str, np.ndarray],
+    post_composite: Dict[str, np.ndarray]
+) -> np.ndarray:
+    """
+    Computes change vector magnitude over S2 bands (B2, B3, B4, B8, B11, B12, post vs pre)
+    plus Delta NDWI and Delta BSI.
+    """
+    band_keys = ['b02', 'b03', 'b04', 'b08', 'b11', 'b12']
+    sq_bands = np.zeros_like(pre_composite['ndvi'], dtype=np.float32)
+    for b in band_keys:
+        diff = (post_composite[b] - pre_composite[b]) / 10000.0
+        sq_bands += diff ** 2
+
+    d_ndwi = post_composite['ndwi'] - pre_composite['ndwi']
+    d_bsi = post_composite['bsi'] - pre_composite['bsi']
+
+    cvm = np.sqrt(sq_bands + (d_ndwi ** 2) + (d_bsi ** 2)).astype(np.float32)
+    return cvm
 
 
 def prepare_s2_event_and_control_composites(
@@ -200,6 +252,10 @@ def prepare_s2_event_and_control_composites(
         ]
     }
 
+    # In-channel change vector magnitude (B2, B3, B4, B8, B11, B12, post vs pre + dNDWI + dBSI)
+    in_channel_change_event = compute_in_channel_change_vector(pre_composite, post_composite)
+    in_channel_change_ctrl = compute_in_channel_change_vector(pre_composite, ctrl_post_composite)
+
     return {
         "scenes_used": scenes_used,
         "pre_composite": pre_composite,
@@ -210,6 +266,8 @@ def prepare_s2_event_and_control_composites(
         "s2_event_valid": s2_event_valid,
         "d_ndvi_ctrl": d_ndvi_ctrl,
         "d_bsi_ctrl": d_bsi_ctrl,
-        "s2_ctrl_valid": s2_ctrl_valid
+        "s2_ctrl_valid": s2_ctrl_valid,
+        "in_channel_change_event": in_channel_change_event,
+        "in_channel_change_ctrl": in_channel_change_ctrl
     }
 

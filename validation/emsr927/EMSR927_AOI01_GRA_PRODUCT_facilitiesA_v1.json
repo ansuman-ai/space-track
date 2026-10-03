@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "EMSR927_AOI01_GRA_PRODUCT_facilitiesA_v1",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "obj_type": "23-Complex Constructions on Industrial Sites", "name": "Langtang Khola Hydroelectric Power House 20MW", "info": "23020-Power plant constructions  Hydro-electric", "simplified": "Power plant", "damage_gra": "Destroyed", "det_method": "Photo-interpretation", "notation": "Not Applicable", "or_src_id": 1, "dmg_src_id": 2, "cd_value": "Not Applicable" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 85.34061313, 28.16402382 ], [ 85.3411349, 28.16403595 ], [ 85.34137141, 28.16400104 ], [ 85.3415046, 28.16391677 ], [ 85.3415192, 28.1638484 ], [ 85.34119941, 28.16379734 ], [ 85.34104293, 28.163653 ], [ 85.34102259, 28.16363935 ], [ 85.34085976, 28.16360804 ], [ 85.34081993, 28.16352516 ], [ 85.34072052, 28.16351136 ], [ 85.34069085, 28.16355857 ], [ 85.34057677, 28.16357948 ], [ 85.34002243, 28.16353311 ], [ 85.33987488, 28.1634762 ], [ 85.33968097, 28.16337292 ], [ 85.33949451, 28.16354556 ], [ 85.3395274, 28.16362442 ], [ 85.33967096, 28.16373593 ], [ 85.33982431, 28.16382374 ], [ 85.34017705, 28.16394992 ], [ 85.34061313, 28.16402382 ] ] ] } }
+]
+}
