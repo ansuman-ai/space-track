@@ -1,0 +1,35 @@
+# Case study configuration for Trishuli flood (Testing & validation only)
+# IMPORTANT: Core pipeline code must NEVER import or hardcode this file.
+
+case_study:
+  name: "Trishuli - Syapru Besi Flood"
+  country: "Nepal"
+  event_date: "2026-08-26"
+  bbox: [85.30, 28.10, 85.42, 28.25]  # [min_lon, min_lat, max_lon, max_lat]
+  utm_crs: "EPSG:32645"
+
+orbit:
+  max_lookback_days: 36
+  preferred_cycle_days: 12
+
+preprocessing:
+  dem_buffer_km: 10.0
+  filter_window_size: 5
+  drainage_accumulation_threshold: 5000
+  look_angle_deg: 38.0
+  orbit_heading_deg: 350.0
+
+detection:
+  log_ratio_smooth_window: 5
+  false_alarm_rate_pct: 1.0  # 1st percentile of control pair in HAND corridor
+  max_hand_corridor_m: 40.0
+  stream_proximity_m: 100.0
+  min_area_pixels: 20
+  simplify_tolerance_m: 8.0
+  s2_pre_days: 15
+  s2_post_days: 15
+  cloud_dilation_buffer_m: 60.0
+
+validation:
+  copernicus_ems_activation: "EMSR927"
+  aoi_id: "AOI01"

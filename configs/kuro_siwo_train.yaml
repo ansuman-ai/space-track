@@ -1,0 +1,49 @@
+# Kuro Siwo AI Flood Segmentation Model Configuration
+# Note: Paths and event lists can be overridden via CLI args or environment variables.
+
+dataset:
+  root_dir: "data/kuro_siwo"
+  patch_size: 256
+  in_channels: 6  # [pre_vv, pre_vh, post_vv, post_vh, log_ratio, dem_slope]
+  num_classes: 1  # Binary flood segmentation (sigmoid threshold)
+  normalize_sar_db: true
+  
+# Split STRICTLY by event ID (zero random spatial patch leaking)
+splits:
+  # Example representative event IDs (confirm exact names via inspect_kurosiwo.py)
+  train_events:
+    - "event_01_rhine"
+    - "event_02_mississippi"
+    - "event_03_mekong"
+    - "event_04_nile"
+    - "event_05_brahmaputra"
+    - "event_06_po_valley"
+    - "event_07_danube"
+    - "event_08_murray_darling"
+  val_events:
+    - "event_09_ebro"
+    - "event_10_elbe"
+  test_events:
+    - "event_11_pakistan_indus"    # Unseen mountainous / riverine basin
+    - "event_12_chamoli_tributary" # Unseen steep Himalayan valley
+
+model:
+  architecture: "unet"
+  encoder: "resnet18"  # Options: resnet18, resnet34
+  pretrained: false     # First layer modified for 6 channels
+
+training:
+  epochs: 30
+  batch_size: 16
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  loss: "bce_dice"     # Combined BCE + Dice loss
+  num_workers: 2
+  device: "cuda"       # "cuda" on Colab/Kaggle, "cpu" fallback
+  output_dir: "models/flood_unet"
+  save_best: true
+
+evaluation:
+  checkpoint: "models/flood_unet/best_model.pt"
+  threshold: 0.5
+  compare_with_otsu: true
