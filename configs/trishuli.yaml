@@ -32,6 +32,9 @@ detection:
   reach_length_m: 250.0
   inferred_hand_percentile: 90.0
   inferred_min_observed_pixels: 20
+  building_buffer_m: 10.0
+  intact_min_post_ndvi: 0.40
+  intact_max_abs_d_ndvi: 0.20
 
 validation:
   copernicus_ems_activation: "EMSR927"

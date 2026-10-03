@@ -91,6 +91,27 @@ def compute_in_channel_control_threshold(
     return t_val
 
 
+def compute_builtup_control_threshold(
+    cvm_ctrl: np.ndarray,
+    builtup_mask: np.ndarray,
+    ctrl_valid: np.ndarray,
+    hand: np.ndarray,
+    max_hand_m: float = 40.0,
+    false_alarm_rate_pct: float = 1.0
+) -> float:
+    """
+    Computes adaptive threshold for S2 change vector magnitude over built-up footprint pixels
+    inside the active HAND corridor from the control pair.
+    """
+    valid = (builtup_mask == 1) & (hand <= max_hand_m) & (hand >= 0) & ctrl_valid & np.isfinite(cvm_ctrl)
+    vals = cvm_ctrl[valid]
+    if vals.size < 20:
+        return 0.25
+
+    t_val = float(np.percentile(vals, 100.0 - false_alarm_rate_pct))
+    return t_val
+
+
 def compute_s1_zscore_control_threshold(
     z_vv_asc_ctrl: np.ndarray,
     hand: np.ndarray,

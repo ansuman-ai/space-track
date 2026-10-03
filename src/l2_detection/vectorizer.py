@@ -26,12 +26,13 @@ def vectorize_hazard_classes(
     out_geojson_path: str,
     simplify_tolerance_m: float = 8.0,
     min_area_m2: float = 500.0,
-    channel_affected_mask: Any = None
+    channel_affected_mask: Any = None,
+    builtup_affected_mask: Any = None
 ) -> Dict[str, Any]:
     """
     Vectorize 2D hazard classification raster into simplified GeoJSON polygons.
     Simplifies geometry via Douglas-Peucker to eliminate raster staircasing.
-    Assigns sub_label ('channel' or 'valley') to class 2 polygons.
+    Assigns sub_label ('channel', 'built-up', or 'valley') to class 2 polygons.
     """
     os.makedirs(os.path.dirname(os.path.abspath(out_geojson_path)), exist_ok=True)
 
@@ -64,9 +65,9 @@ def vectorize_hazard_classes(
 
             class_areas_m2[class_id] += area_m2
 
-            # Determine sub-label (channel vs valley)
-            sub_label = "valley" if class_id == 2 else ("river" if class_id == 1 else "other")
-            if class_id == 2 and channel_affected_mask is not None:
+            # Determine sub-label (channel vs built-up vs valley)
+            sub_label = "valley" if class_id == 2 else ("river" if class_id == 1 else "inferred")
+            if class_id == 2:
                 minx, miny, maxx, maxy = poly.bounds
                 inv_trans = ~transform_matrix
                 c1, r2 = inv_trans * (minx, miny)
@@ -75,7 +76,9 @@ def vectorize_hazard_classes(
                 r_end = min(hazard_raster.shape[0], int(np.ceil(max(r1, r2))))
                 c_start = max(0, int(np.floor(min(c1, c2))))
                 c_end = min(hazard_raster.shape[1], int(np.ceil(max(c1, c2))))
-                if np.any(channel_affected_mask[r_start:r_end, c_start:c_end] == 1):
+                if builtup_affected_mask is not None and np.any(builtup_affected_mask[r_start:r_end, c_start:c_end] == 1):
+                    sub_label = "built-up"
+                elif channel_affected_mask is not None and np.any(channel_affected_mask[r_start:r_end, c_start:c_end] == 1):
                     sub_label = "channel"
 
             # Smooth polygon edges to eliminate staircase artifacts

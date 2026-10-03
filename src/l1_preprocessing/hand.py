@@ -9,6 +9,44 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 
+import heapq
+
+
+def fill_pits_and_resolve_flats(dem: np.ndarray, eps: float = 1e-4) -> np.ndarray:
+    """
+    Priority-Flood depression filling with infinitesimal gradient for flat resolution.
+    Ensures every non-boundary cell has a monotonic downhill drainage path.
+    """
+    h, w = dem.shape
+    filled = np.copy(dem).astype(np.float32)
+    visited = np.zeros((h, w), dtype=bool)
+    heap = []
+
+    for r in range(h):
+        for c in [0, w - 1]:
+            heapq.heappush(heap, (filled[r, c], r, c))
+            visited[r, c] = True
+    for c in range(1, w - 1):
+        for r in [0, h - 1]:
+            heapq.heappush(heap, (filled[r, c], r, c))
+            visited[r, c] = True
+
+    dr = [-1, -1, -1, 0, 0, 1, 1, 1]
+    dc = [-1, 0, 1, -1, 1, -1, 0, 1]
+
+    while heap:
+        elev, r, c = heapq.heappop(heap)
+        for k in range(8):
+            nr, nc = r + dr[k], c + dc[k]
+            if 0 <= nr < h and 0 <= nc < w and not visited[nr, nc]:
+                visited[nr, nc] = True
+                if filled[nr, nc] <= elev:
+                    filled[nr, nc] = elev + eps
+                heapq.heappush(heap, (filled[nr, nc], nr, nc))
+
+    return filled
+
+
 def compute_hand_native(
     elevation: np.ndarray,
     dx: float = 10.0,
@@ -17,14 +55,18 @@ def compute_hand_native(
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
     """
     High-performance native D8 hydrological flow routing and HAND calculation.
-    1. D8 steepest downhill slope flow direction.
-    2. Topological sort (by elevation descending) for cycle-free flow accumulation.
-    3. Drainage network extraction: flow_accumulation >= drainage_threshold.
-    4. HAND: Relative elevation difference from the nearest drainage channel cell.
+    1. Priority-Flood depression filling and flat resolution.
+    2. D8 steepest downhill slope flow direction.
+    3. Topological sort (by elevation descending) for cycle-free flow accumulation.
+    4. Drainage network extraction: flow_accumulation >= drainage_threshold.
+    5. HAND: Relative elevation difference from the nearest drainage channel cell.
     """
-    dem = elevation.astype(np.float32)
-    h, w = dem.shape
+    raw_dem = elevation.astype(np.float32)
+    h, w = raw_dem.shape
     total_cells = h * w
+
+    # Priority-flood pit filling with flat resolution
+    dem = fill_pits_and_resolve_flats(raw_dem)
 
     # 8 neighbor offsets and metric distances
     dr = np.array([-1, -1, -1,  0, 0,  1, 1, 1], dtype=np.int32)

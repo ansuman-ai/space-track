@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
 import rasterio
+from rasterio.features import rasterize
+import geopandas as gpd
 from scipy.ndimage import distance_transform_edt, label
 import yaml
 
@@ -25,6 +27,7 @@ from .thresholds import (
     compute_s2_control_thresholds,
     compute_s1_zscore_control_threshold,
     compute_in_channel_control_threshold,
+    compute_builtup_control_threshold,
     smooth_log_ratio_mean
 )
 from .s2_composite import prepare_s2_event_and_control_composites
@@ -162,6 +165,7 @@ def run_layer2(
     s1_cache_dir: str = "data/interim/s1_cache",
     s1_stack_dir: str = "data/raw/s1_stack",
     osm_waterways_path: str = "data/raw/osm/osm_waterways.geojson",
+    osm_buildings_path: str = "data/raw/osm/osm_buildings.geojson",
     out_dir: str = "data/processed",
     control_out_dir: Optional[str] = None,
     false_alarm_rate_pct: float = 1.0,
@@ -172,7 +176,10 @@ def run_layer2(
     simplify_tol_m: float = 8.0,
     reach_length_m: float = 250.0,
     inferred_hand_percentile: float = 90.0,
-    inferred_min_observed_pixels: int = 20
+    inferred_min_observed_pixels: int = 20,
+    building_buffer_m: float = 10.0,
+    intact_min_post_ndvi: float = 0.40,
+    intact_max_abs_d_ndvi: float = 0.20
 ) -> Dict[str, Any]:
 
     in_path = Path(interim_dir)
@@ -276,6 +283,34 @@ def run_layer2(
         false_alarm_rate_pct=false_alarm_rate_pct
     )
 
+    # S2 Change vector magnitude for built-up footprints (B2, B3, B4, B8, B11, B12)
+    band_keys = ['b02', 'b03', 'b04', 'b08', 'b11', 'b12']
+    sq_ev = sum([((post_comp[b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
+    cvm_ev = np.sqrt(sq_ev).astype(np.float32)
+
+    sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
+    cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
+
+    # Rasterize pre-event OSM building footprints (+ buffer)
+    builtup_mask = np.zeros((h, w), dtype=np.uint8)
+    if Path(osm_buildings_path).exists():
+        b_gdf = gpd.read_file(osm_buildings_path)
+        if not b_gdf.empty:
+            if b_gdf.crs != crs:
+                b_gdf = b_gdf.to_crs(crs)
+            b_geoms = [geom.buffer(building_buffer_m) for geom in b_gdf.geometry if geom is not None and not geom.is_empty]
+            if b_geoms:
+                builtup_mask = rasterize(b_geoms, out_shape=(h, w), transform=transform_mat, fill=0, default_value=1, dtype=np.uint8)
+
+    t_builtup = compute_builtup_control_threshold(
+        cvm_ctrl=cvm_ctrl,
+        builtup_mask=builtup_mask,
+        ctrl_valid=s2_ctrl_valid,
+        hand=hand,
+        max_hand_m=max_hand_corridor_m,
+        false_alarm_rate_pct=false_alarm_rate_pct
+    )
+
     t_z_asc = compute_s1_zscore_control_threshold(
         z_vv_asc_ctrl=z_vv_asc_ctrl,
         hand=hand,
@@ -290,16 +325,18 @@ def run_layer2(
     print(f"  Sentinel-2 ΔNDVI threshold:          {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")
     print(f"  Sentinel-2 ΔBSI threshold:           +{t_d_bsi:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
     print(f"  In-channel S2 change vector threshold: {t_channel:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
+    print(f"  Built-up S2 change vector threshold:   {t_builtup:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
     print(f"  Sentinel-1 Ascending z-score threshold: {t_z_asc:.4f}")
     print(f"  Sentinel-1 Descending O19 log-ratio threshold: {t_lr_o19:.4f} dB")
 
-    # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour)
-    logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel)...")
+    # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour + Built-up)
+    logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel + Built-up)...")
     s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
     ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_event'] > t_channel)
     s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
+    b_ev_cand = s2_event_valid & (builtup_mask == 1) & hand_corridor & (cvm_ev > t_builtup)
 
-    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
+    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand | b_ev_cand).astype(np.uint8)
 
     aff_ev_clean, n_blobs_ev = filter_stream_connected_blobs(
         candidate_mask=ev_cand_total,
@@ -310,8 +347,10 @@ def run_layer2(
     )
 
     # In-channel changed pixels become Class 2 (sub-label "channel")
+    # Built-up affected pixels (sub-label "built-up")
     # Unchanged baseline water remains Class 1
     ch_ev_affected = (perm_water_raw == 1) & (aff_ev_clean == 1)
+    b_ev_affected = (builtup_mask == 1) & (aff_ev_clean == 1)
     perm_water_unchanged = (perm_water_raw == 1) & (aff_ev_clean != 1)
 
     perm_count = int(np.sum(perm_water_unchanged == 1))
@@ -341,7 +380,11 @@ def run_layer2(
         hand_percentile=inferred_hand_percentile,
         min_observed_pixels=inferred_min_observed_pixels,
         touch_distance_m=stream_proximity_m,
-        max_hand_corridor_m=max_hand_corridor_m
+        max_hand_corridor_m=max_hand_corridor_m,
+        post_ndvi=post_comp['ndvi'],
+        d_ndvi=d_ndvi_event,
+        intact_min_post_ndvi=intact_min_post_ndvi,
+        intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
     ev_inf_km2 = inferred_ev_stats["inferred_km2"]
     ev_inf_count = inferred_ev_stats["inferred_pixels"]
@@ -351,8 +394,9 @@ def run_layer2(
     s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
     ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_ctrl'] > t_channel)
     s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
+    b_ctrl_cand = s2_ctrl_valid & (builtup_mask == 1) & hand_corridor & (cvm_ctrl > t_builtup)
 
-    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
+    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand | b_ctrl_cand).astype(np.uint8)
 
     aff_ctrl_clean, n_blobs_ctrl = filter_stream_connected_blobs(
         candidate_mask=ctrl_cand_total,
@@ -380,7 +424,11 @@ def run_layer2(
         hand_percentile=inferred_hand_percentile,
         min_observed_pixels=inferred_min_observed_pixels,
         touch_distance_m=stream_proximity_m,
-        max_hand_corridor_m=max_hand_corridor_m
+        max_hand_corridor_m=max_hand_corridor_m,
+        post_ndvi=s2_data['ctrl_post_composite']['ndvi'],
+        d_ndvi=d_ndvi_ctrl,
+        intact_min_post_ndvi=intact_min_post_ndvi,
+        intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
     ctrl_inf_km2 = inferred_ctrl_stats["inferred_km2"]
     ctrl_inf_count = inferred_ctrl_stats["inferred_pixels"]
@@ -410,7 +458,8 @@ def run_layer2(
         out_geojson_path=out_geojson,
         simplify_tolerance_m=simplify_tol_m,
         min_area_m2=pixel_area_m2 * min_area_pixels,
-        channel_affected_mask=ch_ev_affected
+        channel_affected_mask=ch_ev_affected,
+        builtup_affected_mask=b_ev_affected
     )
 
     # Render EVENT Quicklook (Full AOI + Syabru Besi 4x4 km zoom with S2 post true colour + affected outline)
@@ -445,7 +494,8 @@ def run_layer2(
         out_geojson_path=ctrl_out_geojson,
         simplify_tolerance_m=simplify_tol_m,
         min_area_m2=pixel_area_m2 * min_area_pixels,
-        channel_affected_mask=(aff_ctrl_clean == 1) & (perm_water_raw == 1)
+        channel_affected_mask=(aff_ctrl_clean == 1) & (perm_water_raw == 1),
+        builtup_affected_mask=(aff_ctrl_clean == 1) & (builtup_mask == 1)
     )
     ctrl_quicklook = str(ctrl_out_path / "quicklook_layer2.png")
     render_layer2_quicklook(
@@ -467,6 +517,7 @@ def run_layer2(
             "s2_d_ndvi": round(float(t_d_ndvi), 4),
             "s2_d_bsi": round(float(t_d_bsi), 4),
             "s2_in_channel_cvm": round(float(t_channel), 4),
+            "s2_builtup_cvm": round(float(t_builtup), 4),
             "s1_z_vv_asc": round(float(t_z_asc), 4),
             "s1_lr_o19_db": round(float(t_lr_o19), 2),
             "false_alarm_rate_pct": float(false_alarm_rate_pct),
@@ -476,12 +527,16 @@ def run_layer2(
             "cloud_dilation_buffer_m": float(cloud_dilation_buffer_m),
             "reach_length_m": float(reach_length_m),
             "inferred_hand_percentile": float(inferred_hand_percentile),
-            "inferred_min_observed_pixels": int(inferred_min_observed_pixels)
+            "inferred_min_observed_pixels": int(inferred_min_observed_pixels),
+            "building_buffer_m": float(building_buffer_m),
+            "intact_min_post_ndvi": float(intact_min_post_ndvi),
+            "intact_max_abs_d_ndvi": float(intact_max_abs_d_ndvi)
         },
         "areas_km2": {
             "class_1_permanent_water": perm_km2,
             "event_total_affected": ev_aff_km2,
             "event_channel_affected": round(int(np.sum(ch_ev_affected)) * pixel_area_km2, 4),
+            "event_builtup_affected": round(int(np.sum(b_ev_affected)) * pixel_area_km2, 4),
             "event_s2_affected": ev_s2_km2,
             "event_s1_affected": ev_s1_km2,
             "event_inferred_affected": ev_inf_km2,
@@ -531,6 +586,7 @@ def main():
     parser.add_argument("--s1-cache-dir", default="data/interim/s1_cache", help="Path to S1 cache directory")
     parser.add_argument("--s1-stack-dir", default="data/raw/s1_stack", help="Path to S1 stack directory")
     parser.add_argument("--osm-waterways", default="data/raw/osm/osm_waterways.geojson", help="Path to OSM waterways")
+    parser.add_argument("--osm-buildings", default="data/raw/osm/osm_buildings.geojson", help="Path to OSM buildings")
     parser.add_argument("--out-dir", default="data/processed", help="Path to output directory")
     parser.add_argument("--config", help="Optional test YAML configuration")
 
@@ -545,6 +601,9 @@ def main():
     reach_length_m = 250.0
     inferred_hand_percentile = 90.0
     inferred_min_observed_pixels = 20
+    building_buffer_m = 10.0
+    intact_min_post_ndvi = 0.40
+    intact_max_abs_d_ndvi = 0.20
 
     if args.config and os.path.exists(args.config):
         with open(args.config, "r") as f:
@@ -559,6 +618,9 @@ def main():
         reach_length_m = float(det_cfg.get("reach_length_m", reach_length_m))
         inferred_hand_percentile = float(det_cfg.get("inferred_hand_percentile", inferred_hand_percentile))
         inferred_min_observed_pixels = int(det_cfg.get("inferred_min_observed_pixels", inferred_min_observed_pixels))
+        building_buffer_m = float(det_cfg.get("building_buffer_m", building_buffer_m))
+        intact_min_post_ndvi = float(det_cfg.get("intact_min_post_ndvi", intact_min_post_ndvi))
+        intact_max_abs_d_ndvi = float(det_cfg.get("intact_max_abs_d_ndvi", intact_max_abs_d_ndvi))
 
     results = run_layer2(
         interim_dir=args.interim_dir,
@@ -567,6 +629,7 @@ def main():
         s1_cache_dir=args.s1_cache_dir,
         s1_stack_dir=args.s1_stack_dir,
         osm_waterways_path=args.osm_waterways,
+        osm_buildings_path=args.osm_buildings,
         out_dir=args.out_dir,
         false_alarm_rate_pct=false_alarm_rate_pct,
         max_hand_corridor_m=max_hand_corridor_m,
@@ -576,7 +639,10 @@ def main():
         simplify_tol_m=simplify_tol_m,
         reach_length_m=reach_length_m,
         inferred_hand_percentile=inferred_hand_percentile,
-        inferred_min_observed_pixels=inferred_min_observed_pixels
+        inferred_min_observed_pixels=inferred_min_observed_pixels,
+        building_buffer_m=building_buffer_m,
+        intact_min_post_ndvi=intact_min_post_ndvi,
+        intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
 
     print("\n================== FINAL LAYER 2 DETECTION SUMMARY ==================")

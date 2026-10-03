@@ -82,13 +82,18 @@ def compute_inferred_flood_corridor(
     hand_percentile: float = 90.0,
     min_observed_pixels: int = 20,
     touch_distance_m: float = 100.0,
-    max_hand_corridor_m: float = 40.0
+    max_hand_corridor_m: float = 40.0,
+    post_ndvi: Optional[np.ndarray] = None,
+    d_ndvi: Optional[np.ndarray] = None,
+    intact_min_post_ndvi: float = 0.40,
+    intact_max_abs_d_ndvi: float = 0.20
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Inferred flood corridor (HAND-based fill):
     1. Splits drainage network into reaches of reach_length_m.
     2. Takes HAND values of observed class 2 pixels touching each reach; flood level = percentile.
     3. Flood fills hydrologically connected cells with HAND <= flood level.
+    4. Removes pixels with intact vegetation in post S2 (high post NDVI and small |ΔNDVI|).
     """
     h, w = hand.shape
     reach_map, nearest_reach, total_reaches = segment_stream_reaches(
@@ -124,6 +129,12 @@ def compute_inferred_flood_corridor(
 
     # Do not overwrite class 2
     inferred_clean = inferred_mask & (~observed_class2_mask)
+
+    # Remove pixels with intact post-event vegetation
+    if post_ndvi is not None and d_ndvi is not None:
+        intact_veg = (post_ndvi >= intact_min_post_ndvi) & (np.abs(d_ndvi) <= intact_max_abs_d_ndvi)
+        inferred_clean &= (~intact_veg)
+
     pixel_area_km2 = (pixel_size_m ** 2) / 1e6
 
     stats = {

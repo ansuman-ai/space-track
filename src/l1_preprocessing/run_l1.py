@@ -149,43 +149,54 @@ def run_layer1(
 
     with rasterio.open(actual_dem_to_use) as src_dem_buf:
         if dem_buffer_km > 0:
-            s1_bounds = src_pre.bounds
-            buf_m = dem_buffer_km * 1000.0
-            buf_bounds = (s1_bounds.left - buf_m, s1_bounds.bottom - buf_m, s1_bounds.right + buf_m, s1_bounds.top + buf_m)
-            buf_w = int(round((buf_bounds[2] - buf_bounds[0]) / dx))
-            buf_h = int(round((buf_bounds[3] - buf_bounds[1]) / dy))
-            buf_transform = tf_bounds(*buf_bounds, buf_w, buf_h)
+            dem_native = src_dem_buf.read(1).astype(np.float32)
+            dem_nd = src_dem_buf.nodata
+            if dem_nd is not None:
+                dem_native[dem_native == dem_nd] = np.nanmin(dem_native[dem_native != dem_nd])
 
-            dem_utm_buf = np.empty((buf_h, buf_w), dtype=np.float32)
+            native_thresh = max(100, int(round(drainage_threshold / 9.0)))
+            logger.info(f"Computing HAND on native DEM ({dem_native.shape[1]}x{dem_native.shape[0]} cells, native_thresh={native_thresh})...")
+            hand_native, stream_native, hand_stats = compute_hand(
+                elevation=dem_native,
+                dx=30.0,
+                dy=30.0,
+                drainage_threshold=native_thresh
+            )
+
+            logger.info("Resampling native HAND and stream mask to 10m grid...")
+            hand = np.empty((h, w), dtype=np.float32)
             reproject(
-                source=rasterio.band(src_dem_buf, 1),
-                destination=dem_utm_buf,
+                source=hand_native,
+                destination=hand,
                 src_transform=src_dem_buf.transform,
                 src_crs=src_dem_buf.crs,
-                dst_transform=buf_transform,
-                dst_crs=src_pre.crs,
+                dst_transform=pre_transform,
+                dst_crs=pre_crs,
                 resampling=Resampling.bilinear
             )
 
-            # Compute HAND on buffered DEM
-            logger.info(f"Computing HAND on buffered DEM ({buf_w}x{buf_h} cells, drainage_threshold={drainage_threshold})...")
-            hand_buf, stream_buf, hand_stats = compute_hand(
-                elevation=dem_utm_buf,
-                dx=dx,
-                dy=dy,
-                drainage_threshold=drainage_threshold
+            stream_mask = np.empty((h, w), dtype=np.uint8)
+            reproject(
+                source=stream_native,
+                destination=stream_mask,
+                src_transform=src_dem_buf.transform,
+                src_crs=src_dem_buf.crs,
+                dst_transform=pre_transform,
+                dst_crs=pre_crs,
+                resampling=Resampling.nearest
             )
 
-            # Clip to S1 unbuffered grid
-            r_start = int(round((buf_bounds[3] - s1_bounds.top) / dy))
-            r_end = r_start + h
-            c_start = int(round((s1_bounds.left - buf_bounds[0]) / dx))
-            c_end = c_start + w
-
-            hand = hand_buf[r_start:r_end, c_start:c_end]
-            stream_mask = stream_buf[r_start:r_end, c_start:c_end]
-            dem_aligned = dem_utm_buf[r_start:r_end, c_start:c_end]
-            del dem_utm_buf, hand_buf, stream_buf
+            dem_aligned = np.empty((h, w), dtype=np.float32)
+            reproject(
+                source=dem_native,
+                destination=dem_aligned,
+                src_transform=src_dem_buf.transform,
+                src_crs=src_dem_buf.crs,
+                dst_transform=pre_transform,
+                dst_crs=pre_crs,
+                resampling=Resampling.bilinear
+            )
+            del dem_native, hand_native, stream_native
         else:
             dem_identical, _ = check_grid_identity(src_pre, src_dem_buf)
             if dem_identical:
