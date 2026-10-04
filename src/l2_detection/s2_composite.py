@@ -109,10 +109,11 @@ def process_s2_features(
 
 def composite_scenes(
     scenes: List[Dict[str, np.ndarray]]
-) -> Dict[str, np.ndarray]:
+) -> Dict[str, Any]:
     """
     Per-pixel best clear value compositing across a sequence of scenes.
     Prefers the earliest clear scene in the list; if none is clear, marked as cloudy.
+    Tracks per-pixel acquisition date and days after event.
     """
     if not scenes:
         raise ValueError("No scenes provided for compositing")
@@ -129,6 +130,8 @@ def composite_scenes(
     composite_b11 = np.zeros((h, w), dtype=np.float32)
     composite_b12 = np.zeros((h, w), dtype=np.float32)
     composite_vis = np.zeros((3, h, w), dtype=np.uint8)
+    composite_date = np.full((h, w), "", dtype=object)
+    composite_days = np.full((h, w), -1, dtype=int)
 
     filled = np.zeros((h, w), dtype=bool)
 
@@ -146,6 +149,8 @@ def composite_scenes(
             composite_b11[to_fill] = sc['b11'][to_fill]
             composite_b12[to_fill] = sc['b12'][to_fill]
             composite_vis[:, to_fill] = sc['vis'][:, to_fill]
+            composite_date[to_fill] = sc.get('date', '')
+            composite_days[to_fill] = sc.get('delta_days', 0)
             filled[to_fill] = True
             composite_clear[to_fill] = True
 
@@ -162,6 +167,8 @@ def composite_scenes(
         composite_b11[unfilled] = scenes[0]['b11'][unfilled]
         composite_b12[unfilled] = scenes[0]['b12'][unfilled]
         composite_vis[:, unfilled] = scenes[0]['vis'][:, unfilled]
+        composite_date[unfilled] = scenes[0].get('date', '')
+        composite_days[unfilled] = scenes[0].get('delta_days', 0)
 
     return {
         'is_clear': composite_clear,
@@ -174,7 +181,9 @@ def composite_scenes(
         'b08': composite_b08,
         'b11': composite_b11,
         'b12': composite_b12,
-        'vis': composite_vis
+        'vis': composite_vis,
+        'acq_date': composite_date,
+        'delta_days': composite_days
     }
 
 
@@ -202,7 +211,8 @@ def compute_in_channel_change_vector(
 def prepare_s2_event_and_control_composites(
     cache_dir: str = "data/interim/s2_cache",
     dilation_buffer_m: float = 60.0,
-    pixel_size_m: float = 10.0
+    pixel_size_m: float = 10.0,
+    event_date: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Load cached pre, post, and control Sentinel-2 scenes, apply SCL cloud/shadow dilation,
@@ -223,17 +233,33 @@ def prepare_s2_event_and_control_composites(
             "d_bsi_ctrl": None,
             "s2_ctrl_valid": False,
             "in_channel_change_event": None,
-            "in_channel_change_ctrl": None
+            "in_channel_change_ctrl": None,
+            "optical_evidence_note": ""
         }
 
+    import re
+    from datetime import datetime
+
     def load_processed(prefix: str) -> Dict[str, Any]:
-        files = list(c_path.glob(f"{prefix}_*.npz"))
+        files = sorted(list(c_path.glob(f"{prefix}_*.npz")))
         if not files:
             raise FileNotFoundError(f"Missing cached S2 scene for {prefix} in {cache_dir}")
         data = np.load(files[0])
         bands = {k: data[k] for k in data.files}
         proc = process_s2_features(bands, dilation_buffer_m=dilation_buffer_m, pixel_size_m=pixel_size_m)
         proc['filename'] = files[0].stem
+        m_dt = re.search(r'(\d{4})(\d{2})(\d{2})T', files[0].stem)
+        dt_str = f"{m_dt.group(1)}-{m_dt.group(2)}-{m_dt.group(3)}" if m_dt else ""
+        proc['date'] = dt_str
+        if event_date and dt_str:
+            try:
+                ev_dt = datetime.fromisoformat(event_date)
+                sc_dt = datetime.fromisoformat(dt_str)
+                proc['delta_days'] = abs((sc_dt - ev_dt).days)
+            except Exception:
+                proc['delta_days'] = 0
+        else:
+            proc['delta_days'] = 0
         return proc
 
     s_pre_119 = load_processed("pre_119")
@@ -242,9 +268,10 @@ def prepare_s2_event_and_control_composites(
     s_post_076 = load_processed("post_076")
     s_ctrl_119 = load_processed("ctrl_119")
 
-    # Multi-temporal compositing (earliest clear pixel preferred)
+    # Multi-temporal compositing (earliest clear pixel preferred for post composite)
     pre_composite = composite_scenes([s_pre_119, s_pre_076])
-    post_composite = composite_scenes([s_post_119, s_post_076])
+    post_scenes_sorted = sorted([s_post_119, s_post_076], key=lambda s: s.get('date', ''))
+    post_composite = composite_scenes(post_scenes_sorted)
     ctrl_post_composite = composite_scenes([s_ctrl_119, s_pre_076])
 
     # Event differences
@@ -257,7 +284,6 @@ def prepare_s2_event_and_control_composites(
     d_ndvi_ctrl = ctrl_post_composite['ndvi'] - pre_composite['ndvi']
     d_bsi_ctrl = ctrl_post_composite['bsi'] - pre_composite['bsi']
 
-    import re
     def _parse_scene_meta(fn: str, default_orbit: str) -> Dict[str, str]:
         m_dt = re.search(r'(\d{4})(\d{2})(\d{2})T', fn)
         dt = f"{m_dt.group(1)}-{m_dt.group(2)}-{m_dt.group(3)}" if m_dt else ""
@@ -281,6 +307,17 @@ def prepare_s2_event_and_control_composites(
     in_channel_change_event = compute_in_channel_change_vector(pre_composite, post_composite)
     in_channel_change_ctrl = compute_in_channel_change_vector(pre_composite, ctrl_post_composite)
 
+    # Compute representative optical evidence string
+    clear_d = post_composite['acq_date'][post_composite['is_clear']]
+    clear_days = post_composite['delta_days'][post_composite['is_clear']]
+    if len(clear_d) > 0:
+        from collections import Counter
+        rep_date, _ = Counter(clear_d).most_common(1)[0]
+        rep_days, _ = Counter(clear_days).most_common(1)[0]
+        optical_evidence_note = f"optical evidence from {rep_date} ({rep_days} days after event)"
+    else:
+        optical_evidence_note = ""
+
     return {
         "scenes_used": scenes_used,
         "pre_composite": pre_composite,
@@ -293,6 +330,7 @@ def prepare_s2_event_and_control_composites(
         "d_bsi_ctrl": d_bsi_ctrl,
         "s2_ctrl_valid": s2_ctrl_valid,
         "in_channel_change_event": in_channel_change_event,
-        "in_channel_change_ctrl": in_channel_change_ctrl
+        "in_channel_change_ctrl": in_channel_change_ctrl,
+        "optical_evidence_note": optical_evidence_note
     }
 

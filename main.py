@@ -285,7 +285,8 @@ def run_pipeline(
         building_buffer_m=det_cfg.get("building_buffer_m", 10.0),
         building_damage_proximity_m=det_cfg.get("building_damage_proximity_m", 50.0),
         intact_min_post_ndvi=det_cfg.get("intact_min_post_ndvi", 0.40),
-        intact_max_abs_d_ndvi=det_cfg.get("intact_max_abs_d_ndvi", 0.20)
+        intact_max_abs_d_ndvi=det_cfg.get("intact_max_abs_d_ndvi", 0.20),
+        event_date=event_date
     )
 
     ev_s1_km2 = l2_res.get("areas_km2", {}).get("event_s1_affected", 0.0)
@@ -409,6 +410,7 @@ def run_pipeline(
         "total_duration_seconds": total_duration_s,
         "peak_ram_mb": peak_ram_overall,
         "sensors_used": sensors_used,
+        "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
         "metrics": {
             "affected_km2_observed": l2_res.get("areas_km2", {}).get("event_total_affected", 0.0),
             "affected_km2_s2": l2_res.get("areas_km2", {}).get("event_s2_affected", 0.0),
@@ -453,6 +455,8 @@ def run_pipeline(
     logger.info(f"Total Wall Time:  {total_duration_s:.1f}s")
     logger.info(f"Peak RAM Usage:   {peak_ram_overall:.1f} MB")
     logger.info(f"Sensors Used:     {', '.join(sensors_used)}")
+    if summary_payload.get("optical_evidence_note"):
+        logger.info(f"Optical Evidence: {summary_payload['optical_evidence_note']}")
     logger.info(f"Affected Area:    Observed={summary_payload['metrics']['affected_km2_observed']} km², Inferred={summary_payload['metrics']['affected_km2_inferred']} km²")
     logger.info(f"Infrastructure:   Buildings={summary_payload['metrics']['buildings_affected_total']}, Bridges={summary_payload['metrics']['bridges_affected_total']}")
     logger.info(f"Cut-off Settle.:  {cut_off_veh}")

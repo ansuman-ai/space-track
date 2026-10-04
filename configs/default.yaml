@@ -26,6 +26,7 @@ detection:
   simplify_tolerance_m: 8.0
   s2_pre_days: 15
   s2_post_days: 15
+  s2_post_max_days: 45
   cloud_dilation_buffer_m: 60.0
   reach_length_m: 250.0
   inferred_hand_percentile: 90.0

@@ -111,12 +111,18 @@ def compute_repair_priorities(
     # 1. Single-element repairs evaluation
     single_element_results = []
     for oid, edges in dest_by_osm.items():
-        G_temp = G_post.copy()
-        for u, v, d in edges:
-            G_temp.add_edge(u, v, **d)
-        dist_temp = nx.single_source_dijkstra_path_length(G_temp, "__DEST__")
-        regained = set(sid for sid, info in s_nodes.items() if info["node"] in dist_temp) - init_connected_sids
-        regained_bldgs = sum(s_nodes[sid]["building_count"] for sid in regained)
+        touches_dest = any(u in dist_post or v in dist_post for u, v, _ in edges)
+        if not touches_dest:
+            regained = set()
+            regained_bldgs = 0
+        else:
+            for u, v, d in edges:
+                G_post.add_edge(u, v, **d)
+            dist_temp = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
+            for u, v, _ in edges:
+                G_post.remove_edge(u, v)
+            regained = set(sid for sid, info in s_nodes.items() if info["node"] in dist_temp) - init_connected_sids
+            regained_bldgs = sum(s_nodes[sid]["building_count"] for sid in regained)
 
         single_element_results.append({
             "osm_id": oid,
@@ -179,14 +185,21 @@ def compute_repair_priorities(
         best_bldg_gain = -1
         best_new_conn: Set[str] = set()
 
+        curr_dist = nx.single_source_dijkstra_path_length(curr_G, "__DEST__")
+
         # Check if any candidate yields immediate reconnected settlements
         for oid in candidates:
             if oid in repaired_oids:
                 continue
-            test_G = curr_G.copy()
-            for u, v, d in dest_by_osm[oid]:
-                test_G.add_edge(u, v, **d)
-            dist_test = nx.single_source_dijkstra_path_length(test_G, "__DEST__")
+            edges = dest_by_osm[oid]
+            touches_curr = any(u in curr_dist or v in curr_dist for u, v, _ in edges)
+            if not touches_curr:
+                continue
+            for u, v, d in edges:
+                curr_G.add_edge(u, v, **d)
+            dist_test = nx.single_source_dijkstra_path_length(curr_G, "__DEST__")
+            for u, v, _ in edges:
+                curr_G.remove_edge(u, v)
             new_conn = set(sid for sid, info in s_nodes.items() if info["node"] in dist_test) - curr_conn
             gain = len(new_conn)
             bldg_gain = sum(s_nodes[sid]["building_count"] for sid in new_conn)
@@ -208,10 +221,11 @@ def compute_repair_priorities(
                     break
             if best_oid is None:
                 break
-            test_G = curr_G.copy()
             for u, v, d in dest_by_osm[best_oid]:
-                test_G.add_edge(u, v, **d)
-            dist_test = nx.single_source_dijkstra_path_length(test_G, "__DEST__")
+                curr_G.add_edge(u, v, **d)
+            dist_test = nx.single_source_dijkstra_path_length(curr_G, "__DEST__")
+            for u, v, _ in dest_by_osm[best_oid]:
+                curr_G.remove_edge(u, v)
             best_new_conn = set(sid for sid, info in s_nodes.items() if info["node"] in dist_test) - curr_conn
             best_gain = len(best_new_conn)
             best_bldg_gain = sum(s_nodes[sid]["building_count"] for sid in best_new_conn)

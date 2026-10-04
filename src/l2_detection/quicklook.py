@@ -100,13 +100,16 @@ def render_layer2_quicklook(
         rect = plt.Rectangle((c1, r1), c2 - c1, r2 - r1, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--")
         axes[0].add_patch(rect)
 
-    axes[0].set_title(
+    opt_note = stats.get("optical_evidence_note", "")
+    p1_title = (
         f"Full AOI Hazard Classification ({w}x{h})\n"
         f"Permanent Water: {stats.get('perm_water_km2', 0):.3f} km² | "
         f"Observed: {stats.get('affected_km2', 0):.3f} km² | "
-        f"Inferred: {stats.get('inferred_km2', 0):.3f} km²",
-        fontsize=13, fontweight="bold"
+        f"Inferred: {stats.get('inferred_km2', 0):.3f} km²"
     )
+    if opt_note:
+        p1_title += f"\n[{opt_note}]"
+    axes[0].set_title(p1_title, fontsize=13, fontweight="bold")
     axes[0].axis("off")
 
     legend_patches = [
@@ -180,11 +183,13 @@ def render_layer2_quicklook(
             zorder=15
         )
 
-    axes[1].set_title(
+    p2_title = (
         "High-Impact 4x4 km Zoom (Aligned S2/SAR Post Composite)\n"
-        "Observed (red) & Inferred (orange) Outlines + River Alignment Check (cyan)",
-        fontsize=13, fontweight="bold"
+        "Observed (red) & Inferred (orange) Outlines + River Alignment Check (cyan)"
     )
+    if opt_note:
+        p2_title += f"\n[{opt_note}]"
+    axes[1].set_title(p2_title, fontsize=13, fontweight="bold")
     axes[1].axis("off")
 
     zoom_aff_km2 = np.sum(hazard_raster == 2) * 0.0001
@@ -197,10 +202,10 @@ def render_layer2_quicklook(
     ]
     axes[1].legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=10.5)
 
-    fig.suptitle(
-        "Layer 2 Final Hazard Detection: Sentinel-2 Optical Primary + Sentinel-1 SAR Fallback",
-        fontsize=16, fontweight="bold", y=1.02
-    )
+    supt = "Layer 2 Final Hazard Detection: Sentinel-2 Optical Primary + Sentinel-1 SAR Fallback"
+    if opt_note:
+        supt += f"\n({opt_note})"
+    fig.suptitle(supt, fontsize=16, fontweight="bold", y=1.02)
 
     plt.savefig(output_png_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -232,10 +237,10 @@ def render_layer2_quicklook(
                 bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
                 zorder=15
             )
-        ax_z.set_title(
-            "Layer 2 Detection: High-Impact 4x4 km Zoom (Aligned)\nPost Optical/SAR Composite + River Alignment Check",
-            fontsize=13, fontweight="bold", pad=10
-        )
+        z_title = "Layer 2 Detection: High-Impact 4x4 km Zoom (Aligned)\nPost Optical/SAR Composite + River Alignment Check"
+        if opt_note:
+            z_title += f"\n[{opt_note}]"
+        ax_z.set_title(z_title, fontsize=13, fontweight="bold", pad=10)
         ax_z.axis("off")
         plt.close(fig_z)
 

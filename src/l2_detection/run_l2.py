@@ -227,7 +227,8 @@ def run_layer2(
     building_buffer_m: float = 10.0,
     building_damage_proximity_m: float = 50.0,
     intact_min_post_ndvi: float = 0.40,
-    intact_max_abs_d_ndvi: float = 0.20
+    intact_max_abs_d_ndvi: float = 0.20,
+    event_date: Optional[str] = None
 ) -> Dict[str, Any]:
 
     in_path = Path(interim_dir)
@@ -273,7 +274,8 @@ def run_layer2(
     s2_data = prepare_s2_event_and_control_composites(
         cache_dir=s2_cache_dir,
         dilation_buffer_m=cloud_dilation_buffer_m,
-        pixel_size_m=dx
+        pixel_size_m=dx,
+        event_date=event_date
     )
 
     if s2_data.get('s2_event_valid') is False or s2_data.get('pre_composite') is None:
@@ -556,10 +558,12 @@ def run_layer2(
 
     # Render EVENT Quicklook (Full AOI + High-Impact 4x4 km zoom with S2 post true colour + affected outline)
     out_quicklook = str(out_path / "quicklook_layer2.png")
+    optical_evidence_note = s2_data.get("optical_evidence_note", "")
     stats_dict = {
         "perm_water_km2": perm_km2,
         "affected_km2": ev_aff_km2,
-        "inferred_km2": ev_inf_km2
+        "inferred_km2": ev_inf_km2,
+        "optical_evidence_note": optical_evidence_note
     }
     render_layer2_quicklook(
         post_vv=post_vv,
@@ -602,6 +606,7 @@ def run_layer2(
     # Summary dictionary
     l2_summary = {
         "status": "COMPLETED",
+        "optical_evidence_note": optical_evidence_note,
         "scenes_used": s2_data['scenes_used'],
         "grid_shape": (h, w),
         "pixel_size_m": (dx, dy),
