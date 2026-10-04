@@ -22,11 +22,12 @@ from .settlements import extract_settlements
 from .destinations import extract_destinations
 from .network import build_routing_networks
 from .connectivity import evaluate_network_connectivity
-from .repair import compute_repair_priorities
+from .repair import compute_repair_priorities, compute_repair_packages
 from .quicklook import (
     render_l5_overview,
     render_cutoff_zoom,
-    render_settlement3_component
+    render_settlement3_component,
+    render_dead_end_zoom
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -60,6 +61,7 @@ def run_layer5(
     dbscan_min_samples = r_cfg.get("dbscan_min_samples", 5)
     named_place_max_m = r_cfg.get("named_place_max_distance_m", 500.0)
     rural_roads_drivable = r_cfg.get("rural_roads_drivable", False)
+    snap_dead_end_m = float(r_cfg.get("snap_dead_end_nodes_m", 5.0))
     vehicle_hwys = r_cfg.get("vehicle_highways")
     walking_extra = r_cfg.get("walking_highways_extra")
 
@@ -106,6 +108,7 @@ def run_layer5(
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
         rural_roads_drivable=rural_roads_drivable,
+        snap_dead_end_nodes_m=snap_dead_end_m,
         utm_crs=utm_crs
     )
 
@@ -217,7 +220,7 @@ def run_layer5(
         json.dump(cutoff_summary, f, indent=2, ensure_ascii=False)
     logger.info(f"Saved cutoff summary to {summary_json_path}")
 
-    # 5. Compute Repair Priorities
+    # 5. Compute Repair Priorities and Packages
     repair_json_path = str(out_path / "repair_priority.json")
     logger.info(f"Computing infrastructure repair priorities to {repair_json_path}...")
     repair_summary = compute_repair_priorities(
@@ -226,6 +229,16 @@ def run_layer5(
         destinations_gdf=destinations_gdf,
         max_snap_distance_m=max_snap_m,
         output_json_path=repair_json_path
+    )
+
+    packages_json_path = str(out_path / "repair_packages.json")
+    logger.info(f"Computing minimal repair packages to {packages_json_path}...")
+    packages_summary = compute_repair_packages(
+        G_vehicle=event_net["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        max_snap_distance_m=max_snap_m,
+        output_json_path=packages_json_path
     )
 
     # 6. Visualizations
@@ -290,6 +303,17 @@ def run_layer5(
         utm_crs=utm_crs
     )
 
+    # Dead End Topology Gap Zoom Plot
+    dead_end_png = str(out_path / "zoom_dead_end.png")
+    logger.info(f"Rendering dead-end topology gap zoom to {dead_end_png}...")
+    render_dead_end_zoom(
+        output_png_path=dead_end_png,
+        s2_post_visual=s2_vis,
+        transform_matrix=trans,
+        roads_path=roads_buffered_path,
+        utm_crs=utm_crs
+    )
+
     # 7. CONTROL RUN CHECK
     logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")
     ctrl_net = build_routing_networks(
@@ -300,6 +324,7 @@ def run_layer5(
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
         rural_roads_drivable=rural_roads_drivable,
+        snap_dead_end_nodes_m=snap_dead_end_m,
         utm_crs=utm_crs
     )
     ctrl_v_res = evaluate_network_connectivity(
@@ -338,7 +363,7 @@ def run_layer5(
 
     # Copy artifacts to artifact dir
     if os.path.exists(artifact_dir):
-        for p in [overview_png, s3_comp_png, repair_json_path] + zoom_png_paths:
+        for p in [overview_png, s3_comp_png, dead_end_png, repair_json_path, packages_json_path] + zoom_png_paths:
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(artifact_dir, os.path.basename(p)))
 
@@ -346,8 +371,10 @@ def run_layer5(
         "event_summary": cutoff_summary,
         "control_summary": ctrl_summary,
         "repair_summary": repair_summary,
+        "packages_summary": packages_summary,
         "overview_png": overview_png,
         "s3_component_png": s3_comp_png,
+        "dead_end_png": dead_end_png,
         "zoom_png_paths": zoom_png_paths
     }
 

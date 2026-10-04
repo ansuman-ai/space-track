@@ -639,3 +639,102 @@ def render_settlement3_component(
     plt.savefig(output_png_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_png_path
+
+
+def render_dead_end_zoom(
+    output_png_path: str,
+    s2_post_visual: np.ndarray,
+    transform_matrix: Any,
+    roads_path: str = "data/raw/osm_buffered/osm_roads.geojson",
+    cx: float = 332650.0,
+    cy: float = 3113950.0,
+    pad: float = 350.0,
+    utm_crs: str = "EPSG:32645"
+) -> str:
+    """
+    Renders high-resolution zoom of the dead end near (332700, 3113900)
+    showing all OSM ways coloured by highway type with S2 optical background.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    xmin, xmax = cx - pad, cx + pad
+    ymin, ymax = cy - pad, cy + pad
+
+    roads = gpd.read_file(roads_path).to_crs(utm_crs)
+    r_crop = roads.cx[xmin:xmax, ymin:ymax].copy()
+
+    fig, ax = plt.subplots(figsize=(10, 10), dpi=200)
+
+    if s2_post_visual is not None and transform_matrix is not None:
+        plot_raster_background(ax, s2_post_visual, transform=transform_matrix, clip_extent=(xmin, xmax, ymin, ymax), zorder=1)
+    else:
+        ax.set_facecolor("#1a1a1a")
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+    draw_osm_river_centreline(ax, target_crs=utm_crs, clip_bounds=(xmin, ymin, xmax, ymax), color="#00e5ff", lw=1.5, alpha=0.9, zorder=12)
+
+    color_map = {
+        "unclassified": "#00ffcc",
+        "construction": "#ff00aa",
+        "path": "#ffcc00",
+        "track": "#ff9900",
+        "footway": "#ffff66"
+    }
+
+    for hwy, group in r_crop.groupby("highway"):
+        col = color_map.get(str(hwy), "#ffffff")
+        ls = "--" if hwy in ["path", "construction", "footway"] else "-"
+        lw = 3.5 if hwy in ["unclassified", "construction"] else 2.0
+        group.plot(ax=ax, color=col, linewidth=lw, linestyle=ls, zorder=8, alpha=0.9)
+
+    ax.scatter([332608.3], [3114099.2], color="#00ffcc", s=140, edgecolor="black", linewidth=1.5, zorder=15)
+    ax.annotate(
+        "Dead End: way/853752343 (unclassified)\nContinues only as path (way/341804931)",
+        xy=(332608.3, 3114099.2),
+        xytext=(-60, 25),
+        textcoords="offset points",
+        fontsize=8.5,
+        fontweight="bold",
+        color="#00ffcc",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#00ffcc", lw=1.2),
+        arrowprops=dict(arrowstyle="->", color="#00ffcc", lw=1.5),
+        zorder=20
+    )
+
+    ax.scatter([332722.3], [3113938.5], color="#ff00aa", s=140, edgecolor="black", linewidth=1.5, zorder=15)
+    ax.annotate(
+        "Shared Node: (332722, 3113938)\nway/341811083 (construction: unclassified)\n[Excluded from vehicle network]",
+        xy=(332722.3, 3113938.5),
+        xytext=(20, -35),
+        textcoords="offset points",
+        fontsize=8.5,
+        fontweight="bold",
+        color="#ff00aa",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#ff00aa", lw=1.2),
+        arrowprops=dict(arrowstyle="->", color="#ff00aa", lw=1.5),
+        zorder=20
+    )
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_aspect("equal")
+    ax.set_title(
+        "Topology Gap Zoom: Dead End near (332700, 3113900)\nExcluded Highway Types (construction & path) Sever Network Continuation",
+        fontsize=11,
+        fontweight="bold",
+        pad=10
+    )
+
+    handles = [
+        Line2D([0], [0], color="#00ffcc", lw=3.5, label="unclassified (way/853752343, in vehicle net)"),
+        Line2D([0], [0], color="#ff00aa", lw=3.5, linestyle="--", label="construction (way/341811083, excluded)"),
+        Line2D([0], [0], color="#ffcc00", lw=2.0, linestyle="--", label="path (way/341804931, etc., excluded)"),
+        Line2D([0], [0], color="#00e5ff", lw=1.5, label="OSM waterway=river (Alignment Check)")
+    ]
+    ax.legend(handles=handles, loc="upper left", framealpha=0.9, facecolor="#222222", edgecolor="#555555", fontsize=8.5, labelcolor="white")
+
+    plt.tight_layout()
+    plt.savefig(output_png_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return output_png_path

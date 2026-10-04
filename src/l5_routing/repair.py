@@ -228,3 +228,118 @@ def compute_repair_priorities(
     logger.info(f"Saved repair priority analysis to {output_json_path}")
 
     return output_data
+
+
+def compute_repair_packages(
+    G_vehicle: nx.Graph,
+    settlements_gdf: gpd.GeoDataFrame,
+    destinations_gdf: gpd.GeoDataFrame,
+    max_snap_distance_m: float = 500.0,
+    penalty_per_element: float = 1_000_000.0,
+    output_json_path: str = "data/processed/routing/repair_packages.json"
+) -> Dict[str, Any]:
+    """
+    Computes minimal repair packages for cut-off settlements:
+    For each cut-off settlement, finds the route requiring the FEWEST destroyed elements
+    (via edge penalty P + length).
+    Groups settlements sharing the same package, and ranks packages by settlements/buildings regained.
+    """
+    nodes_list = list(G_vehicle.nodes)
+    nodes_tree = cKDTree(np.array(nodes_list))
+
+    # Destinations
+    d_pts = np.array([(d.geometry.x, d.geometry.y) for _, d in destinations_gdf.iterrows()])
+    d_dists, d_indices = nodes_tree.query(d_pts)
+    valid_d_nodes = set([nodes_list[d_indices[i]] for i, dist in enumerate(d_dists) if dist <= max_snap_distance_m])
+
+    # Settlements mapped
+    s_nodes = {}
+    for idx, s_row in settlements_gdf.iterrows():
+        pt = s_row.geometry
+        d_snap, n_idx = nodes_tree.query([pt.x, pt.y])
+        if d_snap <= max_snap_distance_m:
+            s_nodes[s_row["settlement_id"]] = {
+                "node": nodes_list[n_idx],
+                "name": s_row["name"],
+                "building_count": int(s_row.get("building_count", 0))
+            }
+
+    # Post-event baseline to identify cut-off settlements
+    G_post = G_vehicle.copy()
+    for u, v, d in list(G_post.edges(data=True)):
+        if d.get("damage_grade") == "Destroyed":
+            G_post.remove_edge(u, v)
+    for dn in valid_d_nodes:
+        if dn in G_post:
+            G_post.add_edge("__DEST__", dn, weight=0.0)
+
+    dist_post = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
+    cut_off_sids = [sid for sid, info in s_nodes.items() if info["node"] not in dist_post]
+
+    # Penalized graph: large penalty for destroyed elements
+    G_pen = G_vehicle.copy()
+    for u, v, d in G_pen.edges(data=True):
+        length = float(d.get("weight", 0.0))
+        is_dest = (d.get("damage_grade") == "Destroyed")
+        G_pen[u][v]["penalized_weight"] = length + (penalty_per_element if is_dest else 0.0)
+
+    for dn in valid_d_nodes:
+        G_pen.add_edge("__DEST__", dn, penalized_weight=0.0)
+
+    packages_by_sid = {}
+    for sid in cut_off_sids:
+        info = s_nodes[sid]
+        sn = info["node"]
+        path = nx.shortest_path(G_pen, sn, "__DEST__", weight="penalized_weight")
+        destroyed_oids = set()
+        for i in range(len(path) - 2):  # exclude __DEST__
+            ed = G_vehicle.get_edge_data(path[i], path[i+1])
+            if ed and ed.get("damage_grade") == "Destroyed":
+                destroyed_oids.add(str(ed.get("osm_id")))
+        pkg = tuple(sorted(list(destroyed_oids)))
+        packages_by_sid[sid] = {
+            "settlement_id": sid,
+            "name": info["name"],
+            "building_count": info["building_count"],
+            "package": pkg
+        }
+
+    # Group settlements sharing the same package
+    grouped = {}
+    for sid, p_data in packages_by_sid.items():
+        pkg = p_data["package"]
+        grouped.setdefault(pkg, {"settlements": [], "buildings": 0})
+        grouped[pkg]["settlements"].append(p_data["name"])
+        grouped[pkg]["buildings"] += p_data["building_count"]
+
+    ranked_packages = []
+    for pkg, g_info in grouped.items():
+        ranked_packages.append({
+            "elements": list(pkg),
+            "element_count": len(pkg),
+            "settlements_count": len(g_info["settlements"]),
+            "buildings_count": g_info["buildings"],
+            "settlements": g_info["settlements"]
+        })
+
+    # Rank by settlements, then buildings
+    ranked_packages.sort(key=lambda x: (x["settlements_count"], x["buildings_count"]), reverse=True)
+    for idx, r in enumerate(ranked_packages, start=1):
+        r["rank"] = idx
+
+    pkg_output = {
+        "metadata": {
+            "description": "Minimal Repair Packages for Cut-Off Settlements",
+            "total_cut_off_settlements": len(cut_off_sids),
+            "unique_packages_count": len(ranked_packages)
+        },
+        "ranked_packages": ranked_packages,
+        "settlement_packages": {sid: list(v["package"]) for sid, v in packages_by_sid.items()}
+    }
+
+    Path(output_json_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(pkg_output, f, indent=2, ensure_ascii=False)
+    logger.info(f"Saved repair packages analysis to {output_json_path}")
+
+    return pkg_output

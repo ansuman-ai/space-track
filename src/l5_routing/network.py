@@ -22,6 +22,7 @@ def build_routing_networks(
     vehicle_highways: Optional[List[str]] = None,
     walking_highways_extra: Optional[List[str]] = None,
     rural_roads_drivable: bool = False,
+    snap_dead_end_nodes_m: float = 0.0,
     utm_crs: str = "EPSG:32645"
 ) -> Dict[str, Any]:
     """
@@ -145,6 +146,26 @@ def build_routing_networks(
                         edge_stats["walking"]["unknown_cloud"] += 1
                     else:
                         edge_stats["walking"]["intact"] += 1
+
+    if snap_dead_end_nodes_m > 0.0:
+        from scipy.spatial import cKDTree
+        # Snap vehicle dead ends
+        v_nodes = list(G_vehicle.nodes)
+        if v_nodes:
+            v_tree = cKDTree(np.array(v_nodes))
+            dead_ends = [n for n in G_vehicle.nodes if G_vehicle.degree(n) == 1]
+            snap_count = 0
+            for n in dead_ends:
+                ball = v_tree.query_ball_point([n[0], n[1]], r=snap_dead_end_nodes_m)
+                g_neighbors = set(G_vehicle.neighbors(n))
+                g_neighbors.add(n)
+                for idx in ball:
+                    other_n = v_nodes[idx]
+                    if other_n not in g_neighbors:
+                        d = float(np.hypot(n[0] - other_n[0], n[1] - other_n[1]))
+                        G_vehicle.add_edge(n, other_n, weight=d, highway="connector", damage_grade="Not affected", is_bridge=False, osm_id="snap_connector")
+                        snap_count += 1
+            logger.info(f"Snapped {snap_count} dead-end nodes within {snap_dead_end_nodes_m} m in Vehicle network.")
 
     logger.info(f"Vehicle Graph built: {G_vehicle.number_of_nodes()} nodes, {G_vehicle.number_of_edges()} edges ({edge_stats['vehicle']['destroyed']} destroyed)")
     logger.info(f"Walking Graph built: {G_walking.number_of_nodes()} nodes, {G_walking.number_of_edges()} edges ({edge_stats['walking']['destroyed']} destroyed)")
