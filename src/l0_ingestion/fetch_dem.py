@@ -146,23 +146,24 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
 
     opened_datasets = []
     try:
-        for lat in range(lat_min_int, lat_max_int + 1):
-            for lon in range(lon_min_int, lon_max_int + 1):
-                aws_url = get_aws_dem_tile_url(lat, lon)
-                # Try PC URL if available, else AWS Open Data
-                tile_src = None
-                if tile_urls:
-                    for u in tile_urls:
-                        try:
-                            logger.info(f"Trying PC DEM URL: {u[:80]}...")
-                            tile_src = rasterio.open(u)
-                            break
-                        except Exception as e:
-                            logger.warning(f"Failed to open PC DEM raster ({e}); trying AWS Open Data...")
-                if tile_src is None:
-                    logger.info(f"Opening DEM raster from AWS Open Data: {aws_url}...")
-                    tile_src = rasterio.open(aws_url)
-                opened_datasets.append(tile_src)
+        with rasterio.Env(AWS_NO_SIGN_REQUEST='YES', GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt'):
+            for lat in range(lat_min_int, lat_max_int + 1):
+                for lon in range(lon_min_int, lon_max_int + 1):
+                    aws_url = get_aws_dem_tile_url(lat, lon)
+                    # Try PC URL if available, else AWS Open Data
+                    tile_src = None
+                    if tile_urls:
+                        for u in tile_urls:
+                            try:
+                                logger.info(f"Trying PC DEM URL: {u[:80]}...")
+                                tile_src = rasterio.open(u)
+                                break
+                            except Exception as e:
+                                logger.warning(f"Failed to open PC DEM raster ({e}); trying AWS Open Data...")
+                    if tile_src is None:
+                        logger.info(f"Opening DEM raster from AWS Open Data: {aws_url}...")
+                        tile_src = rasterio.open(aws_url)
+                    opened_datasets.append(tile_src)
 
         if len(opened_datasets) == 1:
             src = opened_datasets[0]
