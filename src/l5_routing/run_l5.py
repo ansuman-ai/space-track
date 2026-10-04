@@ -61,6 +61,7 @@ def run_layer5(
     dbscan_min_samples = r_cfg.get("dbscan_min_samples", 5)
     named_place_max_m = r_cfg.get("named_place_max_distance_m", 500.0)
     rural_roads_drivable = r_cfg.get("rural_roads_drivable", False)
+    construction_roads_passable = r_cfg.get("construction_roads_passable", False)
     snap_dead_end_m = float(r_cfg.get("snap_dead_end_nodes_m", 5.0))
     vehicle_hwys = r_cfg.get("vehicle_highways")
     walking_extra = r_cfg.get("walking_highways_extra")
@@ -108,6 +109,7 @@ def run_layer5(
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
         rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
         snap_dead_end_nodes_m=snap_dead_end_m,
         utm_crs=utm_crs
     )
@@ -131,6 +133,72 @@ def run_layer5(
         max_snap_distance_m=max_snap_m
     )
 
+    # 4b. Comparative Scenario: highway=construction passable
+    logger.info("Evaluating comparative scenario with construction_roads_passable=True...")
+    constr_net = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=event_roads_path,
+        hazard_bridges_path=event_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=True,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    v_constr_res = evaluate_network_connectivity(
+        G=constr_net["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="vehicle_construction",
+        max_snap_distance_m=max_snap_m
+    )
+    v_constr_dict = {r["settlement_id"]: r for r in v_constr_res["settlement_details"]}
+
+    # Identify cut-off settlements that become connected in the construction scenario
+    depends_on_constr = {}
+    constr_ways_per_sid = {}
+    changed_cutoffs = []
+
+    G_constr_post = constr_net["G_vehicle"].copy()
+    for u, v, d in list(G_constr_post.edges(data=True)):
+        if d.get("damage_grade") == "Destroyed":
+            G_constr_post.remove_edge(u, v)
+
+    for sid in settlements_gdf["settlement_id"]:
+        b_info = next(r for r in v_res["settlement_details"] if r["settlement_id"] == sid)
+        c_info = v_constr_dict[sid]
+        b_status = b_info["status_optimistic"]
+        c_status = c_info["status_optimistic"]
+
+        if b_status == "cut_off" and c_status != "cut_off":
+            depends_on_constr[sid] = True
+            c_oids = set()
+            sn = c_info.get("pre_path", [None])[0] if c_info.get("pre_path") else None
+            if sn and sn in G_constr_post:
+                # Find connected construction edges
+                comp = nx.node_connected_component(G_constr_post, sn)
+                subG = G_constr_post.subgraph(comp)
+                for u, v, d in subG.edges(data=True):
+                    if d.get("highway") == "construction" or (d.get("construction") and d.get("construction") != "nan"):
+                        c_oids.add(str(d.get("osm_id")))
+            constr_ways_per_sid[sid] = sorted(list(c_oids))
+            changed_cutoffs.append({
+                "settlement_id": sid,
+                "name": b_info["name"],
+                "building_count": b_info["building_count"],
+                "construction_ways": constr_ways_per_sid[sid]
+            })
+            c_str = ", ".join(constr_ways_per_sid[sid]) if constr_ways_per_sid[sid] else "under construction"
+            logger.info(f"{b_info['name']} ({b_info['building_count']} bldgs): cut off unless road under construction {c_str} is usable")
+        else:
+            depends_on_constr[sid] = False
+            constr_ways_per_sid[sid] = []
+
+    if len(changed_cutoffs) == 0:
+        logger.info("Construction scenario: 0 cut-off settlements change (none become connected).")
+
     # Map results to settlements GeoDataFrame
     v_dict = {r["settlement_id"]: r for r in v_res["settlement_details"]}
     w_dict = {r["settlement_id"]: r for r in w_res["settlement_details"]}
@@ -150,6 +218,9 @@ def run_layer5(
     settlements_out["walking_detour_opt_km"] = [w_dict[sid]["detour_opt_km"] for sid in settlements_out["settlement_id"]]
     settlements_out["walking_breaks_opt_count"] = [len(w_dict[sid]["breaks_opt"]) for sid in settlements_out["settlement_id"]]
 
+    settlements_out["depends_on_construction_road"] = [depends_on_constr[sid] for sid in settlements_out["settlement_id"]]
+    settlements_out["construction_road_osm_ids"] = [", ".join(constr_ways_per_sid[sid]) for sid in settlements_out["settlement_id"]]
+
     # Save settlements.geojson in EPSG:4326 for standard GIS interoperability
     settle_geojson_path = out_path / "settlements.geojson"
     settlements_out.to_crs("EPSG:4326").to_file(settle_geojson_path, driver="GeoJSON")
@@ -163,7 +234,8 @@ def run_layer5(
             "crs": utm_crs,
             "total_settlements": len(settlements_gdf),
             "destinations_count": len(destinations_gdf),
-            "rural_roads_drivable": rural_roads_drivable
+            "rural_roads_drivable": rural_roads_drivable,
+            "construction_roads_passable": construction_roads_passable
         },
         "vehicle": {
             "total_settlements": len(settlements_gdf),
@@ -212,6 +284,12 @@ def run_layer5(
                     for item in w_res["pessimistic"]["cut_off_settlements"]
                 ]
             }
+        },
+        "construction_scenario": {
+            "construction_roads_passable": True,
+            "vehicle_cut_off_count": v_constr_res["optimistic"]["cut_off_count"],
+            "settlements_changed_count": len(changed_cutoffs),
+            "settlements_changed": changed_cutoffs
         }
     }
 
@@ -324,6 +402,7 @@ def run_layer5(
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
         rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
         snap_dead_end_nodes_m=snap_dead_end_m,
         utm_crs=utm_crs
     )
@@ -346,8 +425,32 @@ def run_layer5(
     ctrl_w_cutoff = ctrl_w_res["optimistic"]["cut_off_count"]
     logger.info(f"CONTROL Check: Vehicle cut-off = {ctrl_v_cutoff}, Walking cut-off = {ctrl_w_cutoff}")
 
+    # Re-run control with construction_roads_passable=True to verify 0 cut-offs in that scenario as well
+    ctrl_net_c = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=control_roads_path,
+        hazard_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=True,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    ctrl_vc_res = evaluate_network_connectivity(
+        G=ctrl_net_c["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="control_vehicle_constr",
+        max_snap_distance_m=max_snap_m
+    )
+    ctrl_vc_cutoff = ctrl_vc_res["optimistic"]["cut_off_count"]
+    logger.info(f"CONTROL Check (construction_roads_passable=True): Vehicle cut-off = {ctrl_vc_cutoff}")
+
     ctrl_summary = {
         "vehicle_cutoff_count": ctrl_v_cutoff,
+        "vehicle_constr_cutoff_count": ctrl_vc_cutoff,
         "walking_cutoff_count": ctrl_w_cutoff,
         "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
         "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
@@ -359,11 +462,12 @@ def run_layer5(
 
     # Assert cut-offs must be exactly 0
     assert ctrl_v_cutoff == 0, f"CONTROL vehicle cut-offs must be 0, got {ctrl_v_cutoff}"
+    assert ctrl_vc_cutoff == 0, f"CONTROL vehicle (construction passable) cut-offs must be 0, got {ctrl_vc_cutoff}"
     assert ctrl_w_cutoff == 0, f"CONTROL walking cut-offs must be 0, got {ctrl_w_cutoff}"
 
     # Copy artifacts to artifact dir
     if os.path.exists(artifact_dir):
-        for p in [overview_png, s3_comp_png, dead_end_png, repair_json_path, packages_json_path] + zoom_png_paths:
+        for p in [overview_png, s3_comp_png, dead_end_png, repair_json_path, packages_json_path, str(settle_geojson_path), str(summary_json_path)] + zoom_png_paths:
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(artifact_dir, os.path.basename(p)))
 

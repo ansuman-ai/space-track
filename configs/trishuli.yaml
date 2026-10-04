@@ -56,6 +56,7 @@ routing:
   dbscan_min_samples: 5
   named_place_max_distance_m: 500.0
   rural_roads_drivable: false
+  construction_roads_passable: false
   snap_dead_end_nodes_m: 5.0
   vehicle_highways:
     - motorway

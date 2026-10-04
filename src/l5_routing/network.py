@@ -22,6 +22,7 @@ def build_routing_networks(
     vehicle_highways: Optional[List[str]] = None,
     walking_highways_extra: Optional[List[str]] = None,
     rural_roads_drivable: bool = False,
+    construction_roads_passable: bool = False,
     snap_dead_end_nodes_m: float = 0.0,
     utm_crs: str = "EPSG:32645"
 ) -> Dict[str, Any]:
@@ -40,6 +41,8 @@ def build_routing_networks(
     v_types = set(vehicle_highways)
     if rural_roads_drivable:
         v_types.update(["track", "unclassified"])
+    if construction_roads_passable:
+        v_types.add("construction")
     w_types = v_types.union(set(walking_highways_extra))
 
     bbox_deg = box(*bbox)
@@ -87,8 +90,9 @@ def build_routing_networks(
         oid = str(row.get("@osmId", f"way_{idx}"))
         is_bridge = (str(row.get("bridge")) not in ["None", "no", "nan", ""])
 
-        is_v = hwy in v_types
-        is_w = hwy in w_types
+        constr_sub = str(row.get("construction", ""))
+        is_v = (hwy in v_types) or (construction_roads_passable and (hwy == "construction" or constr_sub in v_types))
+        is_w = (hwy in w_types) or (construction_roads_passable and (hwy == "construction" or constr_sub in w_types))
         if not is_v and not is_w:
             continue
 
@@ -117,6 +121,7 @@ def build_routing_networks(
                 e_attr = {
                     "weight": length_m,
                     "highway": hwy,
+                    "construction": constr_sub,
                     "osm_id": oid,
                     "damage_grade": damage_grade,
                     "is_bridge": is_bridge,
