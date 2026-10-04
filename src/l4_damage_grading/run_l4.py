@@ -41,8 +41,11 @@ def run_layer4(
     building_overlap_pct: float = 50.0,
     distance_damaged_m: float = 10.0,
     distance_possibly_damaged_m: float = 30.0,
-    road_segment_length_m: float = 100.0
+    road_segment_length_m: float = 100.0,
+    bridge_distance_m: float = 30.0,
+    bridge_reach_radius_m: float = 100.0
 ) -> Dict[str, Any]:
+
     """
     Executes complete Layer 4 critical infrastructure damage grading workflow.
     """
@@ -152,15 +155,29 @@ def run_layer4(
     # 6. Grade Bridges
     logger.info("Grading bridges...")
     br_file = osm_path / "osm_bridges.geojson"
+    w_file = osm_path / "osm_waterways.geojson"
+    raw_w = gpd.read_file(w_file) if w_file.exists() else None
+
+    # Load hazard classes raster if present for fine-scale distance lookup
+    haz_raster = None
+    haz_raster_path = Path(hazard_polygons_path).parent / "hazard_classes.tif"
+    if haz_raster_path.exists():
+        with rasterio.open(haz_raster_path) as src_haz:
+            haz_raster = src_haz.read(1)
+
     if br_file.exists():
         raw_br = gpd.read_file(br_file)
         br_graded = grade_bridges(
             bridges_gdf=raw_br,
             hazard_gdf=hazard_gdf,
+            waterways_gdf=raw_w,
+            hazard_raster=haz_raster,
+            transform_matrix=trans,
             cloud_nodata_mask=cloud_or_nodata,
             inv_transform=inv_trans,
             utm_crs=utm_crs,
-            distance_damaged_m=distance_damaged_m
+            bridge_distance_m=bridge_distance_m,
+            bridge_reach_radius_m=bridge_reach_radius_m
         )
     else:
         br_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
@@ -210,7 +227,13 @@ def run_layer4(
         "bridges": {
             "total_count": len(br_graded),
             "damage_grade_counts": br_counts,
-            "affected_count": int(br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0))
+            "rule_counts": br_graded["rule"].value_counts().to_dict() if len(br_graded) > 0 and "rule" in br_graded.columns else {},
+            "evidence_counts": br_graded["evidence"].value_counts().to_dict() if len(br_graded) > 0 and "evidence" in br_graded.columns else {},
+            "affected_count": int(br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0)),
+            "parameters": {
+                "bridge_distance_m": bridge_distance_m,
+                "bridge_reach_radius_m": bridge_reach_radius_m
+            }
         },
         "outputs": {
             "buildings_graded": b_out_file,
@@ -243,6 +266,8 @@ def main():
     distance_damaged_m = 10.0
     distance_possibly_damaged_m = 30.0
     road_segment_length_m = 100.0
+    bridge_distance_m = 30.0
+    bridge_reach_radius_m = 100.0
 
     if args.config and os.path.exists(args.config):
         with open(args.config, "r") as f:
@@ -256,6 +281,8 @@ def main():
         distance_damaged_m = float(dmg_cfg.get("distance_damaged_m", distance_damaged_m))
         distance_possibly_damaged_m = float(dmg_cfg.get("distance_possibly_damaged_m", distance_possibly_damaged_m))
         road_segment_length_m = float(dmg_cfg.get("road_segment_length_m", road_segment_length_m))
+        bridge_distance_m = float(dmg_cfg.get("bridge_distance_m", bridge_distance_m))
+        bridge_reach_radius_m = float(dmg_cfg.get("bridge_reach_radius_m", bridge_reach_radius_m))
 
     res = run_layer4(
         osm_dir=args.osm_dir,
@@ -266,7 +293,9 @@ def main():
         building_overlap_pct=building_overlap_pct,
         distance_damaged_m=distance_damaged_m,
         distance_possibly_damaged_m=distance_possibly_damaged_m,
-        road_segment_length_m=road_segment_length_m
+        road_segment_length_m=road_segment_length_m,
+        bridge_distance_m=bridge_distance_m,
+        bridge_reach_radius_m=bridge_reach_radius_m
     )
 
     print("\n================== LAYER 4 DAMAGE GRADING SUMMARY ==================")
@@ -278,3 +307,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

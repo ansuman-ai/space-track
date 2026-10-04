@@ -80,12 +80,16 @@ def compute_osm_coverage(
         perims_km = r_utm.length / 1000.0
         r_utm["perimeter_km"] = perims_km
 
-        # Diagonal / centerline length for bounding box ways
-        diags_km = []
+        lens_km = []
         for geom in r_utm.geometry:
-            minx, miny, maxx, maxy = geom.bounds
-            diags_km.append(np.hypot(maxx - minx, maxy - miny) / 1000.0)
-        r_utm["centerline_km"] = diags_km
+            if geom is not None and geom.geom_type in ["LineString", "MultiLineString"]:
+                lens_km.append(geom.length / 1000.0)
+            elif geom is not None:
+                minx, miny, maxx, maxy = geom.bounds
+                lens_km.append(np.hypot(maxx - minx, maxy - miny) / 1000.0)
+            else:
+                lens_km.append(0.0)
+        r_utm["centerline_km"] = lens_km
 
         for hwy, grp in r_utm.groupby("highway"):
             road_km_by_type[str(hwy)] = round(float(grp["centerline_km"].sum()), 2)

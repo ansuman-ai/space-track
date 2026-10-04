@@ -1,18 +1,26 @@
 """
 Layer 2 Quick-look Visualization Generator.
 Generates full AOI hazard classification map and high-resolution Syabru Besi 4x4 km zoom
-with Sentinel-2 Post True Colour and affected class outline.
+with Sentinel-2 Post True Colour and affected class outline, using unified plot_utils
+and built-in pre-event OSM river centreline alignment verification.
 """
 
 import os
 from typing import Dict, Any, Optional, Tuple
 import numpy as np
+import rasterio
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
+
+from src.common.plot_utils import (
+    plot_raster_background,
+    draw_osm_river_centreline,
+    reproject_vector,
+)
 
 
 def render_layer2_quicklook(
@@ -21,14 +29,21 @@ def render_layer2_quicklook(
     output_png_path: str,
     stats: Dict[str, Any],
     post_vis: Optional[np.ndarray] = None,
-    zoom_center: Tuple[int, int] = (992, 431)
+    zoom_center: Tuple[int, int] = (992, 431),
+    transform_matrix: Any = None
 ) -> str:
     """
-    Renders 2-panel figure:
+    Renders 2-panel figure with unified georeferencing and OSM river alignment check:
     - Panel 1: Full AOI hazard classification map
-    - Panel 2: Syabru Besi 4x4 km zoom with S2 Post True Colour and affected outline
+    - Panel 2: Syabru Besi 4x4 km zoom with S2 Post True Colour, outlines, and river alignment
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    if transform_matrix is None:
+        ref_path = "data/processed/hazard_classes.tif"
+        if os.path.exists(ref_path):
+            with rasterio.open(ref_path) as src:
+                transform_matrix = src.transform
 
     fig, axes = plt.subplots(1, 2, figsize=(22, 11), constrained_layout=True)
 
@@ -45,24 +60,37 @@ def render_layer2_quicklook(
     h, w = hazard_raster.shape
 
     # --- Panel 1: Full AOI ---
-    if post_vis is not None:
-        if post_vis.shape[0] == 3:
-            vis_rgb = post_vis.transpose(1, 2, 0)
+    if transform_matrix is not None:
+        if post_vis is not None:
+            extent_full, _ = plot_raster_background(axes[0], post_vis, transform=transform_matrix, zorder=1)
         else:
-            vis_rgb = post_vis
-        axes[0].imshow(vis_rgb)
+            extent_full, _ = plot_raster_background(axes[0], post_vv, transform=transform_matrix, cmap="gray", vmin=-25.0, vmax=5.0, zorder=1)
+        axes[0].imshow(hazard_raster, cmap=cmap, norm=norm, interpolation="nearest", extent=extent_full, zorder=2)
+        draw_osm_river_centreline(axes[0], zorder=10, lw=0.9, alpha=0.7)
     else:
-        axes[0].imshow(post_vv, cmap="gray", vmin=-25.0, vmax=5.0)
+        if post_vis is not None:
+            vis_rgb = post_vis.transpose(1, 2, 0) if post_vis.shape[0] == 3 else post_vis
+            axes[0].imshow(vis_rgb)
+        else:
+            axes[0].imshow(post_vv, cmap="gray", vmin=-25.0, vmax=5.0)
+        axes[0].imshow(hazard_raster, cmap=cmap, norm=norm, interpolation="nearest")
 
-    axes[0].imshow(hazard_raster, cmap=cmap, norm=norm, interpolation="nearest")
+    # Spatial coordinates for 4x4 km zoom around Syabru Besi
+    cx, cy = 337320.0, 3115840.0
+    half_w = 2000.0
+    xmin, xmax = cx - half_w, cx + half_w
+    ymin, ymax = cy - half_w, cy + half_w
 
-    # Zoom box rectangle outline on Panel 1
-    cr, cc = zoom_center
-    r1, r2 = max(0, cr - 200), min(h, cr + 200)
-    c1, c2 = max(0, cc - 200), min(w, cc + 200)
-    rect = plt.Rectangle((c1, r1), c2 - c1, r2 - r1, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--")
-    axes[0].add_patch(rect)
-    axes[0].text(c1 + 10, r1 + 30, "Syabru Besi 4x4km Zoom", color="yellow", fontsize=11, fontweight="bold")
+    if transform_matrix is not None:
+        rect = plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--", zorder=12)
+        axes[0].add_patch(rect)
+        axes[0].text(xmin + 100, ymax - 200, "Syabru Besi 4x4km Zoom", color="yellow", fontsize=11, fontweight="bold", zorder=12)
+    else:
+        cr, cc = zoom_center
+        r1, r2 = max(0, cr - 200), min(h, cr + 200)
+        c1, c2 = max(0, cc - 200), min(w, cc + 200)
+        rect = plt.Rectangle((c1, r1), c2 - c1, r2 - r1, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--")
+        axes[0].add_patch(rect)
 
     axes[0].set_title(
         f"Full AOI Hazard Classification ({w}x{h})\n"
@@ -77,70 +105,89 @@ def render_layer2_quicklook(
         mpatches.Patch(color=(0.12, 0.45, 0.95, 0.85), label=f"Class 1: Permanent Water ({stats.get('perm_water_km2', 0):.3f} km²)"),
         mpatches.Patch(color=(0.98, 0.15, 0.08, 0.90), label=f"Class 2: Observed Affected ({stats.get('affected_km2', 0):.3f} km²)"),
         mpatches.Patch(color=(1.0, 0.55, 0.0, 0.85), label=f"Class 3: Inferred Flooded ({stats.get('inferred_km2', 0):.3f} km²)"),
+        Line2D([0], [0], color="#00e5ff", lw=1.0, label="OSM River Centreline (Alignment Check)")
     ]
-    axes[0].legend(handles=legend_patches, loc="lower left", framealpha=0.9, fontsize=11)
+    axes[0].legend(handles=legend_patches, loc="lower left", framealpha=0.9, fontsize=10.5)
 
     # --- Panel 2: Syabru Besi 4x4 km Zoom with S2 Post True Colour + Outlines ---
-    sub_aff = (hazard_raster[r1:r2, c1:c2] == 2).astype(np.uint8)
-    sub_inf = (hazard_raster[r1:r2, c1:c2] == 3).astype(np.uint8)
-    sub_wat = (hazard_raster[r1:r2, c1:c2] == 1).astype(np.uint8)
+    if transform_matrix is not None:
+        bg_source = post_vis if post_vis is not None else post_vv
+        cmap_arg = None if post_vis is not None else "gray"
+        extent_zoom, _ = plot_raster_background(
+            axes[1],
+            bg_source,
+            transform=transform_matrix,
+            clip_extent=(xmin, xmax, ymin, ymax),
+            cmap=cmap_arg,
+            vmin=-25.0 if post_vis is None else None,
+            vmax=5.0 if post_vis is None else None,
+            zorder=1
+        )
 
-    if post_vis is not None:
-        if post_vis.shape[0] == 3:
-            sub_vis = post_vis[:, r1:r2, c1:c2].transpose(1, 2, 0)
-        else:
-            sub_vis = post_vis[r1:r2, c1:c2]
-        axes[1].imshow(sub_vis)
-    else:
-        axes[1].imshow(post_vv[r1:r2, c1:c2], cmap="gray", vmin=-25.0, vmax=5.0)
+        # Slice hazard raster using transform
+        inv_trans = ~transform_matrix
+        c1_idx = int(round((xmin - transform_matrix.c) / transform_matrix.a))
+        r1_idx = int(round((ymax - transform_matrix.f) / transform_matrix.e))
+        c2_idx = int(round((xmax - transform_matrix.c) / transform_matrix.a))
+        r2_idx = int(round((ymin - transform_matrix.f) / transform_matrix.e))
 
-    # Inferred Flooded (Class 3) Orange contour + fill
-    if np.sum(sub_inf) > 0:
-        axes[1].contour(sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--')
-        inf_rgba = np.zeros((*sub_inf.shape, 4), dtype=np.float32)
-        inf_rgba[sub_inf == 1] = [1.0, 0.55, 0.0, 0.35]
-        axes[1].imshow(inf_rgba)
+        r_start = max(0, min(r1_idx, r2_idx, h))
+        r_end = max(0, min(max(r1_idx, r2_idx), h))
+        c_start = max(0, min(c1_idx, c2_idx, w))
+        c_end = max(0, min(max(c1_idx, c2_idx), w))
 
-    # Observed Affected (Class 2) Red contour + fill
-    if np.sum(sub_aff) > 0:
-        axes[1].contour(sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2)
-        aff_rgba = np.zeros((*sub_aff.shape, 4), dtype=np.float32)
-        aff_rgba[sub_aff == 1] = [1.0, 0.15, 0.0, 0.40]
-        axes[1].imshow(aff_rgba)
+        sub_aff = (hazard_raster[r_start:r_end, c_start:c_end] == 2).astype(np.uint8)
+        sub_inf = (hazard_raster[r_start:r_end, c_start:c_end] == 3).astype(np.uint8)
+        sub_wat = (hazard_raster[r_start:r_end, c_start:c_end] == 1).astype(np.uint8)
 
-    if np.sum(sub_wat) > 0:
-        axes[1].contour(sub_wat, levels=[0.5], colors=['#00c0ff'], linewidths=1.8)
-        wat_rgba = np.zeros((*sub_wat.shape, 4), dtype=np.float32)
-        wat_rgba[sub_wat == 1] = [0.0, 0.4, 1.0, 0.35]
-        axes[1].imshow(wat_rgba)
+        # Coordinates for contours
+        nx, ny = c_end - c_start, r_end - r_start
+        X = np.linspace(extent_zoom[0], extent_zoom[1], nx)
+        Y = np.linspace(extent_zoom[3], extent_zoom[2], ny)
 
-    # Town center
-    town_r, town_c = cr - r1, cc - c1
-    axes[1].plot(town_c, town_r, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5)
-    axes[1].text(
-        town_c + 8, town_r, "Syabru Besi\n(85.343°E, 28.161°N)",
-        color="white", fontsize=11, fontweight="bold",
-        bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.7, edgecolor="none")
-    )
+        if np.sum(sub_inf) > 0:
+            axes[1].contour(X, Y, sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--', zorder=3)
+            inf_rgba = np.zeros((*sub_inf.shape, 4), dtype=np.float32)
+            inf_rgba[sub_inf == 1] = [1.0, 0.55, 0.0, 0.35]
+            axes[1].imshow(inf_rgba, extent=extent_zoom, origin="upper", zorder=3)
 
-    zoom_aff_km2 = np.sum(sub_aff) * 0.0001
-    zoom_inf_km2 = np.sum(sub_inf) * 0.0001
-    zoom_wat_km2 = np.sum(sub_wat) * 0.0001
+        if np.sum(sub_aff) > 0:
+            axes[1].contour(X, Y, sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2, zorder=4)
+            aff_rgba = np.zeros((*sub_aff.shape, 4), dtype=np.float32)
+            aff_rgba[sub_aff == 1] = [1.0, 0.15, 0.0, 0.40]
+            axes[1].imshow(aff_rgba, extent=extent_zoom, origin="upper", zorder=4)
+
+        if np.sum(sub_wat) > 0:
+            axes[1].contour(X, Y, sub_wat, levels=[0.5], colors=['#00c0ff'], linewidths=1.8, zorder=5)
+
+        # Built-in river alignment check on zoom
+        draw_osm_river_centreline(axes[1], clip_bounds=(xmin, ymin, xmax, ymax), zorder=12, lw=1.2, color="#00e5ff")
+
+        # Town center
+        axes[1].plot(cx, cy, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5, zorder=15)
+        axes[1].text(
+            cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+            color="white", fontsize=11, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
+            zorder=15
+        )
 
     axes[1].set_title(
-        f"Syabru Besi 4x4 km Zoom (Rows {r1}:{r2}, Cols {c1}:{c2})\n"
-        f"Sentinel-2 Post True Colour + Observed (red) & Inferred (orange) Outlines",
+        "Syabru Besi 4x4 km Zoom (Aligned S2 Post True Colour)\n"
+        "Observed (red) & Inferred (orange) Outlines + River Alignment Check (cyan)",
         fontsize=13, fontweight="bold"
     )
     axes[1].axis("off")
 
+    zoom_aff_km2 = np.sum(hazard_raster == 2) * 0.0001
+    zoom_inf_km2 = np.sum(hazard_raster == 3) * 0.0001
     zoom_legend = [
-        Line2D([0], [0], color='#ff2200', lw=2.5, label=f"Class 2: Observed ({zoom_aff_km2:.3f} km²)"),
-        Line2D([0], [0], color='#ff8800', lw=2.0, linestyle='--', label=f"Class 3: Inferred ({zoom_inf_km2:.3f} km²)"),
-        Line2D([0], [0], color='#00c0ff', lw=1.8, label=f"Class 1: Water ({zoom_wat_km2:.3f} km²)"),
-        Line2D([0], [0], marker='*', color='w', markeredgecolor='black', markersize=12, label="Town Center", linestyle="None")
+        Line2D([0], [0], color='#ff2200', lw=2.5, label="Class 2: Observed Damage"),
+        Line2D([0], [0], color='#ff8800', lw=2.0, linestyle='--', label="Class 3: Inferred Flooded"),
+        Line2D([0], [0], color='#00e5ff', lw=1.2, label="OSM River Centreline (Alignment Check)"),
+        Line2D([0], [0], marker='*', color='w', markeredgecolor='black', markersize=12, label="Syabru Besi Center", linestyle="None")
     ]
-    axes[1].legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=11)
+    axes[1].legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=10.5)
 
     fig.suptitle(
         "Layer 2 Final Hazard Detection: Sentinel-2 Optical Primary + Sentinel-1 SAR Fallback",
@@ -154,35 +201,36 @@ def render_layer2_quicklook(
     zoom_only_path = output_png_path.replace("quicklook_layer2.png", "quicklook_syabrubesi.png")
     if zoom_only_path != output_png_path:
         fig_z, ax_z = plt.subplots(figsize=(10, 10), constrained_layout=True)
-        if post_vis is not None:
-            ax_z.imshow(sub_vis)
-        else:
-            ax_z.imshow(post_vv[r1:r2, c1:c2], cmap="gray", vmin=-25.0, vmax=5.0)
-
-        if np.sum(sub_inf) > 0:
-            ax_z.contour(sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--')
-            ax_z.imshow(inf_rgba)
-        if np.sum(sub_aff) > 0:
-            ax_z.contour(sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2)
-            ax_z.imshow(aff_rgba)
-        if np.sum(sub_wat) > 0:
-            ax_z.contour(sub_wat, levels=[0.5], colors=['#00c0ff'], linewidths=1.8)
-            ax_z.imshow(wat_rgba)
-
-        ax_z.plot(town_c, town_r, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5)
-        ax_z.text(
-            town_c + 8, town_r, "Syabru Besi\n(85.343°E, 28.161°N)",
-            color="white", fontsize=11, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.7, edgecolor="none")
-        )
+        if transform_matrix is not None:
+            plot_raster_background(
+                ax_z,
+                bg_source,
+                transform=transform_matrix,
+                clip_extent=(xmin, xmax, ymin, ymax),
+                cmap=cmap_arg,
+                zorder=1
+            )
+            if np.sum(sub_inf) > 0:
+                ax_z.contour(X, Y, sub_inf, levels=[0.5], colors=['#ff8800'], linewidths=1.8, linestyles='--', zorder=3)
+                ax_z.imshow(inf_rgba, extent=extent_zoom, origin="upper", zorder=3)
+            if np.sum(sub_aff) > 0:
+                ax_z.contour(X, Y, sub_aff, levels=[0.5], colors=['#ff2200'], linewidths=2.2, zorder=4)
+                ax_z.imshow(aff_rgba, extent=extent_zoom, origin="upper", zorder=4)
+            draw_osm_river_centreline(ax_z, clip_bounds=(xmin, ymin, xmax, ymax), zorder=12, lw=1.2, color="#00e5ff")
+            ax_z.plot(cx, cy, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5, zorder=15)
+            ax_z.text(
+                cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+                color="white", fontsize=11, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
+                zorder=15
+            )
         ax_z.set_title(
-            "Layer 2 Detection: Syabru Besi 4x4 km Zoom\nSentinel-2 Post True Colour (2026-08-27) + Affected Outline",
+            "Layer 2 Detection: Syabru Besi 4x4 km Zoom (Aligned)\nSentinel-2 Post True Colour (2026-08-27) + River Alignment Check",
             fontsize=13, fontweight="bold", pad=10
         )
         ax_z.axis("off")
-        ax_z.legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=11)
+        ax_z.legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=10.5)
         plt.savefig(zoom_only_path, dpi=200, bbox_inches="tight")
         plt.close(fig_z)
 
     return output_png_path
-

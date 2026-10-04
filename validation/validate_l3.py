@@ -1,6 +1,7 @@
 """
 Layer 3 Validation: Copernicus EMS EMSR927 Evaluation.
-Evaluates Layer 2 hazard detection outputs against Copernicus EMS EMSR927 (AOI01 Syabru Besi).
+Evaluates Layer 2 hazard detection outputs against Copernicus EMS EMSR927 (AOI01 Syabru Besi),
+using unified plot_utils and built-in river centreline alignment check.
 """
 
 import sys
@@ -15,6 +16,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+from src.common.plot_utils import (
+    plot_raster_background,
+    draw_osm_river_centreline,
+    reproject_vector,
+)
 
 
 def run_validation():
@@ -92,44 +99,78 @@ def run_validation():
     print(f"Tolerant 20m: IoU={iou_20m:.4f}, F1={f1_20m:.4f}, Prec={prec_20m:.4f}, Rec={rec_20m:.4f}")
 
     # 6. Syabru Besi Overlay Plot
-    data = np.load("data/interim/s2_cache/post_119_S2B_MSIL2A_20260827T045659_R11.npz")
-    vis = data["visual"]
-    r1, r2 = 792, 1192
-    c1, c2 = 231, 631
-
-    sub_vis = vis[:, r1:r2, c1:c2].transpose(1, 2, 0)
-    sub_ours = (hazard_raster[r1:r2, c1:c2] == 2).astype(np.uint8)
-    sub_ems = ems_mask[r1:r2, c1:c2]
-    sub_aoi = aoi_mask[r1:r2, c1:c2]
+    cx, cy = 337320.0, 3115840.0
+    half_w = 2000.0
+    xmin, xmax = cx - half_w, cx + half_w
+    ymin, ymax = cy - half_w, cy + half_w
 
     fig, ax = plt.subplots(figsize=(10, 10), dpi=200)
-    ax.imshow(sub_vis)
 
-    if np.sum(sub_ems) > 0:
-        ax.contour(sub_ems, levels=[0.5], colors=["#ffe600"], linewidths=2.5)
-        ems_rgba = np.zeros((*sub_ems.shape, 4), dtype=np.float32)
-        ems_rgba[sub_ems == 1] = [1.0, 0.9, 0.0, 0.25]
-        ax.imshow(ems_rgba)
-
-    if np.sum(sub_ours) > 0:
-        ax.contour(sub_ours, levels=[0.5], colors=["#ff2200"], linewidths=2.0)
-        ours_rgba = np.zeros((*sub_ours.shape, 4), dtype=np.float32)
-        ours_rgba[sub_ours == 1] = [1.0, 0.15, 0.0, 0.40]
-        ax.imshow(ours_rgba)
-
-    if np.sum(sub_aoi) > 0:
-        ax.contour(sub_aoi, levels=[0.5], colors=["#00ffff"], linewidths=1.5, linestyles="--")
-
-    town_r, town_c = 992 - r1, 431 - c1
-    ax.plot(town_c, town_r, "w*", markersize=14, markeredgecolor="black", markeredgewidth=1.5)
-    ax.text(
-        town_c + 8, town_r, "Syabru Besi\n(85.343°E, 28.161°N)",
-        color="white", fontsize=10, fontweight="bold",
-        bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.7, edgecolor="none")
+    # Plot accurately georeferenced raster background
+    npz_path = "data/interim/s2_cache/post_119_S2B_MSIL2A_20260827T045659_R11.npz"
+    extent, _ = plot_raster_background(
+        ax,
+        npz_path,
+        transform=trans,
+        clip_extent=(xmin, xmax, ymin, ymax),
+        zorder=1
     )
+
+    # EMS Landslide footprint (yellow outline + fill)
+    ems_clip = ems_gdf.clip_by_rect(xmin, ymin, xmax, ymax)
+    ems_clip = ems_clip[~ems_clip.is_empty]
+    if len(ems_clip) > 0:
+        ems_clip.plot(ax=ax, facecolor=(1.0, 0.9, 0.0, 0.20), edgecolor="#ffe600", linewidth=2.2, zorder=3)
+
+    # Our Layer 2 Class 2 & Class 3
+    inv_trans = ~trans
+    c1 = int(round((xmin - trans.c) / trans.a))
+    r1 = int(round((ymax - trans.f) / trans.e))
+    c2 = int(round((xmax - trans.c) / trans.a))
+    r2 = int(round((ymin - trans.f) / trans.e))
+
+    r_start = max(0, min(r1, r2, h))
+    r_end = max(0, min(max(r1, r2), h))
+    c_start = max(0, min(c1, c2, w))
+    c_end = max(0, min(max(c1, c2), w))
+
+    sub_c2 = (hazard_raster[r_start:r_end, c_start:c_end] == 2).astype(np.uint8)
+    sub_c3 = (hazard_raster[r_start:r_end, c_start:c_end] == 3).astype(np.uint8)
+
+    nx, ny = c_end - c_start, r_end - r_start
+    X = np.linspace(extent[0], extent[1], nx)
+    Y = np.linspace(extent[3], extent[2], ny)
+
+    if np.sum(sub_c3) > 0:
+        ax.contour(X, Y, sub_c3, levels=[0.5], colors=["#ff8800"], linewidths=1.8, linestyles="--", zorder=4)
+
+    if np.sum(sub_c2) > 0:
+        ax.contour(X, Y, sub_c2, levels=[0.5], colors=["#ff2200"], linewidths=2.0, zorder=5)
+        c2_rgba = np.zeros((*sub_c2.shape, 4), dtype=np.float32)
+        c2_rgba[sub_c2 == 1] = [1.0, 0.15, 0.0, 0.35]
+        ax.imshow(c2_rgba, extent=extent, origin="upper", zorder=5)
+
+    # AOI boundary
+    aoi_clip = aoi_gdf.clip_by_rect(xmin, ymin, xmax, ymax)
+    aoi_clip = aoi_clip[~aoi_clip.is_empty]
+    if len(aoi_clip) > 0:
+        aoi_clip.boundary.plot(ax=ax, color="#00ffff", linewidth=1.5, linestyle="--", zorder=6)
+
+    # Built-in River Centreline Alignment Verification
+    draw_osm_river_centreline(ax, target_crs=crs, clip_bounds=(xmin, ymin, xmax, ymax), color="#00e5ff", lw=1.2, zorder=12)
+
+    # Town center
+    ax.plot(cx, cy, "w*", markersize=14, markeredgecolor="black", markeredgewidth=1.5, zorder=15)
+    ax.text(
+        cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+        color="white", fontsize=10, fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.7, edgecolor="none"),
+        zorder=15
+    )
+
     ax.set_title(
-        "Layer 3 Validation: Syabru Besi 4x4 km Zoom\n"
-        "Sentinel-2 Post True Colour (2026-08-27) + Copernicus EMS vs Layer 2 Detector",
+        "Layer 3 Validation: Syabru Besi 4x4 km Zoom (Georeferenced Alignment)\n"
+        "Sentinel-2 Post True Colour (2026-08-27) + River Alignment Check (cyan)",
         fontsize=12, fontweight="bold", pad=10
     )
     ax.axis("off")
@@ -137,10 +178,12 @@ def run_validation():
     legend_elements = [
         Line2D([0], [0], color="#ffe600", lw=2.5, label="Copernicus EMS Landslide (EMSR927)"),
         Line2D([0], [0], color="#ff2200", lw=2.0, label="Our Layer 2 Flood/Debris (Class 2)"),
+        Line2D([0], [0], color="#ff8800", lw=1.8, linestyle="--", label="Our Layer 2 Inferred (Class 3)"),
+        Line2D([0], [0], color="#00e5ff", lw=1.2, label="OSM River Centreline (Alignment Check)"),
         Line2D([0], [0], color="#00ffff", lw=1.5, linestyle="--", label="EMS AOI Boundary"),
         Line2D([0], [0], marker="*", color="w", markeredgecolor="black", markersize=12, label="Syabru Besi Center", linestyle="None")
     ]
-    ax.legend(handles=legend_elements, loc="lower left", framealpha=0.9, fontsize=10)
+    ax.legend(handles=legend_elements, loc="lower left", framealpha=0.9, fontsize=9.5)
 
     plt.savefig(output_png, bbox_inches="tight")
     plt.close()

@@ -25,6 +25,7 @@ http_client.headers.update({
 OHSOME_BASE_URL = "https://api.ohsome.org/v1"
 
 OSM_QUERIES = {
+    "waterways": "(waterway=* or natural=water) and (geometry:line or geometry:polygon)",
     "roads": "highway=* and highway!=footway and highway!=path and highway!=steps and highway!=cycleway and geometry:line",
     "bridges": "bridge=* and bridge!=no and geometry:line",
     "buildings": "building=* and geometry:polygon",
@@ -51,34 +52,54 @@ def query_ohsome_layer(
     filter_expr: str,
     snapshot_time: str
 ) -> Dict[str, Any]:
-    """Query ohsome elements/bbox (or elements/geometry) endpoint."""
+    """Query ohsome geometry extraction endpoint (elements/geometry or elementsFullHistory/geometry)."""
     bbox_str = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
-    data = {
+    
+    # Try elements/geometry first
+    data_single = {
         "bboxes": bbox_str,
         "filter": filter_expr,
         "time": snapshot_time,
         "properties": "tags"
     }
+    url_single = f"{OHSOME_BASE_URL}/elements/geometry"
+    try:
+        resp = http_client.post(url_single, data=data_single, timeout=60)
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            logger.info(f"elements/geometry returned HTTP {resp.status_code}; trying elementsFullHistory/geometry...")
+    except Exception as e:
+        logger.info(f"elements/geometry failed: {e}")
 
-    # Try elements/bbox endpoint first (publicly permitted)
-    endpoints = ["elements/bbox", "elements/geometry"]
-    last_err = None
-    for ep in endpoints:
-        url = f"{OHSOME_BASE_URL}/{ep}"
-        try:
-            resp = http_client.post(url, data=data, timeout=120)
-            if resp.status_code == 200:
-                return resp.json()
-            elif resp.status_code == 403:
-                last_err = f"HTTP 403 on {ep}"
-                continue
-            else:
-                last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
-        except requests.exceptions.RequestException as e:
-            last_err = f"Request exception on {ep}: {e}"
-
-    logger.error(f"Failed to query ohsome for filter '{filter_expr}': {last_err}")
-    sys.exit(f"FAILED: ohsome query failed: {last_err}")
+    # Fallback to elementsFullHistory/geometry with pre-event time interval
+    t_end = datetime.fromisoformat(snapshot_time.replace("Z", "+00:00"))
+    t_start = (t_end - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    time_interval = f"{t_start},{snapshot_time}"
+    
+    data_hist = {
+        "bboxes": bbox_str,
+        "filter": filter_expr,
+        "time": time_interval,
+        "properties": "tags,metadata"
+    }
+    url_hist = f"{OHSOME_BASE_URL}/elementsFullHistory/geometry"
+    resp = http_client.post(url_hist, data=data_hist, timeout=120)
+    if resp.status_code == 200:
+        res = resp.json()
+        feats = res.get("features", [])
+        # Deduplicate by @osmId keeping latest version
+        dedup = {}
+        for f in feats:
+            oid = f.get("properties", {}).get("@osmId")
+            ver = f.get("properties", {}).get("@version", 0)
+            if oid not in dedup or ver > dedup[oid].get("properties", {}).get("@version", 0):
+                dedup[oid] = f
+        res["features"] = list(dedup.values())
+        return res
+    else:
+        logger.error(f"elementsFullHistory/geometry failed: {resp.status_code} - {resp.text[:200]}")
+        sys.exit(f"FAILED: ohsome geometry query failed: {resp.status_code}")
 
 
 def fetch_osm(

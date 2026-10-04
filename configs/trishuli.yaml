@@ -46,4 +46,7 @@ damage_grading:
   distance_damaged_m: 10.0    # Centroid/distance to Class 2 for Damaged (D1 m)
   distance_possibly_damaged_m: 30.0  # Centroid/distance to Class 2 for Possibly damaged (D2 m, D2 > D1)
   road_segment_length_m: 100.0  # Maximum length of road segments (m)
+  bridge_distance_m: 30.0       # Proximity to Class 2/3 for bridges (D_bridge m)
+  bridge_reach_radius_m: 100.0  # Proximity along crossed river reach for bridges (R m)
+
 
