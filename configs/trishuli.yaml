@@ -54,6 +54,8 @@ routing:
   max_snap_distance_m: 500.0
   dbscan_eps_m: 65.0
   dbscan_min_samples: 5
+  named_place_max_distance_m: 500.0
+  rural_roads_drivable: false
   vehicle_highways:
     - motorway
     - trunk

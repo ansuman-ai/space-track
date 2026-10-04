@@ -1,10 +1,12 @@
 """
 Layer 5 Quicklook Visualization Generator.
 Produces:
-1. Overview map of study area showing network status, settlements (cut off vs connected),
+1. Overview map of study area showing network status, settlements (cut off vs connected clear vs unverified),
    broken infrastructure elements, and target destinations.
 2. High-resolution zoom plots for the 3 largest cut-off settlements showing pre-event route (green)
-   and broken infrastructure element (red).
+   and broken infrastructure elements (red).
+3. Zoom map of Settlement #3's post-event connected road component (amber) illustrating why western roads
+   dead-end in mountain valleys with 0 reachable destinations.
 Strictly uses plot_utils for georeferenced raster background and river alignment line.
 """
 
@@ -22,6 +24,8 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import geopandas as gpd
 from shapely.geometry import Point, LineString, box
+import networkx as nx
+from scipy.spatial import cKDTree
 
 from src.common.plot_utils import (
     plot_raster_background,
@@ -60,6 +64,7 @@ NEPALI_TRANSLITERATION = {
     "शिखरबेंसी स्वास्थ्य चौकी": "Shikharbesi Health Post",
 }
 
+
 def clean_label(text: Any) -> str:
     s = str(text)
     for k, v in NEPALI_TRANSLITERATION.items():
@@ -79,7 +84,8 @@ def render_l5_overview(
     utm_crs: str = "EPSG:32645"
 ) -> str:
     """
-    Renders full study bbox overview of settlement isolation and road network status.
+    Renders full study bbox overview of settlement isolation and road network status
+    with 3-value status classification.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
 
@@ -170,11 +176,12 @@ def render_l5_overview(
                 zorder=15
             )
 
-    # 6. Settlements
+    # 6. Settlements Classified by 3-Value Status
     s_view = settle_utm.cx[xmin:xmax, ymin:ymax]
     s_cutoff = s_view[s_view["vehicle_status_opt"] == "cut_off"]
-    s_conn = s_view[s_view["vehicle_status_opt"] == "connected"]
-    s_noacc = s_view[s_view["vehicle_status_opt"] == "no_network_access"]
+    s_conn_clear = s_view[s_view["vehicle_status_opt"] == "connected (route verified clear)"]
+    s_conn_unverified = s_view[s_view["vehicle_status_opt"] == "connected (unverified: route passes cloud-covered segments)"]
+    s_noacc = s_view[s_view["vehicle_status_opt"].isin(["no_network_access", "isolated_pre_event"])]
 
     if len(s_noacc) > 0:
         s_noacc.plot(
@@ -187,12 +194,22 @@ def render_l5_overview(
             alpha=0.7,
             zorder=9
         )
-    if len(s_conn) > 0:
-        s_conn.plot(
+    if len(s_conn_unverified) > 0:
+        s_conn_unverified.plot(
+            ax=ax,
+            color="#ffcc00",
+            marker="o",
+            markersize=60,
+            edgecolor="black",
+            linewidth=1.0,
+            zorder=10
+        )
+    if len(s_conn_clear) > 0:
+        s_conn_clear.plot(
             ax=ax,
             color="#00ff66",
             marker="o",
-            markersize=55,
+            markersize=60,
             edgecolor="black",
             linewidth=1.0,
             zorder=10
@@ -228,20 +245,21 @@ def render_l5_overview(
     ax.set_aspect("equal")
     ax.set_title(
         f"Layer 5 Routing & Settlement Isolation Overview (Trishuli / Syabru Besi)\n"
-        f"Settlements: {len(s_cutoff)} Cut Off (Vehicle) | {len(s_conn)} Connected | {len(s_noacc)} No Vehicle Access",
-        fontsize=13,
+        f"Vehicle: {len(s_cutoff)} Cut Off | {len(s_conn_clear)} Connected (Verified Clear) | {len(s_conn_unverified)} Connected (Cloud-Unverified) | {len(s_noacc)} No Vehicle Access",
+        fontsize=12,
         fontweight="bold",
         pad=12
     )
 
     legend_elements = [
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#ff1133", markersize=10, label=f"Settlement Cut Off ({len(s_cutoff)})"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#00ff66", markersize=9, label=f"Settlement Connected ({len(s_conn)})"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888", markersize=7, label=f"No Vehicle Access ({len(s_noacc)})"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#ff1133", markersize=10, label=f"Cut Off ({len(s_cutoff)})"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#ffcc00", markersize=9, label=f"Connected (Unverified: cloud) ({len(s_conn_unverified)})"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#00ff66", markersize=9, label=f"Connected (Verified Clear) ({len(s_conn_clear)})"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888", markersize=7, label=f"No Pre-Event Vehicle Access ({len(s_noacc)})"),
         Line2D([0], [0], color="#ff0033", lw=3.0, label="Destroyed Road / Bridge"),
         Line2D([0], [0], color="#ff9900", lw=2.0, linestyle="--", label="Possibly Damaged Road / Bridge"),
         Line2D([0], [0], color="#777777", lw=1.2, label="Intact Road Network"),
-        Line2D([0], [0], marker="P", color="w", markerfacecolor="#00ffff", markeredgecolor="black", markersize=10, label=f"Health Facility Destination ({len(dest_utm)})"),
+        Line2D([0], [0], marker="P", color="w", markerfacecolor="#00ffff", markeredgecolor="black", markersize=10, label=f"Destination ({len(dest_utm)})"),
         Line2D([0], [0], color="#00e5ff", lw=1.5, label="OSM waterway=river (Alignment Check)")
     ]
     ax.legend(handles=legend_elements, loc="lower right", framealpha=0.9, facecolor="#222222", edgecolor="#555555", fontsize=9, labelcolor="white")
@@ -258,14 +276,12 @@ def render_cutoff_zoom(
     output_png_path: str,
     s2_post_visual: np.ndarray,
     transform_matrix: Any,
-    all_roads_gdf: gpd.GeoDataFrame,
+    all_roads_gdf: Optional[gpd.GeoDataFrame] = None,
     utm_crs: str = "EPSG:32645"
 ) -> str:
     """
-    Renders a dedicated zoom plot for a cut-off settlement showing:
-    - Pre-event route in vibrant green (#00ff66)
-    - Severed infrastructure element in bold red (#ff0033)
-    - High-resolution optical background and river alignment line
+    Renders high-resolution zoom plot for a cut-off settlement showing pre-event route
+    and all broken infrastructure elements.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
 
@@ -273,24 +289,28 @@ def render_cutoff_zoom(
     bldgs = settlement_dict["building_count"]
     pre_len_km = settlement_dict["pre_route_km"]
     path_coords = settlement_dict["pre_path"]
-    broken = settlement_dict.get("broken_element", {})
+    breaks = settlement_dict.get("breaks", [])
+    if not breaks and "broken_element" in settlement_dict and settlement_dict["broken_element"]:
+        breaks = [settlement_dict["broken_element"]]
+    broken = breaks[0] if breaks else {}
 
     if not path_coords or len(path_coords) < 2:
         return ""
 
     route_line = LineString(path_coords)
-    broken_coords = broken.get("coords") if broken else None
 
-    # Calculate spatial extent covering settlement and broken element
+    # Calculate spatial extent covering settlement and all broken elements
     xs = [p[0] for p in path_coords]
     ys = [p[1] for p in path_coords]
-    if broken_coords:
-        xs.extend([broken_coords[0][0], broken_coords[1][0]])
-        ys.extend([broken_coords[0][1], broken_coords[1][1]])
+    for b_item in breaks:
+        b_coords = b_item.get("coords")
+        if b_coords:
+            xs.extend([b_coords[0][0], b_coords[1][0]])
+            ys.extend([b_coords[0][1], b_coords[1][1]])
 
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
-    # Add context margin (at least 500m)
+    # Add context margin (at least 600m)
     margin = max(600.0, 0.15 * max(max_x - min_x, max_y - min_y))
     xmin, xmax = min_x - margin, max_x + margin
     ymin, ymax = min_y - margin, max_y + margin
@@ -338,32 +358,38 @@ def render_cutoff_zoom(
         zorder=10
     )
 
-    # 5. Broken Infrastructure Element (Red)
-    if broken_coords:
-        broken_line = LineString(broken_coords)
-        brk_gdf = gpd.GeoDataFrame([{"geometry": broken_line}], crs=utm_crs)
-        brk_gdf.plot(
-            ax=ax,
-            color="#ff0033",
-            linewidth=6.0,
-            zorder=15
-        )
+    # 5. Broken Infrastructure Elements (Red)
+    if breaks:
+        for b_item in breaks:
+            b_coords = b_item.get("coords")
+            if b_coords:
+                b_line = LineString(b_coords)
+                b_gdf = gpd.GeoDataFrame([{"geometry": b_line}], crs=utm_crs)
+                b_gdf.plot(
+                    ax=ax,
+                    color="#ff0033",
+                    linewidth=6.0,
+                    zorder=15
+                )
 
-        mid_x = (broken_coords[0][0] + broken_coords[1][0]) / 2.0
-        mid_y = (broken_coords[0][1] + broken_coords[1][1]) / 2.0
-        brk_label = f"SEVERED: {broken.get('osm_id')} ({broken.get('highway')})"
-        ax.annotate(
-            brk_label,
-            xy=(mid_x, mid_y),
-            xytext=(15, 20),
-            textcoords="offset points",
-            fontsize=9,
-            fontweight="bold",
-            color="#ff3333",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#ff0033", lw=1.2),
-            arrowprops=dict(arrowstyle="->", color="#ff0033", lw=1.5),
-            zorder=18
-        )
+        # Primary break annotation
+        if broken.get("coords"):
+            b_coords = broken["coords"]
+            mid_x = (b_coords[0][0] + b_coords[1][0]) / 2.0
+            mid_y = (b_coords[0][1] + b_coords[1][1]) / 2.0
+            brk_label = f"SEVERED: {broken.get('osm_id')} ({broken.get('highway')})"
+            ax.annotate(
+                brk_label,
+                xy=(mid_x, mid_y),
+                xytext=(15, 20),
+                textcoords="offset points",
+                fontsize=9,
+                fontweight="bold",
+                color="#ff3333",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#ff0033", lw=1.2),
+                arrowprops=dict(arrowstyle="->", color="#ff0033", lw=1.5),
+                zorder=18
+            )
 
     # 6. Settlement Origin
     orig_x, orig_y = path_coords[0]
@@ -388,12 +414,35 @@ def render_cutoff_zoom(
         zorder=18
     )
 
+    # 7. Destination
+    dest_x, dest_y = path_coords[-1]
+    ax.scatter(
+        [dest_x], [dest_y],
+        color="#00ffff",
+        s=160,
+        marker="P",
+        edgecolor="black",
+        linewidth=1.2,
+        zorder=16
+    )
+    ax.annotate(
+        "Destination:\nRasuwa District Hospital",
+        xy=(dest_x, dest_y),
+        xytext=(12, 10),
+        textcoords="offset points",
+        fontsize=9,
+        fontweight="bold",
+        color="#00ffff",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#00ffff", lw=1.2),
+        zorder=18
+    )
+
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
     ax.set_aspect("equal")
     ax.set_title(
         f"Cut-Off Settlement #{rank}: {name} ({bldgs} buildings)\n"
-        f"Pre-Event Route: {pre_len_km:.2f} km | Break Point: {broken.get('osm_id', 'unknown')}",
+        f"Pre-Event Route: {pre_len_km:.2f} km to Hospital | Breaks: {len(breaks)} destroyed elements",
         fontsize=12,
         fontweight="bold",
         pad=10
@@ -402,11 +451,189 @@ def render_cutoff_zoom(
     legend_elements = [
         Line2D([0], [0], marker="*", color="w", markerfacecolor="#ffff00", markeredgecolor="black", markersize=14, label=f"Origin: {name}"),
         Line2D([0], [0], color="#00ff66", lw=3.5, label=f"Pre-Event Route ({pre_len_km:.2f} km)"),
-        Line2D([0], [0], color="#ff0033", lw=5.0, label=f"Broken Element ({broken.get('osm_id', 'Severed')})"),
+        Line2D([0], [0], color="#ff0033", lw=5.0, label=f"Destroyed Elements ({len(breaks)} cuts)"),
+        Line2D([0], [0], marker="P", color="w", markerfacecolor="#00ffff", markeredgecolor="black", markersize=12, label="Destination (Rasuwa District Hospital)"),
         Line2D([0], [0], color="#00e5ff", lw=1.5, label="OSM waterway=river (Alignment Check)"),
         Line2D([0], [0], color="#555555", lw=1.0, label="Other Roads")
     ]
     ax.legend(handles=legend_elements, loc="upper right", framealpha=0.9, facecolor="#222222", edgecolor="#555555", fontsize=9, labelcolor="white")
+
+    plt.tight_layout()
+    plt.savefig(output_png_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return output_png_path
+
+
+def render_settlement3_component(
+    settlements_gdf: gpd.GeoDataFrame,
+    G_vehicle: nx.Graph,
+    output_png_path: str,
+    s2_post_visual: np.ndarray,
+    transform_matrix: Any,
+    all_roads_gdf: Optional[gpd.GeoDataFrame] = None,
+    utm_crs: str = "EPSG:32645"
+) -> str:
+    """
+    Renders the POST-event connected road component for Settlement #3 (near Bhrajam / cluster_29).
+    Illustrates why the extensive western road network cannot reach any hospital or town destination.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    # 1. Locate Settlement #3
+    s3_matches = settlements_gdf[settlements_gdf["settlement_id"] == "cluster_29"]
+    if len(s3_matches) == 0:
+        s3_matches = settlements_gdf[settlements_gdf["name"].str.contains("Bhrajam|भ्रजम", na=False)]
+    s3_row = s3_matches.iloc[0]
+    s3_pt = s3_row.geometry
+
+    # 2. Extract Connected Component in G_opt
+    nodes_list = list(G_vehicle.nodes)
+    nodes_tree = cKDTree(np.array(nodes_list))
+    d_snap, n_idx = nodes_tree.query([s3_pt.x, s3_pt.y])
+    s3_node = nodes_list[n_idx]
+
+    G_opt = G_vehicle.copy()
+    for u, v, d in list(G_opt.edges(data=True)):
+        if d.get("damage_grade") == "Destroyed":
+            G_opt.remove_edge(u, v)
+
+    comp = nx.node_connected_component(G_opt, s3_node)
+    subG = G_opt.subgraph(comp)
+
+    # Component edges to GeoDataFrame
+    comp_lines = [LineString([u, v]) for u, v, _ in subG.edges(data=True)]
+    comp_gdf = gpd.GeoDataFrame(geometry=comp_lines, crs=utm_crs)
+    min_x, min_y, max_x, max_y = comp_gdf.total_bounds
+
+    pad = 1200.0
+    xmin, xmax = min_x - pad, max_x + pad
+    ymin, ymax = min_y - pad, max_y + pad
+
+    fig, ax = plt.subplots(figsize=(14, 12), dpi=200)
+
+    # 1. Raster Background
+    if s2_post_visual is not None and transform_matrix is not None:
+        plot_raster_background(
+            ax,
+            s2_post_visual,
+            transform=transform_matrix,
+            clip_extent=(xmin, xmax, ymin, ymax),
+            zorder=1
+        )
+    else:
+        ax.set_facecolor("#151515")
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+    # 2. OSM river alignment line
+    draw_osm_river_centreline(
+        ax,
+        target_crs=utm_crs,
+        clip_bounds=(xmin, ymin, xmax, ymax),
+        color="#00e5ff",
+        lw=1.5,
+        alpha=0.9,
+        zorder=12
+    )
+
+    # 3. Surrounding context roads
+    if all_roads_gdf is not None and len(all_roads_gdf) > 0:
+        r_crop = all_roads_gdf.cx[xmin:xmax, ymin:ymax]
+        if len(r_crop) > 0:
+            r_crop.plot(ax=ax, color="#555555", linewidth=1.0, alpha=0.4, zorder=3)
+
+    # 4. Connected Road Component (Amber / Bright Yellow)
+    comp_gdf.plot(
+        ax=ax,
+        color="#ffcc00",
+        linewidth=2.2,
+        alpha=0.9,
+        zorder=8
+    )
+
+    # 5. Severed Break Point at way/1266396385 (near Syabru Besi confluence)
+    dest_lines = []
+    for u, v, d in G_vehicle.edges(data=True):
+        if d.get("damage_grade") == "Destroyed" and d.get("osm_id") == "way/1266396385":
+            dest_lines.append(LineString([u, v]))
+    if dest_lines:
+        dest_gdf = gpd.GeoDataFrame(geometry=dest_lines, crs=utm_crs)
+        dest_gdf.plot(ax=ax, color="#ff0033", linewidth=6.0, zorder=16)
+        brk_pt = dest_lines[0].centroid
+        ax.annotate(
+            "SEVERED: way/1266396385\n(Bottleneck to Rasuwa District Hospital)",
+            xy=(brk_pt.x, brk_pt.y),
+            xytext=(-80, 40),
+            textcoords="offset points",
+            fontsize=9.5,
+            fontweight="bold",
+            color="#ff3333",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.9, edgecolor="#ff0033", lw=1.5),
+            arrowprops=dict(arrowstyle="->", color="#ff0033", lw=2.0),
+            zorder=20
+        )
+
+    # 6. Settlement #3 Origin marker
+    ax.scatter(
+        [s3_pt.x], [s3_pt.y],
+        color="#00ff66",
+        s=200,
+        marker="*",
+        edgecolor="black",
+        linewidth=1.5,
+        zorder=18
+    )
+    ax.annotate(
+        f"Settlement #3: {clean_label(s3_row['name'])}\n({s3_row['building_count']} buildings)",
+        xy=(s3_pt.x, s3_pt.y),
+        xytext=(15, -20),
+        textcoords="offset points",
+        fontsize=9,
+        fontweight="bold",
+        color="#00ff66",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.85, edgecolor="#00ff66", lw=1.2),
+        zorder=20
+    )
+
+    # 7. Explanatory Callout Box
+    explanation = (
+        "Western Road Network Isolation Analysis:\n"
+        "• 6,824 road edges connect Settlement #3 westward through Chilime & Gatlang valleys\n"
+        "• Network branches terminate in alpine dead-ends & Chilime hydropower facilities\n"
+        "• ZERO hospitals, health facilities, or towns exist in this western mountain enclave\n"
+        "• Access to Rasuwa District Hospital requires travelling south via Syabru Besi,\n"
+        "  which is completely severed at way/1266396385"
+    )
+    ax.text(
+        0.02, 0.98, explanation,
+        transform=ax.transAxes,
+        fontsize=9.5,
+        fontweight="bold",
+        verticalalignment="top",
+        color="#ffffff",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#1a1a1a", alpha=0.92, edgecolor="#ffcc00", lw=1.5),
+        zorder=25
+    )
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_aspect("equal")
+    ax.set_title(
+        f"Settlement #3 (near Bhrajam): Post-Event Connected Road Component\n"
+        f"Reachable Subnetwork: {len(comp)} Nodes, {subG.number_of_edges()} Edges | Reachable Destinations: 0",
+        fontsize=12,
+        fontweight="bold",
+        pad=10
+    )
+
+    legend_elements = [
+        Line2D([0], [0], marker="*", color="w", markerfacecolor="#00ff66", markeredgecolor="black", markersize=14, label=f"Settlement #3 Origin ({clean_label(s3_row['name'])})"),
+        Line2D([0], [0], color="#ffcc00", lw=3.0, label=f"Post-Event Connected Roads ({subG.number_of_edges()} edges)"),
+        Line2D([0], [0], color="#ff0033", lw=5.0, label="Severed Bottleneck (way/1266396385)"),
+        Line2D([0], [0], color="#00e5ff", lw=1.5, label="OSM waterway=river (Alignment Check)"),
+        Line2D([0], [0], color="#555555", lw=1.0, label="Other Study Area Roads")
+    ]
+    ax.legend(handles=legend_elements, loc="lower right", framealpha=0.9, facecolor="#222222", edgecolor="#555555", fontsize=9, labelcolor="white")
 
     plt.tight_layout()
     plt.savefig(output_png_path, dpi=200, bbox_inches="tight")

@@ -48,18 +48,49 @@ def dbscan_clustering(
     return labels
 
 
+def format_place_name(p_row: Any) -> str:
+    """Format place name: use name:en if present, else name, keeping Nepali in brackets."""
+    en = p_row.get("name:en")
+    ne = p_row.get("name:ne")
+    raw_name = p_row.get("name")
+
+    en_str = str(en).strip() if en is not None and str(en) != "nan" and str(en).strip() != "" else None
+    ne_str = str(ne).strip() if ne is not None and str(ne) != "nan" and str(ne).strip() != "" else None
+    raw_str = str(raw_name).strip() if raw_name is not None and str(raw_name) != "nan" and str(raw_name).strip() != "" else None
+
+    if en_str:
+        if ne_str and ne_str != en_str:
+            return f"{en_str} ({ne_str})"
+        elif raw_str and raw_str != en_str:
+            return f"{en_str} ({raw_str})"
+        else:
+            return en_str
+    elif raw_str:
+        if ne_str and ne_str != raw_str:
+            return f"{raw_str} ({ne_str})"
+        return raw_str
+    elif ne_str:
+        return ne_str
+    else:
+        oid = p_row.get("@osmId", "unknown")
+        return f"Place {oid}"
+
+
 def extract_settlements(
     places_path: str = "data/raw/osm_buffered/osm_places.geojson",
     buildings_path: str = "data/raw/osm/osm_buildings.geojson",
     bbox: List[float] = [85.30, 28.10, 85.42, 28.25],
     eps_m: float = 65.0,
     min_samples: int = 5,
+    named_place_max_distance_m: float = 500.0,
     utm_crs: str = "EPSG:32645"
 ) -> gpd.GeoDataFrame:
     """
     Extracts settlements in the study area:
     - Named place nodes inside bbox
-    - Unnamed groups from DBSCAN clusters of buildings, named after nearest place node
+    - Unnamed groups from DBSCAN clusters of buildings:
+      - Within named_place_max_distance_m: named after nearest place node
+      - Beyond threshold: "Unnamed settlement at lat, lon (nearest named place: NAME, D km)"
     """
     bbox_deg = box(*bbox)
     places_all = gpd.read_file(places_path)
@@ -72,8 +103,13 @@ def extract_settlements(
     labels = dbscan_clustering(b_pts, eps=eps_m, min_samples=min_samples)
     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
 
-    p_pts = np.array([(p.geometry.x, p.geometry.y) for _, p in p_in.iterrows()])
-    p_tree = cKDTree(p_pts)
+    # Named place nodes for distance calculations
+    p_named = p_in[p_in["name"].notna() & (p_in["name"].astype(str) != "") & (p_in["name"].astype(str) != "nan")].copy()
+    if len(p_named) > 0:
+        p_named_pts = np.array([(p.geometry.x, p.geometry.y) for _, p in p_named.iterrows()])
+        p_named_tree = cKDTree(p_named_pts)
+    else:
+        p_named_tree = None
 
     settlements_records = []
     matched_clusters = set()
@@ -81,10 +117,8 @@ def extract_settlements(
     # 1. Place nodes in bbox
     for idx, p_row in p_in.iterrows():
         p_x, p_y = p_row.geometry.x, p_row.geometry.y
-        name = p_row.get("name")
+        name = format_place_name(p_row)
         oid = p_row.get("@osmId", f"node_{idx}")
-        if name is None or str(name) == "nan":
-            name = f"Place {oid}"
 
         pop = p_row.get("population")
         pop_str = str(pop) if pop is not None and str(pop) != "nan" and str(pop).strip() != "" else "not available"
@@ -116,13 +150,26 @@ def extract_settlements(
             continue
         c_pts = b_pts[labels == c_id]
         cx, cy = np.mean(c_pts, axis=0)
-        d, p_idx = p_tree.query([cx, cy])
-        near_p = p_in.iloc[p_idx]
-        near_name = near_p.get("name")
-        if near_name is None or str(near_name) == "nan":
-            near_name = f"Place {near_p.get('@osmId')}"
 
-        c_name = f"Cluster near {near_name} (ID {c_id})"
+        # Coordinate in WGS84 (lat, lon)
+        pt_wgs = gpd.GeoSeries([Point(cx, cy)], crs=utm_crs).to_crs("EPSG:4326").iloc[0]
+        lat, lon = pt_wgs.y, pt_wgs.x
+
+        if p_named_tree is not None:
+            d_m, p_idx = p_named_tree.query([cx, cy])
+            near_p = p_named.iloc[p_idx]
+            near_name = format_place_name(near_p)
+            d_km = d_m / 1000.0
+        else:
+            d_m = float("inf")
+            near_name = "Unknown"
+            d_km = 0.0
+
+        if d_m <= named_place_max_distance_m:
+            c_name = f"Cluster near {near_name} (ID {c_id})"
+        else:
+            c_name = f"Unnamed settlement at {lat:.4f}, {lon:.4f} (nearest named place: {near_name}, {d_km:.1f} km)"
+
         settlements_records.append({
             "settlement_id": f"cluster_{c_id}",
             "name": c_name,

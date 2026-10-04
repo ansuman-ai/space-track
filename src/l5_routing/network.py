@@ -21,6 +21,7 @@ def build_routing_networks(
     bbox: List[float] = [85.30, 28.10, 85.42, 28.25],
     vehicle_highways: Optional[List[str]] = None,
     walking_highways_extra: Optional[List[str]] = None,
+    rural_roads_drivable: bool = False,
     utm_crs: str = "EPSG:32645"
 ) -> Dict[str, Any]:
     """
@@ -36,6 +37,8 @@ def build_routing_networks(
         walking_highways_extra = ["path", "footway", "track", "steps", "pedestrian", "cycleway"]
 
     v_types = set(vehicle_highways)
+    if rural_roads_drivable:
+        v_types.update(["track", "unclassified"])
     w_types = v_types.union(set(walking_highways_extra))
 
     bbox_deg = box(*bbox)

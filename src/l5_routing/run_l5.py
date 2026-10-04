@@ -1,34 +1,33 @@
 """
-Layer 5 Disaster Routing and Settlement Isolation Pipeline Orchestrator.
-Inputs:
-- OSM data in buffered area (30 km buffer)
-- Layer 4 damage grading results (EVENT and CONTROL)
-- Target health facility destinations
-Outputs:
-- settlements.geojson
-- cutoff_summary.json
-- quicklook_l5.png (Overview map)
-- zoom_cutoff_1.png, zoom_cutoff_2.png, zoom_cutoff_3.png (Zoom maps for top 3 cut-off settlements)
-- CONTROL validation execution (asserts 0 cut-offs)
+Layer 5 Orchestrator: Disaster Routing and Settlement Isolation Analysis.
+Executes complete pre- vs post-event routing for VEHICLE and WALKING networks,
+evaluates 3-value connectivity, computes repair priorities, generates publication quicklooks,
+and executes CONTROL run verification check.
 """
 
 import os
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
-import json
-import shutil
-import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import json
+import logging
+import shutil
 import yaml
+import rasterio
 import numpy as np
 import geopandas as gpd
-import rasterio
 
+from .fetch_data import fetch_buffered_osm
 from .settlements import extract_settlements
 from .destinations import extract_destinations
 from .network import build_routing_networks
 from .connectivity import evaluate_network_connectivity
-from .quicklook import render_l5_overview, render_cutoff_zoom
+from .repair import compute_repair_priorities
+from .quicklook import (
+    render_l5_overview,
+    render_cutoff_zoom,
+    render_settlement3_component
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("layer5_routing")
@@ -59,6 +58,8 @@ def run_layer5(
     max_snap_m = r_cfg.get("max_snap_distance_m", 500.0)
     dbscan_eps = r_cfg.get("dbscan_eps_m", 65.0)
     dbscan_min_samples = r_cfg.get("dbscan_min_samples", 5)
+    named_place_max_m = r_cfg.get("named_place_max_distance_m", 500.0)
+    rural_roads_drivable = r_cfg.get("rural_roads_drivable", False)
     vehicle_hwys = r_cfg.get("vehicle_highways")
     walking_extra = r_cfg.get("walking_highways_extra")
 
@@ -79,6 +80,7 @@ def run_layer5(
         bbox=bbox,
         eps_m=dbscan_eps,
         min_samples=dbscan_min_samples,
+        named_place_max_distance_m=named_place_max_m,
         utm_crs=utm_crs
     )
     logger.info(f"Identified {len(settlements_gdf)} settlements in study area.")
@@ -103,6 +105,7 @@ def run_layer5(
         bbox=bbox,
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
         utm_crs=utm_crs
     )
 
@@ -135,20 +138,14 @@ def run_layer5(
     settlements_out["vehicle_pre_dist_km"] = [v_dict[sid]["pre_distance_km"] for sid in settlements_out["settlement_id"]]
     settlements_out["vehicle_post_dist_opt_km"] = [v_dict[sid]["post_distance_opt_km"] for sid in settlements_out["settlement_id"]]
     settlements_out["vehicle_detour_opt_km"] = [v_dict[sid]["detour_opt_km"] for sid in settlements_out["settlement_id"]]
-    settlements_out["vehicle_broken_element_opt"] = [
-        str(v_dict[sid]["broken_element_opt"]["osm_id"]) if v_dict[sid]["broken_element_opt"] else None
-        for sid in settlements_out["settlement_id"]
-    ]
+    settlements_out["vehicle_breaks_opt_count"] = [len(v_dict[sid]["breaks_opt"]) for sid in settlements_out["settlement_id"]]
 
     settlements_out["walking_status_opt"] = [w_dict[sid]["status_optimistic"] for sid in settlements_out["settlement_id"]]
     settlements_out["walking_status_pess"] = [w_dict[sid]["status_pessimistic"] for sid in settlements_out["settlement_id"]]
     settlements_out["walking_pre_dist_km"] = [w_dict[sid]["pre_distance_km"] for sid in settlements_out["settlement_id"]]
     settlements_out["walking_post_dist_opt_km"] = [w_dict[sid]["post_distance_opt_km"] for sid in settlements_out["settlement_id"]]
     settlements_out["walking_detour_opt_km"] = [w_dict[sid]["detour_opt_km"] for sid in settlements_out["settlement_id"]]
-    settlements_out["walking_broken_element_opt"] = [
-        str(w_dict[sid]["broken_element_opt"]["osm_id"]) if w_dict[sid]["broken_element_opt"] else None
-        for sid in settlements_out["settlement_id"]
-    ]
+    settlements_out["walking_breaks_opt_count"] = [len(w_dict[sid]["breaks_opt"]) for sid in settlements_out["settlement_id"]]
 
     # Save settlements.geojson in EPSG:4326 for standard GIS interoperability
     settle_geojson_path = out_path / "settlements.geojson"
@@ -162,14 +159,17 @@ def run_layer5(
             "bbox": bbox,
             "crs": utm_crs,
             "total_settlements": len(settlements_gdf),
-            "destinations_count": len(destinations_gdf)
+            "destinations_count": len(destinations_gdf),
+            "rural_roads_drivable": rural_roads_drivable
         },
         "vehicle": {
             "total_settlements": len(settlements_gdf),
-            "no_network_access": sum(1 for r in v_res["settlement_details"] if r["status_optimistic"] == "no_network_access"),
+            "no_network_access": sum(1 for r in v_res["settlement_details"] if r["status_optimistic"] in ["no_network_access", "isolated_pre_event"]),
             "optimistic": {
                 "cut_off_count": v_res["optimistic"]["cut_off_count"],
-                "connected_count": v_res["optimistic"]["connected_count"],
+                "connected_clear_count": v_res["optimistic"]["connected_clear_count"],
+                "connected_unverified_count": v_res["optimistic"]["connected_unverified_count"],
+                "connected_total_count": v_res["optimistic"]["connected_total_count"],
                 "cut_off_settlements": [
                     {k: v for k, v in item.items() if k != "pre_path"}
                     for item in v_res["optimistic"]["cut_off_settlements"]
@@ -177,7 +177,9 @@ def run_layer5(
             },
             "pessimistic": {
                 "cut_off_count": v_res["pessimistic"]["cut_off_count"],
-                "connected_count": v_res["pessimistic"]["connected_count"],
+                "connected_clear_count": v_res["pessimistic"]["connected_clear_count"],
+                "connected_unverified_count": v_res["pessimistic"]["connected_unverified_count"],
+                "connected_total_count": v_res["pessimistic"]["connected_total_count"],
                 "cut_off_settlements": [
                     {k: v for k, v in item.items() if k != "pre_path"}
                     for item in v_res["pessimistic"]["cut_off_settlements"]
@@ -186,10 +188,12 @@ def run_layer5(
         },
         "walking": {
             "total_settlements": len(settlements_gdf),
-            "no_network_access": sum(1 for r in w_res["settlement_details"] if r["status_optimistic"] == "no_network_access"),
+            "no_network_access": sum(1 for r in w_res["settlement_details"] if r["status_optimistic"] in ["no_network_access", "isolated_pre_event"]),
             "optimistic": {
                 "cut_off_count": w_res["optimistic"]["cut_off_count"],
-                "connected_count": w_res["optimistic"]["connected_count"],
+                "connected_clear_count": w_res["optimistic"]["connected_clear_count"],
+                "connected_unverified_count": w_res["optimistic"]["connected_unverified_count"],
+                "connected_total_count": w_res["optimistic"]["connected_total_count"],
                 "cut_off_settlements": [
                     {k: v for k, v in item.items() if k != "pre_path"}
                     for item in w_res["optimistic"]["cut_off_settlements"]
@@ -197,7 +201,9 @@ def run_layer5(
             },
             "pessimistic": {
                 "cut_off_count": w_res["pessimistic"]["cut_off_count"],
-                "connected_count": w_res["pessimistic"]["connected_count"],
+                "connected_clear_count": w_res["pessimistic"]["connected_clear_count"],
+                "connected_unverified_count": w_res["pessimistic"]["connected_unverified_count"],
+                "connected_total_count": w_res["pessimistic"]["connected_total_count"],
                 "cut_off_settlements": [
                     {k: v for k, v in item.items() if k != "pre_path"}
                     for item in w_res["pessimistic"]["cut_off_settlements"]
@@ -211,7 +217,18 @@ def run_layer5(
         json.dump(cutoff_summary, f, indent=2, ensure_ascii=False)
     logger.info(f"Saved cutoff summary to {summary_json_path}")
 
-    # 5. Visualizations
+    # 5. Compute Repair Priorities
+    repair_json_path = str(out_path / "repair_priority.json")
+    logger.info(f"Computing infrastructure repair priorities to {repair_json_path}...")
+    repair_summary = compute_repair_priorities(
+        G_vehicle=event_net["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        max_snap_distance_m=max_snap_m,
+        output_json_path=repair_json_path
+    )
+
+    # 6. Visualizations
     logger.info("Loading S2 optical composite for visualizations...")
     s2_cache_npz = Path("data/interim/s2_cache/post_119_S2B_MSIL2A_20260827T045659_R11.npz")
     s2_vis = None
@@ -260,7 +277,20 @@ def run_layer5(
         )
         zoom_png_paths.append(zoom_png)
 
-    # 6. CONTROL RUN CHECK
+    # Settlement #3 Connected Component Plot
+    s3_comp_png = str(out_path / "zoom_settlement3_component.png")
+    logger.info(f"Rendering Settlement #3 post-event connected component to {s3_comp_png}...")
+    render_settlement3_component(
+        settlements_gdf=settlements_out,
+        G_vehicle=event_net["G_vehicle"],
+        output_png_path=s3_comp_png,
+        s2_post_visual=s2_vis,
+        transform_matrix=trans,
+        all_roads_gdf=all_roads_gdf,
+        utm_crs=utm_crs
+    )
+
+    # 7. CONTROL RUN CHECK
     logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")
     ctrl_net = build_routing_networks(
         roads_path=roads_buffered_path,
@@ -269,6 +299,7 @@ def run_layer5(
         bbox=bbox,
         vehicle_highways=vehicle_hwys,
         walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
         utm_crs=utm_crs
     )
     ctrl_v_res = evaluate_network_connectivity(
@@ -293,8 +324,10 @@ def run_layer5(
     ctrl_summary = {
         "vehicle_cutoff_count": ctrl_v_cutoff,
         "walking_cutoff_count": ctrl_w_cutoff,
-        "vehicle_connected_count": ctrl_v_res["optimistic"]["connected_count"],
-        "walking_connected_count": ctrl_w_res["optimistic"]["connected_count"]
+        "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
+        "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
+        "walking_connected_clear_count": ctrl_w_res["optimistic"]["connected_clear_count"],
+        "walking_connected_unverified_count": ctrl_w_res["optimistic"]["connected_unverified_count"]
     }
     with open(ctrl_out_path / "cutoff_summary_control.json", "w") as f:
         json.dump(ctrl_summary, f, indent=2)
@@ -305,14 +338,16 @@ def run_layer5(
 
     # Copy artifacts to artifact dir
     if os.path.exists(artifact_dir):
-        for p in [overview_png] + zoom_png_paths:
+        for p in [overview_png, s3_comp_png, repair_json_path] + zoom_png_paths:
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(artifact_dir, os.path.basename(p)))
 
     return {
         "event_summary": cutoff_summary,
         "control_summary": ctrl_summary,
+        "repair_summary": repair_summary,
         "overview_png": overview_png,
+        "s3_component_png": s3_comp_png,
         "zoom_png_paths": zoom_png_paths
     }
 
