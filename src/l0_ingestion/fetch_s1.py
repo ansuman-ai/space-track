@@ -18,8 +18,12 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_s1")
+import time
 
-# Clean proxy environment for direct connection
+# Ensure proxy does not interfere with GDAL/requests direct calls
+for _k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
+    os.environ.pop(_k, None)
+
 http_client = requests.Session()
 http_client.trust_env = False
 
@@ -32,12 +36,17 @@ def get_sas_token(collection: str = "sentinel-1-rtc") -> str:
     """Fetch SAS token for collection from Planetary Computer."""
     pc_key = os.environ.get("PC_SDK_SUBSCRIPTION_KEY")
     headers = {"Ocp-Apim-Subscription-Key": pc_key} if pc_key else {}
-    try:
-        resp = http_client.get(f"https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}", headers=headers, timeout=10)
-        if resp.status_code == 200:
-            return resp.json().get("token", "")
-    except Exception as e:
-        logger.warning(f"Could not retrieve SAS token for {collection}: {e}")
+    for attempt in range(3):
+        try:
+            resp = http_client.get(f"https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}", headers=headers, timeout=60)
+            if resp.status_code == 200:
+                token = resp.json().get("token", "")
+                if token:
+                    return token
+        except Exception as e:
+            logger.warning(f"Attempt {attempt+1}/3 failed to retrieve SAS token for {collection}: {e}")
+            time.sleep(2)
+    logger.error(f"Failed to retrieve valid SAS token for {collection} after 3 attempts.")
     return ""
 
 
@@ -122,41 +131,42 @@ def download_and_clip_bands(
     min_lon, min_lat, max_lon, max_lat = bbox
 
     try:
-        with rasterio.open(vv_url) as src_vv, rasterio.open(vh_url) as src_vh:
-            # Transform bbox from EPSG:4326 to source raster CRS
-            if src_vv.crs and src_vv.crs.to_string() != "EPSG:4326":
-                proj_bounds = transform_bounds("EPSG:4326", src_vv.crs, min_lon, min_lat, max_lon, max_lat)
-            else:
-                proj_bounds = (min_lon, min_lat, max_lon, max_lat)
+        with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt'):
+            with rasterio.open(vv_url) as src_vv, rasterio.open(vh_url) as src_vh:
+                # Transform bbox from EPSG:4326 to source raster CRS
+                if src_vv.crs and src_vv.crs.to_string() != "EPSG:4326":
+                    proj_bounds = transform_bounds("EPSG:4326", src_vv.crs, min_lon, min_lat, max_lon, max_lat)
+                else:
+                    proj_bounds = (min_lon, min_lat, max_lon, max_lat)
 
-            window = from_bounds(*proj_bounds, transform=src_vv.transform)
-            vv_data = src_vv.read(1, window=window)
-            vh_data = src_vh.read(1, window=window)
-            out_transform = rasterio.windows.transform(window, src_vv.transform)
+                window = from_bounds(*proj_bounds, transform=src_vv.transform)
+                vv_data = src_vv.read(1, window=window)
+                vh_data = src_vh.read(1, window=window)
+                out_transform = rasterio.windows.transform(window, src_vv.transform)
 
-            out_meta = src_vv.meta.copy()
-            out_meta.update({
-                "driver": "GTiff",
-                "height": vv_data.shape[0],
-                "width": vv_data.shape[1],
-                "transform": out_transform,
-                "count": 2,
-                "dtype": vv_data.dtype
-            })
+                out_meta = src_vv.meta.copy()
+                out_meta.update({
+                    "driver": "GTiff",
+                    "height": vv_data.shape[0],
+                    "width": vv_data.shape[1],
+                    "transform": out_transform,
+                    "count": 2,
+                    "dtype": vv_data.dtype
+                })
 
-            with rasterio.open(out_path, "w", **out_meta) as dst:
-                dst.write(vv_data, 1)
-                dst.set_band_description(1, "VV")
-                dst.write(vh_data, 2)
-                dst.set_band_description(2, "VH")
-                dst.update_tags(
-                    scene_id=item_meta["id"],
-                    datetime=item_meta["datetime"],
-                    relative_orbit=str(item_meta["relative_orbit"]),
-                    orbit_direction=str(item_meta["orbit_direction"])
-                )
+                with rasterio.open(out_path, "w", **out_meta) as dst:
+                    dst.write(vv_data, 1)
+                    dst.set_band_description(1, "VV")
+                    dst.write(vh_data, 2)
+                    dst.set_band_description(2, "VH")
+                    dst.update_tags(
+                        scene_id=item_meta["id"],
+                        datetime=item_meta["datetime"],
+                        relative_orbit=str(item_meta["relative_orbit"]),
+                        orbit_direction=str(item_meta["orbit_direction"])
+                    )
 
-        logger.info(f"Saved clipped RTC raster to {out_path} ({vv_data.shape[1]}x{vv_data.shape[0]})")
+            logger.info(f"Saved clipped RTC raster to {out_path} ({vv_data.shape[1]}x{vv_data.shape[0]})")
     except Exception as e:
         logger.error(f"Failed to read/clip raster assets: {e}")
         sys.exit(f"FAILED: Could not download and clip raster: {e}")

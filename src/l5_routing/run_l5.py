@@ -35,7 +35,9 @@ logger = logging.getLogger("layer5_routing")
 
 
 def run_layer5(
-    config_path: str = "configs/trishuli.yaml",
+    config_path: str = "configs/default.yaml",
+    bbox: Optional[List[float]] = None,
+    utm_crs: Optional[str] = None,
     event_roads_path: str = "data/processed/roads_graded.geojson",
     event_bridges_path: str = "data/processed/bridges_graded.geojson",
     control_roads_path: str = "data/control/processed/roads_graded.geojson",
@@ -53,8 +55,12 @@ def run_layer5(
         cfg = yaml.safe_load(f)
 
     cs = cfg.get("case_study", cfg.get("spatial", {}))
-    bbox = cs["bbox"]
-    utm_crs = cs.get("utm_crs", "EPSG:32645")
+    if bbox is None:
+        bbox = cs["bbox"]
+    if utm_crs is None:
+        utm_crs = cs.get("utm_crs", "EPSG:32645")
+    if utm_crs == "auto":
+        utm_crs = "EPSG:32645"
     r_cfg = cfg.get("routing", {})
     max_snap_m = r_cfg.get("max_snap_distance_m", 500.0)
     dbscan_eps = r_cfg.get("dbscan_eps_m", 65.0)
@@ -229,7 +235,7 @@ def run_layer5(
     # Build cutoff_summary.json
     cutoff_summary = {
         "metadata": {
-            "event": "Trishuli / Syabru Besi Flood-Landslide 2026",
+            "event": f"Disaster Impact Assessment ({bbox})",
             "bbox": bbox,
             "crs": utm_crs,
             "total_settlements": len(settlements_gdf),
@@ -321,18 +327,36 @@ def run_layer5(
 
     # 6. Visualizations
     logger.info("Loading S2 optical composite for visualizations...")
-    s2_cache_npz = Path("data/interim/s2_cache/post_119_S2B_MSIL2A_20260827T045659_R11.npz")
+    ref_tif = Path(out_dir).parent / "hazard_classes.tif"
+    if not ref_tif.exists():
+        ref_tif = Path(event_roads_path).parent / "hazard_classes.tif"
+    if not ref_tif.exists():
+        ref_tif = Path("data/processed/hazard_classes.tif")
+
     s2_vis = None
     trans = None
-    ref_tif = Path("data/processed/hazard_classes.tif")
     if ref_tif.exists():
-        with rasterio.open(ref_tif) as src:
-            trans = src.transform
+        try:
+            with rasterio.open(ref_tif) as src:
+                trans = src.transform
+        except Exception as e:
+            logger.warning(f"Could not load transform from {ref_tif}: {e}")
 
-    if s2_cache_npz.exists():
-        d = np.load(s2_cache_npz)
-        if "visual" in d:
-            s2_vis = d["visual"]
+    s2_cache_dirs = [
+        Path(out_dir).parent.parent / "interim" / "s2_cache",
+        Path("data/interim/s2_cache")
+    ]
+    for scd in s2_cache_dirs:
+        if scd.exists():
+            cands = sorted(list(scd.glob("post_*.npz")))
+            if cands:
+                try:
+                    d = np.load(cands[0])
+                    if "visual" in d:
+                        s2_vis = d["visual"]
+                        break
+                except Exception:
+                    pass
 
     # Overview Quicklook
     overview_png = str(out_path / "quicklook_l5.png")
@@ -357,40 +381,48 @@ def run_layer5(
     for rank_idx, s_cut in enumerate(top_3_cutoff, start=1):
         zoom_png = str(out_path / f"zoom_cutoff_{rank_idx}.png")
         logger.info(f"Rendering Zoom plot #{rank_idx} for {s_cut['name']} ({s_cut['building_count']} buildings)...")
-        render_cutoff_zoom(
-            settlement_dict=s_cut,
-            rank=rank_idx,
-            output_png_path=zoom_png,
+        try:
+            render_cutoff_zoom(
+                settlement_dict=s_cut,
+                rank=rank_idx,
+                output_png_path=zoom_png,
+                s2_post_visual=s2_vis,
+                transform_matrix=trans,
+                all_roads_gdf=all_roads_gdf,
+                utm_crs=utm_crs
+            )
+            zoom_png_paths.append(zoom_png)
+        except Exception as e:
+            logger.warning(f"Could not render cutoff zoom #{rank_idx}: {e}")
+
+    # Diagnostic component and dead-end plots (if features present)
+    try:
+        s3_comp_png = str(out_path / "zoom_settlement3_component.png")
+        logger.info(f"Rendering Settlement #3 post-event connected component to {s3_comp_png}...")
+        render_settlement3_component(
+            settlements_gdf=settlements_out,
+            G_vehicle=event_net["G_vehicle"],
+            output_png_path=s3_comp_png,
             s2_post_visual=s2_vis,
             transform_matrix=trans,
             all_roads_gdf=all_roads_gdf,
             utm_crs=utm_crs
         )
-        zoom_png_paths.append(zoom_png)
+    except Exception as e:
+        logger.debug(f"Settlement #3 component plot skipped: {e}")
 
-    # Settlement #3 Connected Component Plot
-    s3_comp_png = str(out_path / "zoom_settlement3_component.png")
-    logger.info(f"Rendering Settlement #3 post-event connected component to {s3_comp_png}...")
-    render_settlement3_component(
-        settlements_gdf=settlements_out,
-        G_vehicle=event_net["G_vehicle"],
-        output_png_path=s3_comp_png,
-        s2_post_visual=s2_vis,
-        transform_matrix=trans,
-        all_roads_gdf=all_roads_gdf,
-        utm_crs=utm_crs
-    )
-
-    # Dead End Topology Gap Zoom Plot
-    dead_end_png = str(out_path / "zoom_dead_end.png")
-    logger.info(f"Rendering dead-end topology gap zoom to {dead_end_png}...")
-    render_dead_end_zoom(
-        output_png_path=dead_end_png,
-        s2_post_visual=s2_vis,
-        transform_matrix=trans,
-        roads_path=roads_buffered_path,
-        utm_crs=utm_crs
-    )
+    try:
+        dead_end_png = str(out_path / "zoom_dead_end.png")
+        logger.info(f"Rendering dead-end topology gap zoom to {dead_end_png}...")
+        render_dead_end_zoom(
+            output_png_path=dead_end_png,
+            s2_post_visual=s2_vis,
+            transform_matrix=trans,
+            roads_path=roads_buffered_path,
+            utm_crs=utm_crs
+        )
+    except Exception as e:
+        logger.debug(f"Dead end zoom plot skipped: {e}")
 
     # 7. CONTROL RUN CHECK
     logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")

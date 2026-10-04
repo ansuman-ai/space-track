@@ -1,6 +1,6 @@
 """
 Layer 2 Quick-look Visualization Generator.
-Generates full AOI hazard classification map and high-resolution Syabru Besi 4x4 km zoom
+Generates full AOI hazard classification map and high-resolution 4x4 km zoom
 with Sentinel-2 Post True Colour and affected class outline, using unified plot_utils
 and built-in pre-event OSM river centreline alignment verification.
 """
@@ -35,7 +35,7 @@ def render_layer2_quicklook(
     """
     Renders 2-panel figure with unified georeferencing and OSM river alignment check:
     - Panel 1: Full AOI hazard classification map
-    - Panel 2: Syabru Besi 4x4 km zoom with S2 Post True Colour, outlines, and river alignment
+    - Panel 2: High-impact 4x4 km zoom with S2 Post True Colour, outlines, and river alignment
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
 
@@ -75,18 +75,26 @@ def render_layer2_quicklook(
             axes[0].imshow(post_vv, cmap="gray", vmin=-25.0, vmax=5.0)
         axes[0].imshow(hazard_raster, cmap=cmap, norm=norm, interpolation="nearest")
 
-    # Spatial coordinates for 4x4 km zoom around Syabru Besi
-    cx, cy = 337320.0, 3115840.0
+    # Dynamic spatial coordinates for 4x4 km zoom around highest impact area or center
     half_w = 2000.0
+    if transform_matrix is not None:
+        c2_r, c2_c = np.where(hazard_raster == 2)
+        if len(c2_r) > 0:
+            cx, cy = transform_matrix * (float(np.median(c2_c)), float(np.median(c2_r)))
+        else:
+            cx = (full_extent[0] + full_extent[1]) / 2.0
+            cy = (full_extent[2] + full_extent[3]) / 2.0
+    else:
+        cx, cy = 0.0, 0.0
     xmin, xmax = cx - half_w, cx + half_w
     ymin, ymax = cy - half_w, cy + half_w
 
     if transform_matrix is not None:
         rect = plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--", zorder=12)
         axes[0].add_patch(rect)
-        axes[0].text(xmin + 100, ymax - 200, "Syabru Besi 4x4km Zoom", color="yellow", fontsize=11, fontweight="bold", zorder=12)
+        axes[0].text(xmin + 100, ymax - 200, "High-Impact 4x4km Zoom", color="yellow", fontsize=11, fontweight="bold", zorder=12)
     else:
-        cr, cc = zoom_center
+        cr, cc = zoom_center if zoom_center is not None else (h // 2, w // 2)
         r1, r2 = max(0, cr - 200), min(h, cr + 200)
         c1, c2 = max(0, cc - 200), min(w, cc + 200)
         rect = plt.Rectangle((c1, r1), c2 - c1, r2 - r1, fill=False, edgecolor="yellow", linewidth=2.0, linestyle="--")
@@ -109,7 +117,7 @@ def render_layer2_quicklook(
     ]
     axes[0].legend(handles=legend_patches, loc="lower left", framealpha=0.9, fontsize=10.5)
 
-    # --- Panel 2: Syabru Besi 4x4 km Zoom with S2 Post True Colour + Outlines ---
+    # --- Panel 2: High-Impact 4x4 km Zoom with S2 Post True Colour + Outlines ---
     if transform_matrix is not None:
         bg_source = post_vis if post_vis is not None else post_vv
         cmap_arg = None if post_vis is not None else "gray"
@@ -163,17 +171,17 @@ def render_layer2_quicklook(
         # Built-in river alignment check on zoom
         draw_osm_river_centreline(axes[1], clip_bounds=(xmin, ymin, xmax, ymax), zorder=12, lw=1.2, color="#00e5ff")
 
-        # Town center
+        # Town / impact center
         axes[1].plot(cx, cy, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5, zorder=15)
         axes[1].text(
-            cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+            cx + 60, cy, "Zoom Center",
             color="white", fontsize=11, fontweight="bold",
             bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
             zorder=15
         )
 
     axes[1].set_title(
-        "Syabru Besi 4x4 km Zoom (Aligned S2 Post True Colour)\n"
+        "High-Impact 4x4 km Zoom (Aligned S2/SAR Post Composite)\n"
         "Observed (red) & Inferred (orange) Outlines + River Alignment Check (cyan)",
         fontsize=13, fontweight="bold"
     )
@@ -185,7 +193,7 @@ def render_layer2_quicklook(
         Line2D([0], [0], color='#ff2200', lw=2.5, label="Class 2: Observed Damage"),
         Line2D([0], [0], color='#ff8800', lw=2.0, linestyle='--', label="Class 3: Inferred Flooded"),
         Line2D([0], [0], color='#00e5ff', lw=1.2, label="OSM River Centreline (Alignment Check)"),
-        Line2D([0], [0], marker='*', color='w', markeredgecolor='black', markersize=12, label="Syabru Besi Center", linestyle="None")
+        Line2D([0], [0], marker='*', color='w', markeredgecolor='black', markersize=12, label="Zoom Center", linestyle="None")
     ]
     axes[1].legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=10.5)
 
@@ -198,7 +206,7 @@ def render_layer2_quicklook(
     plt.close(fig)
 
     # Also render standalone zoom image
-    zoom_only_path = output_png_path.replace("quicklook_layer2.png", "quicklook_syabrubesi.png")
+    zoom_only_path = output_png_path.replace("quicklook_layer2.png", "quicklook_zoom.png")
     if zoom_only_path != output_png_path:
         fig_z, ax_z = plt.subplots(figsize=(10, 10), constrained_layout=True)
         if transform_matrix is not None:
@@ -219,18 +227,16 @@ def render_layer2_quicklook(
             draw_osm_river_centreline(ax_z, clip_bounds=(xmin, ymin, xmax, ymax), zorder=12, lw=1.2, color="#00e5ff")
             ax_z.plot(cx, cy, 'w*', markersize=14, markeredgecolor='black', markeredgewidth=1.5, zorder=15)
             ax_z.text(
-                cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+                cx + 60, cy, "Zoom Center",
                 color="white", fontsize=11, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
                 zorder=15
             )
         ax_z.set_title(
-            "Layer 2 Detection: Syabru Besi 4x4 km Zoom (Aligned)\nSentinel-2 Post True Colour (2026-08-27) + River Alignment Check",
+            "Layer 2 Detection: High-Impact 4x4 km Zoom (Aligned)\nPost Optical/SAR Composite + River Alignment Check",
             fontsize=13, fontweight="bold", pad=10
         )
         ax_z.axis("off")
-        ax_z.legend(handles=zoom_legend, loc="lower left", framealpha=0.9, fontsize=10.5)
-        plt.savefig(zoom_only_path, dpi=200, bbox_inches="tight")
         plt.close(fig_z)
 
     return output_png_path

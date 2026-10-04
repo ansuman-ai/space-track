@@ -84,7 +84,7 @@ def ensure_river_centerline_exists(
 
     if lines:
         merged = linemerge(unary_union(lines))
-        gdf = gpd.GeoDataFrame([{"name": "OSM / Trishuli River Centreline", "geometry": merged}], crs=crs)
+        gdf = gpd.GeoDataFrame([{"name": "OSM River Centreline", "geometry": merged}], crs=crs)
         gdf.to_file(out_path, driver="GeoJSON")
     return out_path
 
@@ -226,6 +226,13 @@ def plot_raster_background(
         c1_cl = max(0, min(c1_idx, w))
         c2_cl = max(0, min(c2_idx, w))
 
+        if r2_cl <= r1_cl or c2_cl <= c1_cl:
+            extent = (clip_extent[0], clip_extent[1], clip_extent[2], clip_extent[3])
+            ax.set_facecolor("#151515")
+            ax.set_xlim(clip_extent[0], clip_extent[1])
+            ax.set_ylim(clip_extent[2], clip_extent[3])
+            return extent, None
+
         win = rasterio.windows.Window(c1_cl, r1_cl, c2_cl - c1_cl, r2_cl - r1_cl)
         left, bottom, right, top = rasterio.windows.bounds(win, transform)
         extent = (left, right, bottom, top)
@@ -248,6 +255,10 @@ def plot_raster_background(
             sub_arr = arr.transpose(1, 2, 0)
         else:
             sub_arr = arr
+
+    if sub_arr.size == 0:
+        ax.set_facecolor("#151515")
+        return extent, None
 
     if sub_arr.ndim == 3:
         im = ax.imshow(sub_arr, extent=extent, origin=origin, zorder=zorder, alpha=alpha)

@@ -188,7 +188,7 @@ def run_layer4(
 
     # 7. Render Quicklook
     out_quicklook = str(out_path / "quicklook_l4.png")
-    logger.info(f"Rendering Layer 4 Syabru Besi zoom quicklook to {out_quicklook}...")
+    logger.info(f"Rendering Layer 4 damage overview quicklook to {out_quicklook}...")
     render_l4_quicklook(
         s2_post_visual=s2_post_visual,
         buildings_gdf=b_graded,
@@ -196,7 +196,7 @@ def run_layer4(
         bridges_gdf=br_graded,
         hazard_gdf=hazard_gdf,
         output_png_path=out_quicklook,
-        zoom_center_utm=(337320.0, 3115840.0),
+        zoom_center_utm=None,
         zoom_half_width_m=2000.0,
         utm_crs=utm_crs,
         transform_matrix=trans
@@ -253,15 +253,17 @@ def run_layer4(
 
 def main():
     parser = argparse.ArgumentParser(description="Run Layer 4 Critical Infrastructure Damage Grading")
-    parser.add_argument("--config", default="configs/trishuli.yaml", help="Path to config YAML")
+    parser.add_argument("--config", default="configs/default.yaml", help="Path to config YAML")
+    parser.add_argument("--bbox", type=float, nargs=4, default=None, help="Bounding box [min_lon, min_lat, max_lon, max_lat]")
+    parser.add_argument("--utm-crs", default=None, help="Target UTM CRS")
     parser.add_argument("--osm-dir", default="data/raw/osm", help="Path to OSM directory")
     parser.add_argument("--hazard-polygons", default="data/processed/hazard_polygons.geojson", help="Path to hazard GeoJSON")
     parser.add_argument("--out-dir", default="data/processed", help="Output directory")
 
     args = parser.parse_args()
 
-    bbox = [85.30, 28.10, 85.42, 28.25]
-    utm_crs = "EPSG:32645"
+    bbox = args.bbox
+    utm_crs = args.utm_crs
     building_overlap_pct = 50.0
     distance_damaged_m = 10.0
     distance_possibly_damaged_m = 30.0
@@ -273,8 +275,10 @@ def main():
         with open(args.config, "r") as f:
             cfg = yaml.safe_load(f)
         cs_cfg = cfg.get("case_study", {})
-        bbox = cs_cfg.get("bbox", bbox)
-        utm_crs = cs_cfg.get("utm_crs", utm_crs)
+        if bbox is None:
+            bbox = cs_cfg.get("bbox")
+        if utm_crs is None:
+            utm_crs = cs_cfg.get("utm_crs", "auto")
 
         dmg_cfg = cfg.get("damage_grading", {})
         building_overlap_pct = float(dmg_cfg.get("building_overlap_pct", building_overlap_pct))

@@ -106,36 +106,80 @@ def filter_stream_connected_blobs(
 def load_s1_features(
     stack_dir: Path,
     s1_cache_dir: Path,
-    post_vv_path: Path
+    post_vv_path: Path,
+    ctrl_interim_dir: Optional[Path] = None
 ) -> Dict[str, np.ndarray]:
     """
-    Load S1 multi-temporal pre-stack, compute ascending z-scores,
+    Load S1 multi-temporal pre-stack (or pre/post pair), compute ascending z-scores,
     and load descending orbit 19 log-ratio.
     """
-    pre_dates = ['2026-06-29', '2026-07-11', '2026-07-23', '2026-08-04', '2026-08-16']
-    vv_stack = []
-    for d in pre_dates:
-        f_p = stack_dir / f"s1_{d}.tif"
-        if not f_p.exists():
-            raise FileNotFoundError(f"Missing S1 stack file: {f_p}")
-        with rasterio.open(f_p) as s:
-            vv_stack.append(10.0 * np.log10(np.maximum(s.read(1), 1e-5)))
-
-    vv_mean = np.mean(vv_stack, axis=0)
-    vv_std = np.maximum(np.std(vv_stack, axis=0), 0.2)
-
     with rasterio.open(post_vv_path) as s:
         post_vv = s.read(1)
+        h, w = post_vv.shape
     if np.nanmin(post_vv) < 0.0:
         post_vv_db = post_vv
     else:
         post_vv_db = 10.0 * np.log10(np.maximum(post_vv, 1e-5))
-    z_vv_asc_event = (post_vv_db - vv_mean) / vv_std
 
-    # Ascending Control z-score (using 4 earlier scenes as baseline, 5th scene as observation)
-    ctrl_vv_mean = np.mean(vv_stack[:4], axis=0)
-    ctrl_vv_std = np.maximum(np.std(vv_stack[:4], axis=0), 0.2)
-    z_vv_asc_ctrl = (vv_stack[4] - ctrl_vv_mean) / ctrl_vv_std
+    stack_files = sorted(list(stack_dir.glob("s1_*.tif"))) if stack_dir.exists() else []
+    if len(stack_files) >= 2:
+        with rasterio.open(stack_files[0]) as s_chk:
+            stack_matches_shape = (s_chk.shape == (h, w))
+    else:
+        stack_matches_shape = False
+
+    if stack_matches_shape:
+        vv_stack = []
+        for f_p in stack_files:
+            with rasterio.open(f_p) as s:
+                vv_stack.append(10.0 * np.log10(np.maximum(s.read(1), 1e-5)))
+
+        vv_mean = np.mean(vv_stack, axis=0)
+        vv_std = np.maximum(np.std(vv_stack, axis=0), 0.2)
+        z_vv_asc_event = (post_vv_db - vv_mean) / vv_std
+
+        # Ascending Control z-score (using earlier scenes as baseline, last scene as observation)
+        ctrl_vv_mean = np.mean(vv_stack[:-1], axis=0)
+        ctrl_vv_std = np.maximum(np.std(vv_stack[:-1], axis=0), 0.2)
+        z_vv_asc_ctrl = (vv_stack[-1] - ctrl_vv_mean) / ctrl_vv_std
+    else:
+        pre_cands = [
+            post_vv_path.parent / "pre_vv.tif",
+            post_vv_path.parent.parent / "raw" / "s1" / "pre.tif",
+            post_vv_path.parent / "pre.tif"
+        ]
+        pre_f = next((p for p in pre_cands if p and p.exists()), None)
+        if pre_f:
+            with rasterio.open(pre_f) as s:
+                pre_vv = s.read(1)
+            pre_db = pre_vv if np.nanmin(pre_vv) < 0.0 else 10.0 * np.log10(np.maximum(pre_vv, 1e-5))
+            z_vv_asc_event = (post_vv_db - pre_db) / 2.0
+        else:
+            z_vv_asc_event = np.zeros_like(post_vv_db)
+
+        # Control pair
+        ctrl_post_f = None
+        ctrl_pre_f = None
+        if ctrl_interim_dir and ctrl_interim_dir.exists():
+            cp_cand = ctrl_interim_dir / "post_vv.tif"
+            pr_cand = ctrl_interim_dir / "pre_vv.tif"
+            if cp_cand.exists() and pr_cand.exists():
+                ctrl_post_f, ctrl_pre_f = cp_cand, pr_cand
+        if ctrl_post_f is None or ctrl_pre_f is None:
+            raw_ctrl_dir = post_vv_path.parent.parent / "control" / "raw" / "s1"
+            if (raw_ctrl_dir / "post.tif").exists() and (raw_ctrl_dir / "pre.tif").exists():
+                ctrl_post_f = raw_ctrl_dir / "post.tif"
+                ctrl_pre_f = raw_ctrl_dir / "pre.tif"
+
+        if ctrl_post_f and ctrl_pre_f:
+            with rasterio.open(ctrl_post_f) as s_post, rasterio.open(ctrl_pre_f) as s_pre:
+                c_post = s_post.read(1)
+                c_pre = s_pre.read(1)
+            c_post_db = c_post if np.nanmin(c_post) < 0.0 else 10.0 * np.log10(np.maximum(c_post, 1e-5))
+            c_pre_db = c_pre if np.nanmin(c_pre) < 0.0 else 10.0 * np.log10(np.maximum(c_pre, 1e-5))
+            z_vv_asc_ctrl = (c_post_db - c_pre_db) / 2.0
+        else:
+            z_vv_asc_ctrl = np.zeros_like(post_vv_db)
 
     # Descending Orbit 19 log-ratio
     o19_file = s1_cache_dir / "o19_desc.npz"
@@ -143,10 +187,13 @@ def load_s1_features(
         o19_data = np.load(o19_file)
         o19_pre_vv = o19_data['vv_pre']
         o19_post_vv = o19_data['vv_post']
-        o19_lr_event = (
-            10.0 * np.log10(np.maximum(o19_post_vv, 1e-5)) -
-            10.0 * np.log10(np.maximum(o19_pre_vv, 1e-5))
-        )
+        if o19_pre_vv.shape == (h, w):
+            o19_lr_event = (
+                10.0 * np.log10(np.maximum(o19_post_vv, 1e-5)) -
+                10.0 * np.log10(np.maximum(o19_pre_vv, 1e-5))
+            )
+        else:
+            o19_lr_event = np.zeros_like(post_vv_db)
     else:
         o19_lr_event = np.zeros_like(post_vv_db)
 
@@ -229,22 +276,44 @@ def run_layer2(
         pixel_size_m=dx
     )
 
-    pre_comp = s2_data['pre_composite']
-    post_comp = s2_data['post_composite']
-    d_ndvi_event = s2_data['d_ndvi_event']
-    d_bsi_event = s2_data['d_bsi_event']
-    s2_event_valid = s2_data['s2_event_valid']
-
-    d_ndvi_ctrl = s2_data['d_ndvi_ctrl']
-    d_bsi_ctrl = s2_data['d_bsi_ctrl']
-    s2_ctrl_valid = s2_data['s2_ctrl_valid']
+    if s2_data.get('s2_event_valid') is False or s2_data.get('pre_composite') is None:
+        logger.warning("[WARNING] Sentinel-2 clear scenes unavailable. Operating in pure Sentinel-1 SAR fallback mode.")
+        pre_comp = None
+        post_comp = None
+        d_ndvi_event = np.zeros((h, w), dtype=np.float32)
+        d_bsi_event = np.zeros((h, w), dtype=np.float32)
+        s2_event_valid = np.zeros((h, w), dtype=bool)
+        d_ndvi_ctrl = np.zeros((h, w), dtype=np.float32)
+        d_bsi_ctrl = np.zeros((h, w), dtype=np.float32)
+        s2_ctrl_valid = np.zeros((h, w), dtype=bool)
+        pre_ndwi = np.zeros((h, w), dtype=np.float32)
+        cvm_ev = np.zeros((h, w), dtype=np.float32)
+        cvm_ctrl = np.zeros((h, w), dtype=np.float32)
+        post_vis = None
+    else:
+        pre_comp = s2_data['pre_composite']
+        post_comp = s2_data['post_composite']
+        d_ndvi_event = s2_data['d_ndvi_event']
+        d_bsi_event = s2_data['d_bsi_event']
+        s2_event_valid = s2_data['s2_event_valid']
+        d_ndvi_ctrl = s2_data['d_ndvi_ctrl']
+        d_bsi_ctrl = s2_data['d_bsi_ctrl']
+        s2_ctrl_valid = s2_data['s2_ctrl_valid']
+        pre_ndwi = pre_comp['ndwi']
+        post_vis = post_comp['vis']
+        band_keys = ['b02', 'b03', 'b04', 'b08', 'b11', 'b12']
+        sq_ev = sum([((post_comp[b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
+        cvm_ev = np.sqrt(sq_ev).astype(np.float32)
+        sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
+        cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
 
     # 3. Load Sentinel-1 features (Ascending stack z-scores & Descending O19 log-ratio)
-    logger.info("Loading Sentinel-1 SAR features for cloudy-area fallback...")
+    post_vv_file = in_path / "post_vv.tif" if (in_path / "post_vv.tif").exists() else (in_path.parent / "raw" / "s1" / "post.tif")
     s1_data = load_s1_features(
         stack_dir=Path(s1_stack_dir),
         s1_cache_dir=Path(s1_cache_dir),
-        post_vv_path=Path("data/raw/s1/post.tif") if Path("data/raw/s1/post.tif").exists() else (in_path / "post_vv.tif")
+        post_vv_path=post_vv_file,
+        ctrl_interim_dir=ctrl_path
     )
     z_vv_asc_event = s1_data['z_vv_asc_event']
     z_vv_asc_ctrl = s1_data['z_vv_asc_ctrl']
@@ -261,7 +330,7 @@ def run_layer2(
         transform_matrix=transform_mat,
         crs=crs,
         hand_corridor_m=15.0,
-        pre_ndwi=pre_comp['ndwi']
+        pre_ndwi=pre_ndwi
     )
 
     # Compute adaptive thresholds from CONTROL pair inside active HAND corridor
@@ -275,22 +344,15 @@ def run_layer2(
         false_alarm_rate_pct=false_alarm_rate_pct
     )
 
+    in_ch_ctrl = s2_data['in_channel_change_ctrl'] if s2_data.get('in_channel_change_ctrl') is not None else np.zeros((h, w), dtype=np.float32)
     t_channel = compute_in_channel_control_threshold(
-        in_channel_change_ctrl=s2_data['in_channel_change_ctrl'],
+        in_channel_change_ctrl=in_ch_ctrl,
         perm_water_mask=perm_water_raw,
         ctrl_valid=s2_ctrl_valid,
         hand=hand,
         max_hand_m=max_hand_corridor_m,
         false_alarm_rate_pct=false_alarm_rate_pct
     )
-
-    # S2 Change vector magnitude for built-up footprints (B2, B3, B4, B8, B11, B12)
-    band_keys = ['b02', 'b03', 'b04', 'b08', 'b11', 'b12']
-    sq_ev = sum([((post_comp[b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
-    cvm_ev = np.sqrt(sq_ev).astype(np.float32)
-
-    sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
-    cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
 
     # Rasterize pre-event OSM building footprints (+ buffer)
     builtup_mask = np.zeros((h, w), dtype=np.uint8)
@@ -333,7 +395,11 @@ def run_layer2(
     # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour + Built-up)
     logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel + Built-up)...")
     s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
-    ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_event'] > t_channel)
+    ch_change_ev = s2_data.get('in_channel_change_event')
+    if ch_change_ev is not None:
+        ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ev > t_channel)
+    else:
+        ch_ev_cand = np.zeros((h, w), dtype=bool)
     s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
 
     ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
@@ -383,6 +449,7 @@ def run_layer2(
 
     # 5b. Class 3: Inferred Flooded Corridor (HAND-based hydraulic fill along stream reaches)
     logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (EVENT)...")
+    post_ndvi_arr = post_comp['ndvi'] if post_comp is not None else None
     inferred_ev_clean, inferred_ev_stats = compute_inferred_flood_corridor(
         hand=hand,
         stream_mask=stream_mask,
@@ -393,8 +460,8 @@ def run_layer2(
         min_observed_pixels=inferred_min_observed_pixels,
         touch_distance_m=stream_proximity_m,
         max_hand_corridor_m=max_hand_corridor_m,
-        post_ndvi=post_comp['ndvi'],
-        d_ndvi=d_ndvi_event,
+        post_ndvi=post_ndvi_arr,
+        d_ndvi=d_ndvi_event if post_comp is not None else None,
         intact_min_post_ndvi=intact_min_post_ndvi,
         intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
@@ -404,7 +471,11 @@ def run_layer2(
     # 6. Evaluate CONTROL pair with the exact same detector
     logger.info("Evaluating CONTROL pair with the exact same multi-sensor detector...")
     s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
-    ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (s2_data['in_channel_change_ctrl'] > t_channel)
+    ch_change_ctrl = s2_data.get('in_channel_change_ctrl')
+    if ch_change_ctrl is not None:
+        ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ctrl > t_channel)
+    else:
+        ch_ctrl_cand = np.zeros((h, w), dtype=bool)
     s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
 
     ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
@@ -436,6 +507,7 @@ def run_layer2(
     ctrl_aff_km2 = round(ctrl_aff_count * pixel_area_km2, 4)
 
     logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (CONTROL)...")
+    ctrl_post_ndvi = s2_data['ctrl_post_composite']['ndvi'] if s2_data.get('ctrl_post_composite') is not None else None
     inferred_ctrl_clean, inferred_ctrl_stats = compute_inferred_flood_corridor(
         hand=hand,
         stream_mask=stream_mask,
@@ -446,10 +518,9 @@ def run_layer2(
         min_observed_pixels=inferred_min_observed_pixels,
         touch_distance_m=stream_proximity_m,
         max_hand_corridor_m=max_hand_corridor_m,
-        post_ndvi=s2_data['ctrl_post_composite']['ndvi'],
-        d_ndvi=d_ndvi_ctrl,
+        post_ndvi=ctrl_post_ndvi,
+        d_ndvi=d_ndvi_ctrl if ctrl_post_ndvi is not None else None,
         intact_min_post_ndvi=intact_min_post_ndvi,
-        intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
     )
     ctrl_inf_km2 = inferred_ctrl_stats["inferred_km2"]
     ctrl_inf_count = inferred_ctrl_stats["inferred_pixels"]
@@ -483,7 +554,7 @@ def run_layer2(
         builtup_affected_mask=b_ev_affected
     )
 
-    # Render EVENT Quicklook (Full AOI + Syabru Besi 4x4 km zoom with S2 post true colour + affected outline)
+    # Render EVENT Quicklook (Full AOI + High-Impact 4x4 km zoom with S2 post true colour + affected outline)
     out_quicklook = str(out_path / "quicklook_layer2.png")
     stats_dict = {
         "perm_water_km2": perm_km2,
@@ -495,7 +566,7 @@ def run_layer2(
         hazard_raster=hazard_raster,
         output_png_path=out_quicklook,
         stats=stats_dict,
-        post_vis=post_comp['vis'],
+        post_vis=post_vis,
         zoom_center=(992, 431)
     )
 
@@ -524,7 +595,7 @@ def run_layer2(
         hazard_raster=ctrl_hazard_raster,
         output_png_path=ctrl_quicklook,
         stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2, "inferred_km2": ctrl_inf_km2},
-        post_vis=post_comp['vis'],
+        post_vis=post_vis,
         zoom_center=(992, 431)
     )
 
@@ -582,7 +653,7 @@ def run_layer2(
             "source_mask": out_source_tif,
             "hazard_polygons": out_geojson,
             "quicklook": out_quicklook,
-            "quicklook_syabrubesi": out_quicklook.replace("quicklook_layer2.png", "quicklook_syabrubesi.png"),
+            "quicklook_zoom": out_quicklook.replace("quicklook_layer2.png", "quicklook_zoom.png"),
             "control_hazard_raster": ctrl_out_tif,
             "control_quicklook": ctrl_quicklook
         }

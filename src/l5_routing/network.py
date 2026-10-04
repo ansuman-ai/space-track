@@ -18,7 +18,7 @@ def build_routing_networks(
     roads_path: str = "data/raw/osm_buffered/osm_roads.geojson",
     hazard_roads_path: str = "data/processed/roads_graded.geojson",
     hazard_bridges_path: str = "data/processed/bridges_graded.geojson",
-    bbox: List[float] = [85.30, 28.10, 85.42, 28.25],
+    bbox: List[float] = None,
     vehicle_highways: Optional[List[str]] = None,
     walking_highways_extra: Optional[List[str]] = None,
     rural_roads_drivable: bool = False,

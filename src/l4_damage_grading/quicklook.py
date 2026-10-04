@@ -1,6 +1,6 @@
 """
 Layer 4 Quicklook Visualization Generator.
-High-resolution 4x4 km zoom on Syabru Besi showcasing:
+High-resolution 4x4 km zoom showcasing:
 - Sentinel-2 Post True Colour optical composite background (strictly georeferenced)
 - Flood hazard outlines (Class 2: Observed, Class 3: Inferred)
 - Pre-event OSM river centreline for built-in visual alignment verification
@@ -34,19 +34,15 @@ def render_l4_quicklook(
     bridges_gdf: gpd.GeoDataFrame,
     hazard_gdf: gpd.GeoDataFrame,
     output_png_path: str,
-    zoom_center_utm: Tuple[float, float] = (337320.0, 3115840.0),
+    zoom_center_utm: Optional[Tuple[float, float]] = None,
     zoom_half_width_m: float = 2000.0,
     utm_crs: str = "EPSG:32645",
     transform_matrix: Any = None
 ) -> str:
     """
-    Renders Syabru Besi 4x4 km damage grading overview map with unified alignment.
+    Renders 4x4 km damage grading overview map with unified alignment.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
-
-    cx, cy = zoom_center_utm
-    xmin, xmax = cx - zoom_half_width_m, cx + zoom_half_width_m
-    ymin, ymax = cy - zoom_half_width_m, cy + zoom_half_width_m
 
     if transform_matrix is None:
         ref_path = "data/processed/hazard_classes.tif"
@@ -59,6 +55,26 @@ def render_l4_quicklook(
     r_utm = reproject_vector(roads_gdf, utm_crs)
     br_utm = reproject_vector(bridges_gdf, utm_crs)
     haz_utm = reproject_vector(hazard_gdf, utm_crs)
+
+    if zoom_center_utm is not None:
+        cx, cy = zoom_center_utm
+    else:
+        dmg_b = b_utm[b_utm["damage_grade"].astype(str).str.lower().isin(["destroyed", "damaged", "possibly damaged"])] if "damage_grade" in b_utm.columns else None
+        if dmg_b is not None and not dmg_b.empty:
+            cx = float(dmg_b.geometry.centroid.x.median())
+            cy = float(dmg_b.geometry.centroid.y.median())
+        elif not haz_utm.empty:
+            c2_haz = haz_utm[haz_utm["class"] == 2] if "class" in haz_utm.columns else haz_utm
+            cx = float(c2_haz.geometry.centroid.x.median())
+            cy = float(c2_haz.geometry.centroid.y.median())
+        elif not b_utm.empty:
+            cx = float(b_utm.geometry.centroid.x.median())
+            cy = float(b_utm.geometry.centroid.y.median())
+        else:
+            cx, cy = 0.0, 0.0
+
+    xmin, xmax = cx - zoom_half_width_m, cx + zoom_half_width_m
+    ymin, ymax = cy - zoom_half_width_m, cy + zoom_half_width_m
 
     fig, ax = plt.subplots(figsize=(12, 12), dpi=200)
 
@@ -142,7 +158,7 @@ def render_l4_quicklook(
     # Town center star marker
     ax.plot(cx, cy, marker="*", color="white", markeredgecolor="black", markersize=14, markeredgewidth=1.5, zorder=15)
     ax.text(
-        cx + 60, cy, "Syabru Besi\n(85.343°E, 28.161°N)",
+        cx + 60, cy, "Zoom Center",
         color="white", fontsize=10, fontweight="bold",
         bbox=dict(boxstyle="round,pad=0.25", facecolor="black", alpha=0.75, edgecolor="none"),
         zorder=15
@@ -164,13 +180,13 @@ def render_l4_quicklook(
         Line2D([0], [0], color="#ff8800", lw=2.0, linestyle="--", label="Road: Possibly Damaged"),
         Line2D([0], [0], marker="D", color="w", markerfacecolor="#ff0044", markeredgecolor="white", markersize=9, label="Bridge: Destroyed"),
         Line2D([0], [0], marker="D", color="w", markerfacecolor="#ff8800", markeredgecolor="white", markersize=8, label="Bridge: Possibly Damaged"),
-        Line2D([0], [0], marker="*", color="w", markeredgecolor="black", markersize=12, label="Syabru Besi Center", linestyle="None")
+        Line2D([0], [0], marker="*", color="w", markeredgecolor="black", markersize=12, label="Zoom Center", linestyle="None")
     ]
     ax.legend(handles=legend_elements, loc="lower left", framealpha=0.9, fontsize=9.5)
 
     ax.set_title(
-        "Layer 4: Critical Infrastructure Damage Grading (Syabru Besi 4x4 km Zoom)\n"
-        "Sentinel-2 Post True Colour (2026-08-27) + River Alignment Check (cyan)",
+        "Layer 4: Critical Infrastructure Damage Grading (High-Impact 4x4 km Zoom)\n"
+        "Post Optical/SAR Background + River Alignment Check (cyan)",
         fontsize=12, fontweight="bold", pad=12
     )
 

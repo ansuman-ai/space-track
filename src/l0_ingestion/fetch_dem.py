@@ -17,6 +17,12 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_dem")
 
+import time
+
+# Ensure proxy does not interfere with GDAL/requests direct calls
+for _k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
+    os.environ.pop(_k, None)
+
 http_client = requests.Session()
 http_client.trust_env = False
 
@@ -28,12 +34,17 @@ def get_sas_token(collection: str = "cop-dem-glo-30") -> str:
     """Fetch SAS token for collection from Planetary Computer."""
     pc_key = os.environ.get("PC_SDK_SUBSCRIPTION_KEY")
     headers = {"Ocp-Apim-Subscription-Key": pc_key} if pc_key else {}
-    try:
-        resp = http_client.get(f"https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}", headers=headers, timeout=10)
-        if resp.status_code == 200:
-            return resp.json().get("token", "")
-    except Exception as e:
-        logger.warning(f"Could not retrieve SAS token for {collection}: {e}")
+    for attempt in range(3):
+        try:
+            resp = http_client.get(f"https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}", headers=headers, timeout=60)
+            if resp.status_code == 200:
+                token = resp.json().get("token", "")
+                if token:
+                    return token
+        except Exception as e:
+            logger.warning(f"Attempt {attempt+1}/3 failed to retrieve SAS token for {collection}: {e}")
+            time.sleep(2)
+    logger.error(f"Failed to retrieve valid SAS token for {collection} after 3 attempts.")
     return ""
 
 

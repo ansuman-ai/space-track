@@ -24,8 +24,7 @@ OSM_BUFFER_QUERIES = {
     "roads": "highway=* and geometry:line",
     "bridges": "bridge=* and bridge!=no and geometry:line",
     "hospitals": "(amenity=hospital or amenity=clinic or amenity=doctors or healthcare=hospital) and (geometry:point or geometry:polygon)",
-    "places": "(place=city or place=town or place=village or place=hamlet or place=isolated_dwelling) and geometry:point",
-    "buildings": "building=* and geometry:polygon"
+    "places": "(place=city or place=town or place=village or place=hamlet or place=isolated_dwelling) and geometry:point"
 }
 
 
@@ -89,7 +88,7 @@ def compute_layer_vertex_stats(gdf: gpd.GeoDataFrame) -> Dict[str, Any]:
 def fetch_buffered_osm(
     bbox: List[float],
     buffer_km: float = 30.0,
-    event_date: str = "2026-08-26",
+    event_date: Optional[str] = None,
     out_dir: str = "data/raw/osm_buffered",
     utm_crs: str = "EPSG:32645",
     days_before: int = 1,
@@ -106,10 +105,13 @@ def fetch_buffered_osm(
     buf_bbox = compute_buffered_bbox(bbox, buffer_km=buffer_km, utm_crs=utm_crs)
     logger.info(f"Target buffered bbox ({buffer_km} km buffer): {buf_bbox}")
 
-    ev_dt = datetime.fromisoformat(event_date)
-    pre_event_dt = (ev_dt - timedelta(days=days_before)).strftime("%Y-%m-%dT00:00:00Z")
     latest_ts = get_latest_ohsome_timestamp()
-    snapshot_time = min(pre_event_dt, latest_ts)
+    if event_date:
+        ev_dt = datetime.fromisoformat(event_date)
+        pre_event_dt = (ev_dt - timedelta(days=days_before)).strftime("%Y-%m-%dT00:00:00Z")
+        snapshot_time = min(pre_event_dt, latest_ts)
+    else:
+        snapshot_time = latest_ts
     logger.info(f"Pre-event snapshot timestamp: {snapshot_time}")
 
     stats = {}
@@ -150,14 +152,16 @@ def fetch_buffered_osm(
 
 
 if __name__ == "__main__":
-    import yaml
-    with open("configs/trishuli.yaml") as f:
-        cfg = yaml.safe_load(f)
-    cs = cfg["case_study"]
-    rt = cfg.get("routing", {})
+    import argparse
+    parser = argparse.ArgumentParser(description="Fetch buffered OSM for L5 routing")
+    parser.add_argument("--bbox", type=float, nargs=4, required=True, help="W S E N")
+    parser.add_argument("--event-date", type=str, required=True, help="YYYY-MM-DD")
+    parser.add_argument("--buffer-km", type=float, default=30.0)
+    parser.add_argument("--utm-crs", type=str, default="EPSG:32645")
+    args = parser.parse_args()
     fetch_buffered_osm(
-        bbox=cs["bbox"],
-        buffer_km=rt.get("buffer_km", 30.0),
-        event_date=cs["event_date"],
-        utm_crs=cs.get("utm_crs", "EPSG:32645")
+        bbox=args.bbox,
+        buffer_km=args.buffer_km,
+        event_date=args.event_date,
+        utm_crs=args.utm_crs
     )

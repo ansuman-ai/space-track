@@ -44,7 +44,7 @@ def get_latest_ohsome_timestamp() -> str:
                 return to_ts
     except Exception as e:
         logger.warning(f"Could not query ohsome metadata: {e}")
-    return "2026-07-27T09:00:00Z"
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def query_ohsome_layer(

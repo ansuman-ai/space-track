@@ -69,7 +69,8 @@ def compute_repair_priorities(
 
     dist_post = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
     init_connected_sids = set(sid for sid, info in s_nodes.items() if info["node"] in dist_post)
-    logger.info(f"Initial post-event connected settlements: {len(init_connected_sids)}")
+    cutoff_sids = set(sid for sid, info in s_nodes.items() if info["node"] not in dist_post)
+    logger.info(f"Initial post-event connected settlements: {len(init_connected_sids)}, cut-off: {len(cutoff_sids)}")
 
     # Group destroyed edges by OSM ID
     dest_by_osm: Dict[str, List[Tuple[Any, Any, Dict[str, Any]]]] = {}
@@ -147,12 +148,32 @@ def compute_repair_priorities(
         reverse=True
     )
 
+    if not candidates:
+        output_data = {
+            "metadata": {
+                "description": "Layer 5 Critical Infrastructure Repair Prioritization",
+                "initial_connected_settlements": len(init_connected_sids),
+                "total_cut_off_settlements": len(cutoff_sids),
+                "total_destroyed_vehicle_elements": 0
+            },
+            "single_element_repair_ranking": single_element_results,
+            "greedy_repair_top_5": []
+        }
+        Path(output_json_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved repair priority analysis to {output_json_path}")
+        return output_data
+
     greedy_steps = []
     curr_G = G_post.copy()
     curr_conn = set(init_connected_sids)
     repaired_oids: Set[str] = set()
 
-    for step in range(1, 6):
+    num_steps = min(5, len(candidates))
+    for step in range(1, num_steps + 1):
+        if len(repaired_oids) >= len(candidates):
+            break
         best_oid = None
         best_gain = -1
         best_bldg_gain = -1
@@ -185,6 +206,8 @@ def compute_repair_priorities(
                 if oid not in repaired_oids:
                     best_oid = oid
                     break
+            if best_oid is None:
+                break
             test_G = curr_G.copy()
             for u, v, d in dest_by_osm[best_oid]:
                 test_G.add_edge(u, v, **d)
@@ -192,6 +215,9 @@ def compute_repair_priorities(
             best_new_conn = set(sid for sid, info in s_nodes.items() if info["node"] in dist_test) - curr_conn
             best_gain = len(best_new_conn)
             best_bldg_gain = sum(s_nodes[sid]["building_count"] for sid in best_new_conn)
+
+        if best_oid is None:
+            break
 
         repaired_oids.add(best_oid)
         for u, v, d in dest_by_osm[best_oid]:
@@ -215,8 +241,8 @@ def compute_repair_priorities(
         "metadata": {
             "description": "Layer 5 Critical Infrastructure Repair Prioritization",
             "initial_connected_settlements": len(init_connected_sids),
-            "total_cut_off_settlements": 44,
-            "bottleneck_explanation": "All cut-off settlements lie north of 3 destroyed elements in series along the Pasang Lhamu highway corridor (way/84566285, way/84566287, way/332122791). Thus repairing any SINGLE element yields 0 reconnected settlements. Sequential repair of these three corridor links followed by way/1266396385 reconnects northern settlements."
+            "total_cut_off_settlements": len(cutoff_sids),
+            "total_destroyed_vehicle_elements": len(candidates)
         },
         "single_element_repair_ranking": single_element_results,
         "greedy_repair_top_5": greedy_steps
@@ -290,12 +316,15 @@ def compute_repair_packages(
     for sid in cut_off_sids:
         info = s_nodes[sid]
         sn = info["node"]
-        path = nx.shortest_path(G_pen, sn, "__DEST__", weight="penalized_weight")
         destroyed_oids = set()
-        for i in range(len(path) - 2):  # exclude __DEST__
-            ed = G_vehicle.get_edge_data(path[i], path[i+1])
-            if ed and ed.get("damage_grade") == "Destroyed":
-                destroyed_oids.add(str(ed.get("osm_id")))
+        try:
+            path = nx.shortest_path(G_pen, sn, "__DEST__", weight="penalized_weight")
+            for i in range(len(path) - 2):  # exclude __DEST__
+                ed = G_vehicle.get_edge_data(path[i], path[i+1])
+                if ed and ed.get("damage_grade") == "Destroyed":
+                    destroyed_oids.add(str(ed.get("osm_id")))
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            pass
         pkg = tuple(sorted(list(destroyed_oids)))
         packages_by_sid[sid] = {
             "settlement_id": sid,

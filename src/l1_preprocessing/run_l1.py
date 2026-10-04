@@ -281,10 +281,10 @@ def run_layer1(
         "shape": (h, w),
         "grid_str": f"{w}x{h}",
         "dates": {
-            "pre": meta.get("pre", {}).get("datetime", "2026-08-16"),
-            "post": meta.get("post", {}).get("datetime", "2026-08-28"),
-            "orbit": meta.get("post", {}).get("relative_orbit", 85),
-            "pass": meta.get("post", {}).get("orbit_direction", "ascending").upper()
+            "pre": meta.get("pre", {}).get("datetime", ""),
+            "post": meta.get("post", {}).get("datetime", ""),
+            "orbit": meta.get("post", {}).get("relative_orbit", None),
+            "pass": meta.get("post", {}).get("orbit_direction", "").upper()
         },
         "db_stats": {
             "pre_vv": stats_pre_vv,

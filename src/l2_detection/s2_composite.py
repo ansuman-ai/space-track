@@ -13,6 +13,9 @@ import numpy as np
 import rasterio
 from rasterio.windows import from_bounds
 from scipy.ndimage import distance_transform_edt
+import logging
+
+logger = logging.getLogger("s2_composite")
 
 
 def load_or_cache_s2_scene(
@@ -206,6 +209,22 @@ def prepare_s2_event_and_control_composites(
     and build multi-temporal per-pixel clear-sky composites.
     """
     c_path = Path(cache_dir)
+    if not c_path.exists() or len(list(c_path.glob("*.npz"))) == 0:
+        logger.warning("[WARNING] Missing input: Clear Sentinel-2 optical scenes unavailable in cache. Falling back to Sentinel-1 SAR.")
+        return {
+            "scenes_used": {"pre": [], "post": [], "control_post": []},
+            "pre_composite": None,
+            "post_composite": None,
+            "ctrl_post_composite": None,
+            "d_ndvi_event": None,
+            "d_bsi_event": None,
+            "s2_event_valid": False,
+            "d_ndvi_ctrl": None,
+            "d_bsi_ctrl": None,
+            "s2_ctrl_valid": False,
+            "in_channel_change_event": None,
+            "in_channel_change_ctrl": None
+        }
 
     def load_processed(prefix: str) -> Dict[str, Any]:
         files = list(c_path.glob(f"{prefix}_*.npz"))
@@ -238,17 +257,23 @@ def prepare_s2_event_and_control_composites(
     d_ndvi_ctrl = ctrl_post_composite['ndvi'] - pre_composite['ndvi']
     d_bsi_ctrl = ctrl_post_composite['bsi'] - pre_composite['bsi']
 
+    import re
+    def _parse_scene_meta(fn: str, default_orbit: str) -> Dict[str, str]:
+        m_dt = re.search(r'(\d{4})(\d{2})(\d{2})T', fn)
+        dt = f"{m_dt.group(1)}-{m_dt.group(2)}-{m_dt.group(3)}" if m_dt else ""
+        return {"scene_id": fn, "date": dt, "orbit": default_orbit}
+
     scenes_used = {
         "pre": [
-            {"scene_id": s_pre_119['filename'], "date": "2026-08-12", "orbit": "R119"},
-            {"scene_id": s_pre_076['filename'], "date": "2026-08-24", "orbit": "R076"}
+            _parse_scene_meta(s_pre_119['filename'], "R119"),
+            _parse_scene_meta(s_pre_076['filename'], "R076")
         ],
         "post": [
-            {"scene_id": s_post_119['filename'], "date": "2026-08-27", "orbit": "R119"},
-            {"scene_id": s_post_076['filename'], "date": "2026-09-08", "orbit": "R076"}
+            _parse_scene_meta(s_post_119['filename'], "R119"),
+            _parse_scene_meta(s_post_076['filename'], "R076")
         ],
         "control_post": [
-            {"scene_id": s_ctrl_119['filename'], "date": "2026-08-24", "orbit": "R119"}
+            _parse_scene_meta(s_ctrl_119['filename'], "R119")
         ]
     }
 

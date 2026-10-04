@@ -80,7 +80,7 @@ def render_l5_overview(
     output_png_path: str,
     s2_post_visual: np.ndarray,
     transform_matrix: Any,
-    bbox: List[float] = [85.30, 28.10, 85.42, 28.25],
+    bbox: List[float],
     utm_crs: str = "EPSG:32645"
 ) -> str:
     """
@@ -244,7 +244,7 @@ def render_l5_overview(
     ax.set_ylim(ymin, ymax)
     ax.set_aspect("equal")
     ax.set_title(
-        f"Layer 5 Routing & Settlement Isolation Overview (Trishuli / Syabru Besi)\n"
+        f"Layer 5 Routing & Settlement Isolation Overview\n"
         f"Vehicle: {len(s_cutoff)} Cut Off | {len(s_conn_clear)} Connected (Verified Clear) | {len(s_conn_unverified)} Connected (Cloud-Unverified) | {len(s_noacc)} No Vehicle Access",
         fontsize=12,
         fontweight="bold",
@@ -426,7 +426,7 @@ def render_cutoff_zoom(
         zorder=16
     )
     ax.annotate(
-        "Destination:\nRasuwa District Hospital",
+        "Destination:\nHealth Facility",
         xy=(dest_x, dest_y),
         xytext=(12, 10),
         textcoords="offset points",
@@ -452,7 +452,7 @@ def render_cutoff_zoom(
         Line2D([0], [0], marker="*", color="w", markerfacecolor="#ffff00", markeredgecolor="black", markersize=14, label=f"Origin: {name}"),
         Line2D([0], [0], color="#00ff66", lw=3.5, label=f"Pre-Event Route ({pre_len_km:.2f} km)"),
         Line2D([0], [0], color="#ff0033", lw=5.0, label=f"Destroyed Elements ({len(breaks)} cuts)"),
-        Line2D([0], [0], marker="P", color="w", markerfacecolor="#00ffff", markeredgecolor="black", markersize=12, label="Destination (Rasuwa District Hospital)"),
+        Line2D([0], [0], marker="P", color="w", markerfacecolor="#00ffff", markeredgecolor="black", markersize=12, label="Destination (Health Facility)"),
         Line2D([0], [0], color="#00e5ff", lw=1.5, label="OSM waterway=river (Alignment Check)"),
         Line2D([0], [0], color="#555555", lw=1.0, label="Other Roads")
     ]
@@ -551,7 +551,7 @@ def render_settlement3_component(
         zorder=8
     )
 
-    # 5. Severed Break Point at way/1266396385 (near Syabru Besi confluence)
+    # 5. Severed Break Point at way/1266396385
     dest_lines = []
     for u, v, d in G_vehicle.edges(data=True):
         if d.get("damage_grade") == "Destroyed" and d.get("osm_id") == "way/1266396385":
@@ -561,7 +561,7 @@ def render_settlement3_component(
         dest_gdf.plot(ax=ax, color="#ff0033", linewidth=6.0, zorder=16)
         brk_pt = dest_lines[0].centroid
         ax.annotate(
-            "SEVERED: way/1266396385\n(Bottleneck to Rasuwa District Hospital)",
+            "SEVERED: way/1266396385\n(Bottleneck to Destination)",
             xy=(brk_pt.x, brk_pt.y),
             xytext=(-80, 40),
             textcoords="offset points",
@@ -598,11 +598,11 @@ def render_settlement3_component(
     # 7. Explanatory Callout Box
     explanation = (
         "Western Road Network Isolation Analysis:\n"
-        "• 6,824 road edges connect Settlement #3 westward through Chilime & Gatlang valleys\n"
-        "• Network branches terminate in alpine dead-ends & Chilime hydropower facilities\n"
-        "• ZERO hospitals, health facilities, or towns exist in this western mountain enclave\n"
-        "• Access to Rasuwa District Hospital requires travelling south via Syabru Besi,\n"
-        "  which is completely severed at way/1266396385"
+        "• Road edges connect Settlement #3 westward through alpine valleys\n"
+        "• Network branches terminate in alpine dead-ends\n"
+        "• ZERO hospitals or health facilities exist in this western mountain enclave\n"
+        "• Access to destination requires travelling through the main valley corridor,\n"
+        "  which is completely severed at destroyed way/1266396385"
     )
     ax.text(
         0.02, 0.98, explanation,

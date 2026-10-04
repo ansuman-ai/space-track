@@ -79,7 +79,7 @@ def format_place_name(p_row: Any) -> str:
 def extract_settlements(
     places_path: str = "data/raw/osm_buffered/osm_places.geojson",
     buildings_path: str = "data/raw/osm/osm_buildings.geojson",
-    bbox: List[float] = [85.30, 28.10, 85.42, 28.25],
+    bbox: List[float] = None,
     eps_m: float = 65.0,
     min_samples: int = 5,
     named_place_max_distance_m: float = 500.0,
