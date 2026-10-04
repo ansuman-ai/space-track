@@ -1,0 +1,163 @@
+"""
+Buffered OpenStreetMap Data Ingestion for Layer 5 Routing.
+Fetches pre-event OSM geometries using ohsome geometry extraction
+over a buffered bounding box around the event study area.
+"""
+
+import os
+import sys
+import json
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Tuple
+import numpy as np
+import geopandas as gpd
+from pyproj import Transformer
+
+from src.l0_ingestion.fetch_osm import query_ohsome_layer, get_latest_ohsome_timestamp
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("l5_fetch_osm")
+
+OSM_BUFFER_QUERIES = {
+    "roads": "highway=* and geometry:line",
+    "bridges": "bridge=* and bridge!=no and geometry:line",
+    "hospitals": "(amenity=hospital or amenity=clinic or amenity=doctors or healthcare=hospital) and (geometry:point or geometry:polygon)",
+    "places": "(place=city or place=town or place=village or place=hamlet or place=isolated_dwelling) and geometry:point",
+    "buildings": "building=* and geometry:polygon"
+}
+
+
+def compute_buffered_bbox(
+    bbox: List[float],
+    buffer_km: float = 30.0,
+    utm_crs: str = "EPSG:32645"
+) -> List[float]:
+    """Expands WGS84 bbox [min_lon, min_lat, max_lon, max_lat] by buffer_km in UTM."""
+    to_utm = Transformer.from_crs("EPSG:4326", utm_crs, always_xy=True)
+    to_wgs = Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
+
+    x1, y1 = to_utm.transform(bbox[0], bbox[1])
+    x2, y2 = to_utm.transform(bbox[2], bbox[3])
+
+    buf_m = buffer_km * 1000.0
+    x_min, y_min = min(x1, x2) - buf_m, min(y1, y2) - buf_m
+    x_max, y_max = max(x1, x2) + buf_m, max(y1, y2) + buf_m
+
+    lon_min, lat_min = to_wgs.transform(x_min, y_min)
+    lon_max, lat_max = to_wgs.transform(x_max, y_max)
+
+    return [round(float(lon_min), 4), round(float(lat_min), 4),
+            round(float(lon_max), 4), round(float(lat_max), 4)]
+
+
+def compute_layer_vertex_stats(gdf: gpd.GeoDataFrame) -> Dict[str, Any]:
+    """Computes vertex statistics (min, median, max) and geometry type breakdown."""
+    if len(gdf) == 0:
+        return {"count": 0, "geom_types": {}, "min_vertices": 0, "median_vertices": 0.0, "max_vertices": 0}
+
+    geom_types = gdf.geometry.geom_type.value_counts().to_dict()
+    vertex_counts = []
+    for g in gdf.geometry:
+        if g is None or g.is_empty:
+            continue
+        if g.geom_type == "Point":
+            vertex_counts.append(1)
+        elif g.geom_type in ["LineString", "LinearRing"]:
+            vertex_counts.append(len(g.coords))
+        elif g.geom_type == "Polygon":
+            vertex_counts.append(len(g.exterior.coords))
+        elif g.geom_type == "MultiPolygon":
+            vertex_counts.append(sum(len(p.exterior.coords) for p in g.geoms))
+        elif g.geom_type == "MultiLineString":
+            vertex_counts.append(sum(len(ls.coords) for ls in g.geoms))
+
+    if not vertex_counts:
+        return {"count": len(gdf), "geom_types": geom_types, "min_vertices": 0, "median_vertices": 0.0, "max_vertices": 0}
+
+    vc = np.array(vertex_counts)
+    return {
+        "count": len(gdf),
+        "geom_types": geom_types,
+        "min_vertices": int(vc.min()),
+        "median_vertices": float(np.median(vc)),
+        "max_vertices": int(vc.max())
+    }
+
+
+def fetch_buffered_osm(
+    bbox: List[float],
+    buffer_km: float = 30.0,
+    event_date: str = "2026-08-26",
+    out_dir: str = "data/raw/osm_buffered",
+    utm_crs: str = "EPSG:32645",
+    days_before: int = 1,
+    force: bool = False
+) -> Dict[str, Any]:
+    """
+    Fetches pre-event OSM layers over the 30 km buffered area:
+    roads, paths/footways/tracks, bridges, hospitals, places, buildings.
+    """
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    summary_file = out_path / "osm_buffered_summary.json"
+
+    buf_bbox = compute_buffered_bbox(bbox, buffer_km=buffer_km, utm_crs=utm_crs)
+    logger.info(f"Target buffered bbox ({buffer_km} km buffer): {buf_bbox}")
+
+    ev_dt = datetime.fromisoformat(event_date)
+    pre_event_dt = (ev_dt - timedelta(days=days_before)).strftime("%Y-%m-%dT00:00:00Z")
+    latest_ts = get_latest_ohsome_timestamp()
+    snapshot_time = min(pre_event_dt, latest_ts)
+    logger.info(f"Pre-event snapshot timestamp: {snapshot_time}")
+
+    stats = {}
+    for layer_name, filter_expr in OSM_BUFFER_QUERIES.items():
+        layer_file = out_path / f"osm_{layer_name}.geojson"
+        if not force and layer_file.exists():
+            logger.info(f"Loading existing cached layer: {layer_file}")
+            gdf = gpd.read_file(layer_file)
+        else:
+            logger.info(f"Fetching buffered OSM layer '{layer_name}' with filter '{filter_expr}'...")
+            geojson_res = query_ohsome_layer(buf_bbox, filter_expr, snapshot_time)
+            with open(layer_file, "w") as f:
+                json.dump(geojson_res, f)
+            logger.info(f"Saved {len(geojson_res.get('features', []))} features to {layer_file}")
+            gdf = gpd.read_file(layer_file)
+
+        l_stats = compute_layer_vertex_stats(gdf)
+        stats[layer_name] = l_stats
+
+        print(f"=== Layer: {layer_name} ===")
+        print(f"  Feature count:   {l_stats['count']}")
+        print(f"  Geometry types:  {l_stats['geom_types']}")
+        print(f"  Vertex counts -> Min: {l_stats['min_vertices']}, Median: {l_stats['median_vertices']:.1f}, Max: {l_stats['max_vertices']}")
+
+    summary = {
+        "event_date": event_date,
+        "snapshot_time": snapshot_time,
+        "base_bbox": bbox,
+        "buffered_bbox": buf_bbox,
+        "buffer_km": buffer_km,
+        "layer_stats": stats
+    }
+
+    with open(summary_file, "w") as f:
+        json.dump(summary, f, indent=2)
+
+    return summary
+
+
+if __name__ == "__main__":
+    import yaml
+    with open("configs/trishuli.yaml") as f:
+        cfg = yaml.safe_load(f)
+    cs = cfg["case_study"]
+    rt = cfg.get("routing", {})
+    fetch_buffered_osm(
+        bbox=cs["bbox"],
+        buffer_km=rt.get("buffer_km", 30.0),
+        event_date=cs["event_date"],
+        utm_crs=cs.get("utm_crs", "EPSG:32645")
+    )

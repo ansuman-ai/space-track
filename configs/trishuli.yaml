@@ -49,4 +49,31 @@ damage_grading:
   bridge_distance_m: 30.0       # Proximity to Class 2/3 for bridges (D_bridge m)
   bridge_reach_radius_m: 100.0  # Proximity along crossed river reach for bridges (R m)
 
+routing:
+  buffer_km: 30.0
+  max_snap_distance_m: 500.0
+  dbscan_eps_m: 65.0
+  dbscan_min_samples: 5
+  vehicle_highways:
+    - motorway
+    - trunk
+    - primary
+    - secondary
+    - tertiary
+    - unclassified
+    - residential
+    - service
+    - motorway_link
+    - trunk_link
+    - primary_link
+    - secondary_link
+    - tertiary_link
+  walking_highways_extra:
+    - path
+    - footway
+    - track
+    - steps
+    - pedestrian
+    - cycleway
+
 
