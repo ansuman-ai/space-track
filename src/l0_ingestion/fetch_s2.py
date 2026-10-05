@@ -168,78 +168,125 @@ def fetch_s2(
     )
 
     # Determine reference bounds and shape from bbox in UTM
-    from pyproj import Transformer
-    transformer = Transformer.from_crs("EPSG:4326", utm_crs, always_xy=True)
-    x1, y1 = transformer.transform(bbox[0], bbox[1])
-    x2, y2 = transformer.transform(bbox[2], bbox[3])
-    x_min, x_max = min(x1, x2), max(x1, x2)
-    y_min, y_max = min(y1, y2), max(y1, y2)
-    target_width = int(round((x_max - x_min) / 10.0))
-    target_height = int(round((y_max - y_min) / 10.0))
-    utm_bounds = (x_min, y_min, x_max, y_max)
+    from rasterio.warp import transform_bounds
+    utm_bounds = transform_bounds("EPSG:4326", utm_crs, *bbox)
+    target_width = int(round((utm_bounds[2] - utm_bounds[0]) / 10.0))
+    target_height = int(round((utm_bounds[3] - utm_bounds[1]) / 10.0))
     target_shape = (target_height, target_width)
 
-    all_downloaded = []
-    scenes_to_fetch = [
-        ("pre", pre_feats),
-        ("post", post_feats),
-        ("ctrl", ctrl_feats),
-        ("seas_pre", seas_pre_feats),
-        ("seas_post", seas_post_feats)
-    ]
+    def _get_orbit_str(feat):
+        props = feat.get("properties", {})
+        orbit = props.get("sat:relative_orbit") or props.get("s2:relative_orbit", "")
+        return f"R{orbit:03d}" if isinstance(orbit, int) else (f"R{orbit}" if orbit else "R000")
 
-    for prefix, feat_list in scenes_to_fetch:
-        for feat in feat_list:
-            scene_id = feat.get("id", "")
-            props = feat.get("properties", {})
-            orbit = props.get("sat:relative_orbit", "")
-            if not orbit and "s2:mgrs_tile" in props:
-                orbit = props.get("s2:relative_orbit", "")
-            orbit_str = f"R{orbit:03d}" if isinstance(orbit, int) else (f"R{orbit}" if orbit else "R000")
-            dt_str = props.get("datetime", "")[:10].replace("-", "")
+    # Select best scenes per orbit to avoid downloading unneeded STAC matches
+    selected_scenes_to_fetch = []
 
-            save_fn = out_path / f"{prefix}_{orbit_str}_{scene_id[:30]}.npz"
-            if save_fn.exists():
-                all_downloaded.append(save_fn.name)
-                continue
+    # Pre: sort descending by datetime (closest to event), pick 1 per orbit
+    pre_by_orb = {}
+    for f in sorted(pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True):
+        orb = _get_orbit_str(f)
+        if orb not in pre_by_orb:
+            pre_by_orb[orb] = f
+            selected_scenes_to_fetch.append(("pre", f))
 
-            assets = feat.get("assets", {})
-            bands = {}
-            sun_elev = float(props.get("view:sun_elevation", 65.0))
-            sun_az = float(props.get("view:sun_azimuth", 135.0))
-            bands["sun_elevation"] = np.array(sun_elev, dtype=np.float32)
-            bands["sun_azimuth"] = np.array(sun_az, dtype=np.float32)
+    # Post: sort ascending by datetime (earliest after event), pick up to 2 per orbit
+    post_by_orb = {}
+    for f in sorted(post_feats, key=lambda x: x.get("properties", {}).get("datetime", "")):
+        orb = _get_orbit_str(f)
+        post_by_orb.setdefault(orb, []).append(f)
+    for orb, f_list in post_by_orb.items():
+        for f in f_list[:2]:
+            selected_scenes_to_fetch.append(("post", f))
 
+    # Ctrl: sort descending by datetime (closest to pre window), pick 1 per orbit
+    ctrl_by_orb = {}
+    for f in sorted(ctrl_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True):
+        orb = _get_orbit_str(f)
+        if orb not in ctrl_by_orb:
+            ctrl_by_orb[orb] = f
+            selected_scenes_to_fetch.append(("ctrl", f))
+
+    # Seasonal pre: pick 1 per orbit
+    seas_pre_by_orb = {}
+    for f in sorted(seas_pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True):
+        orb = _get_orbit_str(f)
+        if orb not in seas_pre_by_orb:
+            seas_pre_by_orb[orb] = f
+            selected_scenes_to_fetch.append(("seas_pre", f))
+
+    # Seasonal post: pick 1 per orbit
+    seas_post_by_orb = {}
+    for f in sorted(seas_post_feats, key=lambda x: x.get("properties", {}).get("datetime", "")):
+        orb = _get_orbit_str(f)
+        if orb not in seas_post_by_orb:
+            seas_post_by_orb[orb] = f
+            selected_scenes_to_fetch.append(("seas_post", f))
+
+    import concurrent.futures
+
+    def _fetch_scene_bands(item_tuple):
+        prefix, feat = item_tuple
+        scene_id = feat.get("id", "")
+        props = feat.get("properties", {})
+        orbit_str = _get_orbit_str(feat)
+
+        save_fn = out_path / f"{prefix}_{orbit_str}_{scene_id[:30]}.npz"
+        if save_fn.exists():
+            return save_fn.name
+
+        assets = feat.get("assets", {})
+        sun_elev = float(props.get("view:sun_elevation", 65.0))
+        sun_az = float(props.get("view:sun_azimuth", 135.0))
+
+        band_names = ['B02', 'B03', 'B04', 'B08', 'B11', 'B12', 'SCL', 'visual']
+
+        def _read_band(b_name):
+            b_src = 'B11' if b_name == 'B12' and 'B12' not in assets and 'B11' in assets else b_name
+            if b_src not in assets:
+                return None, None
+            url = assets[b_src]['href']
+            if token and "?" not in url:
+                url = f"{url}?{token}"
             with env:
-                for b_name in ['B02', 'B03', 'B04', 'B08', 'B11', 'B12', 'SCL', 'visual']:
-                    if b_name not in assets:
-                        if b_name == 'B12' and 'B11' in assets:
-                            b_name_src = 'B11'
-                        else:
-                            continue
-                    else:
-                        b_name_src = b_name
+                try:
+                    with rasterio.open(url) as s:
+                        b_s = transform_bounds(utm_crs, s.crs, *utm_bounds) if s.crs.to_string() != utm_crs else utm_bounds
+                        w = from_bounds(*b_s, transform=s.transform)
+                        out_s = (3, *target_shape) if b_name == 'visual' else target_shape
+                        arr = s.read(window=w, out_shape=out_s)
+                        if b_name != 'visual' and arr.ndim == 3 and arr.shape[0] == 1:
+                            arr = arr[0]
+                        return b_name, arr
+                except Exception as e:
+                    logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
+                    return None, None
 
-                    url = assets[b_name_src]['href']
-                    if token and "?" not in url:
-                        url = f"{url}?{token}"
+        bands = {
+            "sun_elevation": np.array(sun_elev, dtype=np.float32),
+            "sun_azimuth": np.array(sun_az, dtype=np.float32)
+        }
 
-                    try:
-                        with rasterio.open(url) as s:
-                            b_s = transform_bounds(utm_crs, s.crs, *utm_bounds) if s.crs.to_string() != utm_crs else utm_bounds
-                            w = from_bounds(*b_s, transform=s.transform)
-                            out_s = (3, *target_shape) if b_name == 'visual' else target_shape
-                            arr = s.read(window=w, out_shape=out_s)
-                            if b_name != 'visual' and arr.ndim == 3 and arr.shape[0] == 1:
-                                arr = arr[0]
-                            bands[b_name] = arr
-                    except Exception as e:
-                        logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as b_ex:
+            futs = [b_ex.submit(_read_band, b) for b in band_names]
+            for fut in futs:
+                k, v = fut.result()
+                if k is not None and v is not None:
+                    bands[k] = v
 
-            if "B04" in bands and "B08" in bands:
-                np.savez_compressed(save_fn, **bands)
-                all_downloaded.append(save_fn.name)
-                logger.info(f"Saved S2 scene to {save_fn.name}")
+        if "B04" in bands and "B08" in bands:
+            np.savez_compressed(save_fn, **bands)
+            logger.info(f"Saved S2 scene to {save_fn.name}")
+            return save_fn.name
+        return None
+
+    all_downloaded = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as sc_ex:
+        sc_futs = [sc_ex.submit(_fetch_scene_bands, item) for item in selected_scenes_to_fetch]
+        for fut in sc_futs:
+            res_fn = fut.result()
+            if res_fn:
+                all_downloaded.append(res_fn)
 
     return {
         "status": "FETCHED",

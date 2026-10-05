@@ -208,6 +208,9 @@ def compute_in_channel_change_vector(
     return cvm
 
 
+_TERRAIN_SHADOW_CACHE: Dict[Tuple, np.ndarray] = {}
+
+
 def compute_terrain_cast_shadow(
     dem: np.ndarray,
     sun_elevation_deg: float,
@@ -219,6 +222,17 @@ def compute_terrain_cast_shadow(
     Computes terrain cast shadow mask from DEM and sun vector using line-of-sight ray tracing.
     Returns boolean mask where True indicates pixel is in terrain cast shadow.
     """
+    cache_key = (
+        round(float(sun_elevation_deg), 1),
+        round(float(sun_azimuth_deg), 1),
+        round(float(pixel_size_m), 1),
+        dem.shape,
+        float(dem.flat[0]),
+        float(dem.flat[-1])
+    )
+    if cache_key in _TERRAIN_SHADOW_CACHE:
+        return _TERRAIN_SHADOW_CACHE[cache_key].copy()
+
     elev_rad = np.radians(sun_elevation_deg)
     az_rad = np.radians(sun_azimuth_deg)
     tan_elev = np.tan(elev_rad)
@@ -240,6 +254,8 @@ def compute_terrain_cast_shadow(
         shifted_dem = shift(dem, (-delta_r, -delta_c), order=1, mode='nearest')
         is_blocked = (shifted_dem - dem) > height_diff_needed
         cast_shadow |= is_blocked
+
+    _TERRAIN_SHADOW_CACHE[cache_key] = cast_shadow
     return cast_shadow
 
 
@@ -355,7 +371,14 @@ def prepare_s2_event_and_control_composites(
         # Terrain cast shadow mask & snow mask
         if dem_array is not None:
             shad = compute_terrain_cast_shadow(dem_array, sun_elev, sun_az, pixel_size_m=pixel_size_m)
-            proc['is_clear'] &= (~shad)
+            if shad.shape != proc['is_clear'].shape:
+                min_h = min(shad.shape[0], proc['is_clear'].shape[0])
+                min_w = min(shad.shape[1], proc['is_clear'].shape[1])
+                shad_sub = np.zeros_like(proc['is_clear'])
+                shad_sub[:min_h, :min_w] = shad[:min_h, :min_w]
+                proc['is_clear'] &= (~shad_sub)
+            else:
+                proc['is_clear'] &= (~shad)
 
         # SCL == 11 is Snow/Ice
         scl = bands.get('SCL')

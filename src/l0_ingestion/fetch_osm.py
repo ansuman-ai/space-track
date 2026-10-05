@@ -6,6 +6,7 @@ Time parameter strictly derived before event_date.
 
 import sys
 import os
+import time
 import json
 import logging
 from pathlib import Path
@@ -47,32 +48,16 @@ def get_latest_ohsome_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+import concurrent.futures
+
 def query_ohsome_layer(
     bbox: List[float],
     filter_expr: str,
     snapshot_time: str
 ) -> Dict[str, Any]:
-    """Query ohsome geometry extraction endpoint (elements/geometry or elementsFullHistory/geometry)."""
+    """Query ohsome geometry extraction endpoint via elementsFullHistory/geometry with pre-event interval."""
     bbox_str = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
     
-    # Try elements/geometry first
-    data_single = {
-        "bboxes": bbox_str,
-        "filter": filter_expr,
-        "time": snapshot_time,
-        "properties": "tags"
-    }
-    url_single = f"{OHSOME_BASE_URL}/elements/geometry"
-    try:
-        resp = http_client.post(url_single, data=data_single, timeout=60)
-        if resp.status_code == 200:
-            return resp.json()
-        else:
-            logger.info(f"elements/geometry returned HTTP {resp.status_code}; trying elementsFullHistory/geometry...")
-    except Exception as e:
-        logger.info(f"elements/geometry failed: {e}")
-
-    # Fallback to elementsFullHistory/geometry with pre-event time interval
     t_end = datetime.fromisoformat(snapshot_time.replace("Z", "+00:00"))
     t_start = (t_end - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     time_interval = f"{t_start},{snapshot_time}"
@@ -84,22 +69,31 @@ def query_ohsome_layer(
         "properties": "tags,metadata"
     }
     url_hist = f"{OHSOME_BASE_URL}/elementsFullHistory/geometry"
-    resp = http_client.post(url_hist, data=data_hist, timeout=120)
-    if resp.status_code == 200:
-        res = resp.json()
-        feats = res.get("features", [])
-        # Deduplicate by @osmId keeping latest version
-        dedup = {}
-        for f in feats:
-            oid = f.get("properties", {}).get("@osmId")
-            ver = f.get("properties", {}).get("@version", 0)
-            if oid not in dedup or ver > dedup[oid].get("properties", {}).get("@version", 0):
-                dedup[oid] = f
-        res["features"] = list(dedup.values())
-        return res
-    else:
-        logger.error(f"elementsFullHistory/geometry failed: {resp.status_code} - {resp.text[:200]}")
-        sys.exit(f"FAILED: ohsome geometry query failed: {resp.status_code}")
+    for attempt in range(3):
+        try:
+            resp = http_client.post(url_hist, data=data_hist, timeout=120)
+            if resp.status_code == 200:
+                res = resp.json()
+                feats = res.get("features", [])
+                # Deduplicate by @osmId keeping latest version
+                dedup = {}
+                for f in feats:
+                    oid = f.get("properties", {}).get("@osmId")
+                    ver = f.get("properties", {}).get("@version", 0)
+                    if oid not in dedup or ver > dedup[oid].get("properties", {}).get("@version", 0):
+                        dedup[oid] = f
+                res["features"] = list(dedup.values())
+                return res
+            elif resp.status_code >= 500:
+                time.sleep(2)
+                continue
+            else:
+                logger.error(f"elementsFullHistory/geometry failed: {resp.status_code} - {resp.text[:200]}")
+                sys.exit(f"FAILED: ohsome geometry query failed: {resp.status_code}")
+        except requests.exceptions.RequestException as e:
+            if attempt == 2:
+                sys.exit(f"FAILED: ohsome network error: {e}")
+            time.sleep(2)
 
 
 def fetch_osm(
@@ -137,17 +131,22 @@ def fetch_osm(
 
     logger.info(f"Using pre-event OSM snapshot timestamp: {snapshot_time} for bbox: {bbox}")
 
-    counts = {}
-    for layer_name, filter_expr in OSM_QUERIES.items():
+    def _fetch_single_layer(layer_name, filter_expr):
         logger.info(f"Fetching OSM layer '{layer_name}' with filter '{filter_expr}'...")
         geojson_res = query_ohsome_layer(bbox, filter_expr, snapshot_time)
         feature_count = len(geojson_res.get("features", []))
-        counts[layer_name] = feature_count
-
         layer_file = out_path / f"osm_{layer_name}.geojson"
         with open(layer_file, "w") as f:
             json.dump(geojson_res, f, indent=2)
         logger.info(f"Saved {feature_count} features to {layer_file}")
+        return layer_name, feature_count
+
+    counts = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futs = [executor.submit(_fetch_single_layer, k, v) for k, v in OSM_QUERIES.items()]
+        for fut in concurrent.futures.as_completed(futs):
+            lname, cnt = fut.result()
+            counts[lname] = cnt
 
     summary = {
         "event_date": event_date,

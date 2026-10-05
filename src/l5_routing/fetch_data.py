@@ -114,8 +114,9 @@ def fetch_buffered_osm(
         snapshot_time = latest_ts
     logger.info(f"Pre-event snapshot timestamp: {snapshot_time}")
 
-    stats = {}
-    for layer_name, filter_expr in OSM_BUFFER_QUERIES.items():
+    import concurrent.futures
+
+    def _fetch_buf_layer(layer_name, filter_expr):
         layer_file = out_path / f"osm_{layer_name}.geojson"
         if not force and layer_file.exists():
             logger.info(f"Loading existing cached layer: {layer_file}")
@@ -129,12 +130,18 @@ def fetch_buffered_osm(
             gdf = gpd.read_file(layer_file)
 
         l_stats = compute_layer_vertex_stats(gdf)
-        stats[layer_name] = l_stats
+        return layer_name, l_stats
 
-        print(f"=== Layer: {layer_name} ===")
-        print(f"  Feature count:   {l_stats['count']}")
-        print(f"  Geometry types:  {l_stats['geom_types']}")
-        print(f"  Vertex counts -> Min: {l_stats['min_vertices']}, Median: {l_stats['median_vertices']:.1f}, Max: {l_stats['max_vertices']}")
+    stats = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futs = [executor.submit(_fetch_buf_layer, k, v) for k, v in OSM_BUFFER_QUERIES.items()]
+        for fut in concurrent.futures.as_completed(futs):
+            lname, l_stats = fut.result()
+            stats[lname] = l_stats
+            print(f"=== Layer: {lname} ===")
+            print(f"  Feature count:   {l_stats['count']}")
+            print(f"  Geometry types:  {l_stats['geom_types']}")
+            print(f"  Vertex counts -> Min: {l_stats['min_vertices']}, Median: {l_stats['median_vertices']:.1f}, Max: {l_stats['max_vertices']}")
 
     summary = {
         "event_date": event_date,

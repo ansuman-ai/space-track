@@ -43,7 +43,9 @@ def run_layer4(
     distance_possibly_damaged_m: float = 30.0,
     road_segment_length_m: float = 100.0,
     bridge_distance_m: float = 30.0,
-    bridge_reach_radius_m: float = 100.0
+    bridge_reach_radius_m: float = 100.0,
+    s2_valid_mask: Optional[np.ndarray] = None,
+    s2_post_visual: Optional[np.ndarray] = None
 ) -> Dict[str, Any]:
 
     """
@@ -84,15 +86,25 @@ def run_layer4(
         dx = abs(trans.a)
 
     # Cloud mask from S2 composite
-    try:
-        from ..l2_detection.s2_composite import prepare_s2_event_and_control_composites
-        s2_data = prepare_s2_event_and_control_composites(s2_cache_dir, dilation_buffer_m=60.0, pixel_size_m=dx)
-        s2_valid = s2_data["s2_event_valid"]
-        s2_post_visual = s2_data["post_composite"]["vis"]
-    except Exception as e:
-        logger.warning(f"Could not load S2 composite cache: {e}. Falling back to default validity.")
-        s2_valid = np.ones((h, w), dtype=bool)
-        s2_post_visual = np.zeros((3, h, w), dtype=np.uint8)
+    cached_valid_f = Path(nodata_mask_path).parent / "s2_event_valid.npy"
+    cached_vis_f = Path(nodata_mask_path).parent / "s2_post_visual.npy"
+
+    if s2_valid_mask is not None:
+        s2_valid = s2_valid_mask
+        s2_post_visual = s2_post_visual if s2_post_visual is not None else np.zeros((3, h, w), dtype=np.uint8)
+    elif cached_valid_f.exists():
+        s2_valid = np.load(cached_valid_f)
+        s2_post_visual = np.load(cached_vis_f) if cached_vis_f.exists() else np.zeros((3, h, w), dtype=np.uint8)
+    else:
+        try:
+            from ..l2_detection.s2_composite import prepare_s2_event_and_control_composites
+            s2_data = prepare_s2_event_and_control_composites(s2_cache_dir, dilation_buffer_m=60.0, pixel_size_m=dx)
+            s2_valid = s2_data["s2_event_valid"]
+            s2_post_visual = s2_data["post_composite"]["vis"]
+        except Exception as e:
+            logger.warning(f"Could not load S2 composite cache: {e}. Falling back to default validity.")
+            s2_valid = np.ones((h, w), dtype=bool)
+            s2_post_visual = np.zeros((3, h, w), dtype=np.uint8)
 
     cloud_or_nodata = (~s2_valid) | (nodata == 1)
     inv_trans = ~trans

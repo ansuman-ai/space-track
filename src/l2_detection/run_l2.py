@@ -316,6 +316,13 @@ def run_layer2(
         sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
         cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
 
+    try:
+        np.save(in_path / "s2_event_valid.npy", s2_event_valid)
+        if post_vis is not None:
+            np.save(in_path / "s2_post_visual.npy", post_vis)
+    except Exception as e:
+        logger.warning(f"Could not persist s2_event_valid to interim: {e}")
+
     # 3. Load Sentinel-1 features (Ascending stack z-scores & Descending O19 log-ratio)
     post_vv_file = in_path / "post_vv.tif" if (in_path / "post_vv.tif").exists() else (in_path.parent / "raw" / "s1" / "post.tif")
     s1_data = load_s1_features(

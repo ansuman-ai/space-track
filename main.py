@@ -179,7 +179,8 @@ def run_pipeline(
     # ==================================================================
     l0_start_time = datetime.now()
     t_l0_0 = time.time()
-    size_raw_before = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir)
+    s2_cache_path = interim_dir / "s2_cache"
+    size_raw_before = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir) + get_dir_size_mb(s2_cache_path)
 
     logger.info("\n>>> EXECUTING LAYER 0: DATA INGESTION (PARALLEL)")
     s1_pre_path = raw_dir / "s1" / "pre.tif"
@@ -187,27 +188,26 @@ def run_pipeline(
     s1_meta_path = raw_dir / "s1" / "meta.json"
     dem_cands = [raw_dir / "dem" / "dem_buffered.tif", raw_dir / "dem" / "dem_glo30_buffered.tif", raw_dir / "dem" / "dem.tif"]
     dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
-    s2_cache_path = interim_dir / "s2_cache"
 
     l0_notes = []
     try:
         def _task_s1():
-            if not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
+            if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
                 logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
-                fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir))
+                fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
             else:
                 logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
 
         def _task_dem():
-            if not dem_file.exists():
+            if no_cache or not dem_file.exists():
                 logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
-                fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0))
+                fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0), force=no_cache)
             else:
                 logger.info(f"Using verified existing DEM in {dem_file}")
 
         def _task_osm_bbox():
             logger.info("Fetching pre-event OSM inside bbox...")
-            fetch_osm(bbox, event_date, str(raw_dir / "osm"))
+            fetch_osm(bbox, event_date, str(raw_dir / "osm"), force=no_cache)
 
         def _task_osm_buf():
             buf_osm_dir = raw_dir / "osm_buffered"
@@ -217,7 +217,8 @@ def run_pipeline(
                 buffer_km=rt_cfg.get("buffer_km", 30.0),
                 event_date=event_date,
                 utm_crs=utm_crs,
-                out_dir=str(buf_osm_dir)
+                out_dir=str(buf_osm_dir),
+                force=no_cache
             )
 
         def _task_s2():
@@ -231,7 +232,8 @@ def run_pipeline(
                 s2_post_days=det_cfg.get("s2_post_days", 15),
                 s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
                 s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
-                s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0)
+                s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
+                force=no_cache
             )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -249,7 +251,7 @@ def run_pipeline(
         l0_notes.append(f"Ingestion error: {e}")
         raise e
 
-    size_raw_after = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir)
+    size_raw_after = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir) + get_dir_size_mb(s2_cache_path)
     l0_downloaded_mb = round(max(0.0, size_raw_after - size_raw_before), 2)
     l0_duration_s = round(time.time() - t_l0_0, 2)
     layer_logs["L0"] = {
@@ -402,6 +404,9 @@ def run_pipeline(
     t_l4_0 = time.time()
     logger.info("\n>>> EXECUTING LAYER 4: DAMAGE GRADING")
 
+    s2_valid_arr = np.load(interim_dir / "s2_event_valid.npy") if (interim_dir / "s2_event_valid.npy").exists() else None
+    s2_vis_arr = np.load(interim_dir / "s2_post_visual.npy") if (interim_dir / "s2_post_visual.npy").exists() else None
+
     l4_res = run_layer4(
         osm_dir=str(raw_dir / "osm"),
         hazard_polygons_path=str(processed_dir / "hazard_polygons.geojson"),
@@ -415,7 +420,9 @@ def run_pipeline(
         distance_possibly_damaged_m=dmg_cfg.get("distance_possibly_damaged_m", 30.0),
         road_segment_length_m=dmg_cfg.get("road_segment_length_m", 100.0),
         bridge_distance_m=dmg_cfg.get("bridge_distance_m", 30.0),
-        bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0)
+        bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0),
+        s2_valid_mask=s2_valid_arr,
+        s2_post_visual=s2_vis_arr
     )
 
     # 2. Control L4
@@ -435,7 +442,9 @@ def run_pipeline(
             distance_possibly_damaged_m=dmg_cfg.get("distance_possibly_damaged_m", 30.0),
             road_segment_length_m=dmg_cfg.get("road_segment_length_m", 100.0),
             bridge_distance_m=dmg_cfg.get("bridge_distance_m", 30.0),
-            bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0)
+            bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0),
+            s2_valid_mask=s2_valid_arr,
+            s2_post_visual=s2_vis_arr
         )
 
     l4_duration_s = round(time.time() - t_l4_0, 2)
