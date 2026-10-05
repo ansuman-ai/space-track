@@ -129,6 +129,8 @@ def run_layer4(
         b_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     b_out_file = str(out_path / "buildings_graded.geojson")
+    if "@osmId" in b_graded.columns:
+        b_graded = b_graded.sort_values("@osmId").reset_index(drop=True)
     b_graded.to_file(b_out_file, driver="GeoJSON")
     b_counts = b_graded["damage_grade"].value_counts().to_dict() if len(b_graded) > 0 else {}
     b_ev_counts = b_graded["evidence"].value_counts().to_dict() if len(b_graded) > 0 else {}
@@ -151,6 +153,10 @@ def run_layer4(
         r_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     r_out_file = str(out_path / "roads_graded.geojson")
+    if "segment_id" in r_graded.columns:
+        r_graded = r_graded.sort_values("segment_id").reset_index(drop=True)
+    elif "@osmId" in r_graded.columns:
+        r_graded = r_graded.sort_values("@osmId").reset_index(drop=True)
     r_graded.to_file(r_out_file, driver="GeoJSON")
 
     # Road km summary
@@ -196,6 +202,8 @@ def run_layer4(
         br_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     br_out_file = str(out_path / "bridges_graded.geojson")
+    if "@osmId" in br_graded.columns:
+        br_graded = br_graded.sort_values("@osmId").reset_index(drop=True)
     br_graded.to_file(br_out_file, driver="GeoJSON")
     br_counts = br_graded["damage_grade"].value_counts().to_dict() if len(br_graded) > 0 else {}
 
