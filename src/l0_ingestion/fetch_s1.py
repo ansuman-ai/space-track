@@ -76,11 +76,18 @@ def query_stac(
     if pc_key:
         headers["Ocp-Apim-Subscription-Key"] = pc_key
 
-    try:
-        resp = http_client.post(PC_STAC_URL, json=body, headers=headers, timeout=20)
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Network error querying Planetary Computer STAC: {e}")
-        sys.exit(f"FAILED: Network error querying STAC: {e}")
+    resp = None
+    for attempt in range(3):
+        try:
+            resp = http_client.post(PC_STAC_URL, json=body, headers=headers, timeout=20)
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt < 2:
+                logger.warning(f"Attempt {attempt+1}/3 failed querying Planetary Computer STAC ({e}); retrying in 2s...")
+                time.sleep(2)
+                continue
+            logger.error(f"Network error querying Planetary Computer STAC: {e}")
+            sys.exit(f"FAILED: Network error querying STAC: {e}")
 
     if resp.status_code == 403:
         logger.error("HTTP 403 Forbidden: Sandbox or network environment blocked access to Planetary Computer STAC.")
