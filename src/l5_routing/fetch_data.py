@@ -85,6 +85,47 @@ def compute_layer_vertex_stats(gdf: gpd.GeoDataFrame) -> Dict[str, Any]:
     }
 
 
+def match_buf_roads(f: Dict[str, Any]) -> bool:
+    props = f.get("properties", {})
+    gtype = f.get("geometry", {}).get("type", "")
+    is_geom = gtype in ("LineString", "MultiLineString")
+    hw = props.get("highway")
+    return is_geom and bool(hw)
+
+
+def match_buf_bridges(f: Dict[str, Any]) -> bool:
+    props = f.get("properties", {})
+    gtype = f.get("geometry", {}).get("type", "")
+    is_geom = gtype in ("LineString", "MultiLineString")
+    br = props.get("bridge")
+    return is_geom and bool(br) and br != "no"
+
+
+def match_buf_hospitals(f: Dict[str, Any]) -> bool:
+    props = f.get("properties", {})
+    gtype = f.get("geometry", {}).get("type", "")
+    is_geom = gtype in ("Point", "MultiPoint", "Polygon", "MultiPolygon")
+    am = props.get("amenity")
+    hc = props.get("healthcare")
+    return is_geom and (am in ("hospital", "clinic", "doctors") or hc == "hospital")
+
+
+def match_buf_places(f: Dict[str, Any]) -> bool:
+    props = f.get("properties", {})
+    gtype = f.get("geometry", {}).get("type", "")
+    is_geom = gtype in ("Point", "MultiPoint")
+    pl = props.get("place")
+    return is_geom and pl in ("city", "town", "village", "hamlet", "isolated_dwelling")
+
+
+BUFFER_LAYER_MATCHERS = {
+    "roads": match_buf_roads,
+    "bridges": match_buf_bridges,
+    "hospitals": match_buf_hospitals,
+    "places": match_buf_places,
+}
+
+
 def fetch_buffered_osm(
     bbox: List[float],
     buffer_km: float = 30.0,
@@ -96,7 +137,8 @@ def fetch_buffered_osm(
 ) -> Dict[str, Any]:
     """
     Fetches pre-event OSM layers over the 30 km buffered area:
-    roads, paths/footways/tracks, bridges, hospitals, places, buildings.
+    roads, paths/footways/tracks, bridges, hospitals, places.
+    Uses a single combined ohsome query and splits features locally by tags.
     """
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -104,6 +146,15 @@ def fetch_buffered_osm(
 
     buf_bbox = compute_buffered_bbox(bbox, buffer_km=buffer_km, utm_crs=utm_crs)
     logger.info(f"Target buffered bbox ({buffer_km} km buffer): {buf_bbox}")
+
+    if not force and summary_file.exists() and all((out_path / f"osm_{k}.geojson").exists() for k in OSM_BUFFER_QUERIES):
+        try:
+            with open(summary_file, "r") as f:
+                cached = json.load(f)
+            logger.info(f"Verified existing buffered OSM layers in {out_dir}")
+            return cached
+        except Exception:
+            pass
 
     latest_ts = get_latest_ohsome_timestamp()
     if event_date:
@@ -114,34 +165,35 @@ def fetch_buffered_osm(
         snapshot_time = latest_ts
     logger.info(f"Pre-event snapshot timestamp: {snapshot_time}")
 
-    import concurrent.futures
-
-    def _fetch_buf_layer(layer_name, filter_expr):
-        layer_file = out_path / f"osm_{layer_name}.geojson"
-        if not force and layer_file.exists():
-            logger.info(f"Loading existing cached layer: {layer_file}")
-            gdf = gpd.read_file(layer_file)
-        else:
-            logger.info(f"Fetching buffered OSM layer '{layer_name}' with filter '{filter_expr}'...")
-            geojson_res = query_ohsome_layer(buf_bbox, filter_expr, snapshot_time)
-            with open(layer_file, "w") as f:
-                json.dump(geojson_res, f)
-            logger.info(f"Saved {len(geojson_res.get('features', []))} features to {layer_file}")
-            gdf = gpd.read_file(layer_file)
-
-        l_stats = compute_layer_vertex_stats(gdf)
-        return layer_name, l_stats
+    combined_filter = " or ".join(f"({v})" for v in OSM_BUFFER_QUERIES.values())
+    logger.info("Executing single combined ohsome geometry extraction query for all buffered layers...")
+    import time
+    t_q0 = time.time()
+    geojson_res = query_ohsome_layer(buf_bbox, combined_filter, snapshot_time)
+    t_q1 = time.time()
+    all_features = geojson_res.get("features", [])
+    logger.info(f"Combined buffered OSM query returned {len(all_features)} total features in {t_q1 - t_q0:.2f}s")
 
     stats = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futs = [executor.submit(_fetch_buf_layer, k, v) for k, v in OSM_BUFFER_QUERIES.items()]
-        for fut in concurrent.futures.as_completed(futs):
-            lname, l_stats = fut.result()
-            stats[lname] = l_stats
-            print(f"=== Layer: {lname} ===")
-            print(f"  Feature count:   {l_stats['count']}")
-            print(f"  Geometry types:  {l_stats['geom_types']}")
-            print(f"  Vertex counts -> Min: {l_stats['min_vertices']}, Median: {l_stats['median_vertices']:.1f}, Max: {l_stats['max_vertices']}")
+    for layer_name, matcher in BUFFER_LAYER_MATCHERS.items():
+        layer_file = out_path / f"osm_{layer_name}.geojson"
+        layer_feats = [f for f in all_features if matcher(f)]
+        layer_res = {
+            "attribution": geojson_res.get("attribution", {}),
+            "apiVersion": geojson_res.get("apiVersion", ""),
+            "type": "FeatureCollection",
+            "features": layer_feats
+        }
+        with open(layer_file, "w") as f:
+            json.dump(layer_res, f)
+        logger.info(f"Saved {len(layer_feats)} features to {layer_file}")
+        gdf = gpd.read_file(layer_file)
+        l_stats = compute_layer_vertex_stats(gdf)
+        stats[layer_name] = l_stats
+        print(f"=== Layer: {layer_name} ===")
+        print(f"  Feature count:   {l_stats['count']}")
+        print(f"  Geometry types:  {l_stats['geom_types']}")
+        print(f"  Vertex counts -> Min: {l_stats['min_vertices']}, Median: {l_stats['median_vertices']:.1f}, Max: {l_stats['max_vertices']}")
 
     summary = {
         "event_date": event_date,

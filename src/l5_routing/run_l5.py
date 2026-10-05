@@ -34,6 +34,99 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("layer5_routing")
 
 
+def _run_control_routing_check(
+    roads_buffered_path: str,
+    control_roads_path: str,
+    control_bridges_path: str,
+    bbox: List[float],
+    vehicle_hwys: Any,
+    walking_extra: Any,
+    rural_roads_drivable: bool,
+    construction_roads_passable: bool,
+    snap_dead_end_m: float,
+    utm_crs: str,
+    settlements_gdf: gpd.GeoDataFrame,
+    destinations_gdf: gpd.GeoDataFrame,
+    max_snap_m: float,
+    ctrl_out_path: Path
+) -> Dict[str, Any]:
+    logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK (PARALLEL) ===")
+    ctrl_net = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=control_roads_path,
+        hazard_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    ctrl_v_res = evaluate_network_connectivity(
+        G=ctrl_net["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="vehicle_control",
+        max_snap_distance_m=max_snap_m
+    )
+    ctrl_w_res = evaluate_network_connectivity(
+        G=ctrl_net["G_walking"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="walking_control",
+        max_snap_distance_m=max_snap_m
+    )
+
+    ctrl_v_cutoff = ctrl_v_res["optimistic"]["cut_off_count"]
+    ctrl_w_cutoff = ctrl_w_res["optimistic"]["cut_off_count"]
+    logger.info(f"CONTROL Check: Vehicle cut-off = {ctrl_v_cutoff}, Walking cut-off = {ctrl_w_cutoff}")
+
+    # Re-run control with construction_roads_passable=True to verify 0 cut-offs in that scenario as well
+    ctrl_net_c = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=control_roads_path,
+        hazard_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=True,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    ctrl_vc_res = evaluate_network_connectivity(
+        G=ctrl_net_c["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="control_vehicle_constr",
+        max_snap_distance_m=max_snap_m
+    )
+    ctrl_vc_cutoff = ctrl_vc_res["optimistic"]["cut_off_count"]
+    logger.info(f"CONTROL Check (construction_roads_passable=True): Vehicle cut-off = {ctrl_vc_cutoff}")
+
+    ctrl_summary = {
+        "vehicle_cutoff_count": ctrl_v_cutoff,
+        "vehicle_constr_cutoff_count": ctrl_vc_cutoff,
+        "walking_cutoff_count": ctrl_w_cutoff,
+        "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
+        "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
+        "walking_connected_clear_count": ctrl_w_res["optimistic"]["connected_clear_count"],
+        "walking_connected_unverified_count": ctrl_w_res["optimistic"]["connected_unverified_count"]
+    }
+    with open(ctrl_out_path / "cutoff_summary_control.json", "w") as f:
+        json.dump(ctrl_summary, f, indent=2)
+
+    if ctrl_v_cutoff != 0:
+        logger.warning(f"CONTROL vehicle cut-offs: expected 0, got {ctrl_v_cutoff}")
+    if ctrl_vc_cutoff != 0:
+        logger.warning(f"CONTROL vehicle (construction passable) cut-offs: expected 0, got {ctrl_vc_cutoff}")
+    if ctrl_w_cutoff != 0:
+        logger.warning(f"CONTROL walking cut-offs: expected 0, got {ctrl_w_cutoff}")
+
+    return ctrl_summary
+
+
 def run_layer5(
     config_path: str = "configs/default.yaml",
     bbox: Optional[List[float]] = None,
@@ -104,9 +197,30 @@ def run_layer5(
     )
     logger.info(f"Loaded {len(destinations_gdf)} destinations.")
 
+    # Start CONTROL routing in parallel process/thread
+    import concurrent.futures
+    roads_buffered_path = os.path.join(buffered_osm_dir, "osm_roads.geojson")
+    ctrl_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    ctrl_future = ctrl_pool.submit(
+        _run_control_routing_check,
+        roads_buffered_path=roads_buffered_path,
+        control_roads_path=control_roads_path,
+        control_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_hwys=vehicle_hwys,
+        walking_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
+        snap_dead_end_m=snap_dead_end_m,
+        utm_crs=utm_crs,
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        max_snap_m=max_snap_m,
+        ctrl_out_path=ctrl_out_path
+    )
+
     # 3. Build EVENT Networks
     logger.info("Building topological routing networks for EVENT...")
-    roads_buffered_path = os.path.join(buffered_osm_dir, "osm_roads.geojson")
     event_net = build_routing_networks(
         roads_path=roads_buffered_path,
         hazard_roads_path=event_roads_path,
@@ -424,81 +538,10 @@ def run_layer5(
     except Exception as e:
         logger.debug(f"Dead end zoom plot skipped: {e}")
 
-    # 7. CONTROL RUN CHECK
-    logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")
-    ctrl_net = build_routing_networks(
-        roads_path=roads_buffered_path,
-        hazard_roads_path=control_roads_path,
-        hazard_bridges_path=control_bridges_path,
-        bbox=bbox,
-        vehicle_highways=vehicle_hwys,
-        walking_highways_extra=walking_extra,
-        rural_roads_drivable=rural_roads_drivable,
-        construction_roads_passable=construction_roads_passable,
-        snap_dead_end_nodes_m=snap_dead_end_m,
-        utm_crs=utm_crs
-    )
-    ctrl_v_res = evaluate_network_connectivity(
-        G=ctrl_net["G_vehicle"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="vehicle_control",
-        max_snap_distance_m=max_snap_m
-    )
-    ctrl_w_res = evaluate_network_connectivity(
-        G=ctrl_net["G_walking"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="walking_control",
-        max_snap_distance_m=max_snap_m
-    )
-
-    ctrl_v_cutoff = ctrl_v_res["optimistic"]["cut_off_count"]
-    ctrl_w_cutoff = ctrl_w_res["optimistic"]["cut_off_count"]
-    logger.info(f"CONTROL Check: Vehicle cut-off = {ctrl_v_cutoff}, Walking cut-off = {ctrl_w_cutoff}")
-
-    # Re-run control with construction_roads_passable=True to verify 0 cut-offs in that scenario as well
-    ctrl_net_c = build_routing_networks(
-        roads_path=roads_buffered_path,
-        hazard_roads_path=control_roads_path,
-        hazard_bridges_path=control_bridges_path,
-        bbox=bbox,
-        vehicle_highways=vehicle_hwys,
-        walking_highways_extra=walking_extra,
-        rural_roads_drivable=rural_roads_drivable,
-        construction_roads_passable=True,
-        snap_dead_end_nodes_m=snap_dead_end_m,
-        utm_crs=utm_crs
-    )
-    ctrl_vc_res = evaluate_network_connectivity(
-        G=ctrl_net_c["G_vehicle"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="control_vehicle_constr",
-        max_snap_distance_m=max_snap_m
-    )
-    ctrl_vc_cutoff = ctrl_vc_res["optimistic"]["cut_off_count"]
-    logger.info(f"CONTROL Check (construction_roads_passable=True): Vehicle cut-off = {ctrl_vc_cutoff}")
-
-    ctrl_summary = {
-        "vehicle_cutoff_count": ctrl_v_cutoff,
-        "vehicle_constr_cutoff_count": ctrl_vc_cutoff,
-        "walking_cutoff_count": ctrl_w_cutoff,
-        "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
-        "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
-        "walking_connected_clear_count": ctrl_w_res["optimistic"]["connected_clear_count"],
-        "walking_connected_unverified_count": ctrl_w_res["optimistic"]["connected_unverified_count"]
-    }
-    with open(ctrl_out_path / "cutoff_summary_control.json", "w") as f:
-        json.dump(ctrl_summary, f, indent=2)
-
-    # Check control cut-offs (log warning if non-zero false alarms)
-    if ctrl_v_cutoff != 0:
-        logger.warning(f"CONTROL vehicle cut-offs: expected 0, got {ctrl_v_cutoff}")
-    if ctrl_vc_cutoff != 0:
-        logger.warning(f"CONTROL vehicle (construction passable) cut-offs: expected 0, got {ctrl_vc_cutoff}")
-    if ctrl_w_cutoff != 0:
-        logger.warning(f"CONTROL walking cut-offs: expected 0, got {ctrl_w_cutoff}")
+    # 7. AWAIT CONTROL RUN CHECK (RAN IN PARALLEL)
+    logger.info("Awaiting parallel CONTROL run validation check...")
+    ctrl_summary = ctrl_future.result()
+    ctrl_pool.shutdown()
 
     # Copy artifacts to artifact dir
     if os.path.exists(artifact_dir):

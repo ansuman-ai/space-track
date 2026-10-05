@@ -190,67 +190,134 @@ def run_pipeline(
     dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
 
     l0_notes = []
+
+    def _task_s1():
+        if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
+            logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
+            fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
+        else:
+            logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+
+    def _task_dem():
+        if no_cache or not dem_file.exists():
+            logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
+            fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0), force=no_cache)
+        else:
+            logger.info(f"Using verified existing DEM in {dem_file}")
+
+    def _task_osm_bbox():
+        logger.info("Fetching pre-event OSM inside bbox...")
+        fetch_osm(bbox, event_date, str(raw_dir / "osm"), force=no_cache)
+
+    def _task_osm_buf():
+        buf_osm_dir = raw_dir / "osm_buffered"
+        logger.info("Fetching pre-event buffered OSM (roads, health facilities, places)...")
+        fetch_buffered_osm(
+            bbox=bbox,
+            buffer_km=rt_cfg.get("buffer_km", 30.0),
+            event_date=event_date,
+            utm_crs=utm_crs,
+            out_dir=str(buf_osm_dir),
+            force=no_cache
+        )
+
+    def _task_s2():
+        logger.info("Fetching Sentinel-2 optical scenes...")
+        fetch_s2(
+            bbox=bbox,
+            event_date=event_date,
+            out_dir=str(s2_cache_path),
+            utm_crs=utm_crs,
+            s2_pre_days=det_cfg.get("s2_pre_days", 15),
+            s2_post_days=det_cfg.get("s2_post_days", 15),
+            s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
+            s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
+            s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
+            force=no_cache
+        )
+
     try:
-        def _task_s1():
-            if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
-                logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
-                fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
-            else:
-                logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+        l0_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+        f_s1 = l0_executor.submit(_task_s1)
+        f_dem = l0_executor.submit(_task_dem)
+        f_osm_bbox = l0_executor.submit(_task_osm_bbox)
+        f_osm_buf = l0_executor.submit(_task_osm_buf)
+        f_s2 = l0_executor.submit(_task_s2)
 
-        def _task_dem():
-            if no_cache or not dem_file.exists():
-                logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
-                fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0), force=no_cache)
-            else:
-                logger.info(f"Using verified existing DEM in {dem_file}")
-
-        def _task_osm_bbox():
-            logger.info("Fetching pre-event OSM inside bbox...")
-            fetch_osm(bbox, event_date, str(raw_dir / "osm"), force=no_cache)
-
-        def _task_osm_buf():
-            buf_osm_dir = raw_dir / "osm_buffered"
-            logger.info("Fetching pre-event buffered OSM (roads, health facilities, places)...")
-            fetch_buffered_osm(
-                bbox=bbox,
-                buffer_km=rt_cfg.get("buffer_km", 30.0),
-                event_date=event_date,
-                utm_crs=utm_crs,
-                out_dir=str(buf_osm_dir),
-                force=no_cache
-            )
-
-        def _task_s2():
-            logger.info("Fetching Sentinel-2 optical scenes...")
-            fetch_s2(
-                bbox=bbox,
-                event_date=event_date,
-                out_dir=str(s2_cache_path),
-                utm_crs=utm_crs,
-                s2_pre_days=det_cfg.get("s2_pre_days", 15),
-                s2_post_days=det_cfg.get("s2_post_days", 15),
-                s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
-                s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
-                s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
-                force=no_cache
-            )
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futs = {
-                executor.submit(_task_s1): "Sentinel-1",
-                executor.submit(_task_dem): "DEM",
-                executor.submit(_task_osm_bbox): "OSM (bbox)",
-                executor.submit(_task_osm_buf): "OSM (buffered)",
-                executor.submit(_task_s2): "Sentinel-2"
-            }
-            for fut in concurrent.futures.as_completed(futs):
-                fut.result()
+        # 1. Wait ONLY for S1 and DEM so L1 Preprocessing can start immediately!
+        f_s1.result()
+        f_dem.result()
     except Exception as e:
         logger.error(f"[ERROR] Layer 0 ingestion failed: {e}")
         l0_notes.append(f"Ingestion error: {e}")
         raise e
 
+    dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
+    logger.info("[PROGRESS] S1 and DEM ready! Starting L1 Preprocessing immediately...")
+
+    # ==================================================================
+    # LAYER 1: PREPROCESSING (EVENT & CONTROL IN PARALLEL)
+    # ==================================================================
+    l1_start_time = datetime.now()
+    t_l1_0 = time.time()
+    logger.info("\n>>> EXECUTING LAYER 1: PREPROCESSING (OVERLAPPED WITH S2 & OSM DOWNLOADS)")
+
+    ctrl_pre = ctrl_raw_dir / "pre.tif"
+    ctrl_post = ctrl_raw_dir / "post.tif"
+    ctrl_meta = ctrl_raw_dir / "meta.json"
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as l1_pool:
+        f_ev = l1_pool.submit(
+            run_layer1,
+            pre_path=str(s1_pre_path),
+            post_path=str(s1_post_path),
+            dem_path=str(dem_file),
+            meta_path=str(s1_meta_path),
+            out_dir=str(interim_dir),
+            window_size=prep_cfg.get("filter_window_size", 5),
+            drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
+            look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
+            orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
+            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
+        )
+        if ctrl_pre.exists() and ctrl_post.exists():
+            f_ctrl = l1_pool.submit(
+                run_layer1,
+                pre_path=str(ctrl_pre),
+                post_path=str(ctrl_post),
+                dem_path=str(dem_file),
+                meta_path=str(ctrl_meta) if ctrl_meta.exists() else None,
+                out_dir=str(ctrl_interim_dir),
+                window_size=prep_cfg.get("filter_window_size", 5),
+                drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
+                look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
+                orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
+                dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
+            )
+        else:
+            f_ctrl = None
+
+        l1_res = f_ev.result()
+        if f_ctrl:
+            f_ctrl.result()
+
+    l1_duration_s = round(time.time() - t_l1_0, 2)
+    layer_logs["L1"] = {
+        "start": l1_start_time.isoformat(),
+        "end": datetime.now().isoformat(),
+        "duration_s": l1_duration_s,
+        "peak_ram_mb": get_peak_ram_mb(),
+        "downloaded_mb": 0.0,
+        "s1_cloud_fallback": False,
+        "notes": "Grid shape: " + str(l1_res.get("shape", ""))
+    }
+    update_status_file(status_file, "RUNNING", 0.40, time.time() - t0, "L1 Preprocessing Completed")
+    logger.info(f"[PROGRESS] Step L1 (Preprocessing) finished in {l1_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
+
+    # Await Sentinel-2 download for Layer 2
+    f_s2.result()
+
+    # Finalize L0 metrics
     size_raw_after = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir) + get_dir_size_mb(s2_cache_path)
     l0_downloaded_mb = round(max(0.0, size_raw_after - size_raw_before), 2)
     l0_duration_s = round(time.time() - t_l0_0, 2)
@@ -265,60 +332,6 @@ def run_pipeline(
     }
     update_status_file(status_file, "RUNNING", 0.20, time.time() - t0, "L0 Data Ingestion Completed")
     logger.info(f"[PROGRESS] Step L0 (Data Ingestion) finished in {l0_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
-
-    # ==================================================================
-    # LAYER 1: PREPROCESSING (EVENT & CONTROL)
-    # ==================================================================
-    l1_start_time = datetime.now()
-    t_l1_0 = time.time()
-    logger.info("\n>>> EXECUTING LAYER 1: PREPROCESSING (EVENT & CONTROL)")
-
-    # 1. Event L1
-    l1_res = run_layer1(
-        pre_path=str(s1_pre_path),
-        post_path=str(s1_post_path),
-        dem_path=str(dem_file),
-        meta_path=str(s1_meta_path),
-        out_dir=str(interim_dir),
-        window_size=prep_cfg.get("filter_window_size", 5),
-        drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 1000),
-        look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
-        orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
-        dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
-    )
-
-    # 2. Control L1
-    ctrl_pre = ctrl_raw_dir / "pre.tif"
-    ctrl_post = ctrl_raw_dir / "post.tif"
-    ctrl_meta = ctrl_raw_dir / "meta.json"
-    if ctrl_pre.exists() and ctrl_post.exists():
-        run_layer1(
-            pre_path=str(ctrl_pre),
-            post_path=str(ctrl_post),
-            dem_path=str(dem_file),
-            meta_path=str(ctrl_meta) if ctrl_meta.exists() else None,
-            out_dir=str(ctrl_interim_dir),
-            window_size=prep_cfg.get("filter_window_size", 5),
-            drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 1000),
-            look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
-            orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
-            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
-        )
-    else:
-        logger.warning(f"[WARNING] Missing Sentinel-1 control pair in {ctrl_raw_dir}. Continuing without separate control L1.")
-
-    l1_duration_s = round(time.time() - t_l1_0, 2)
-    layer_logs["L1"] = {
-        "start": l1_start_time.isoformat(),
-        "end": datetime.now().isoformat(),
-        "duration_s": l1_duration_s,
-        "peak_ram_mb": get_peak_ram_mb(),
-        "downloaded_mb": 0.0,
-        "s1_cloud_fallback": False,
-        "notes": "Grid shape: " + str(l1_res.get("shape", ""))
-    }
-    update_status_file(status_file, "RUNNING", 0.40, time.time() - t0, "L1 Preprocessing Completed")
-    logger.info(f"[PROGRESS] Step L1 (Preprocessing) finished in {l1_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
 
     # ==================================================================
     # LAYER 2: MULTI-SENSOR DETECTION (S2 PRIMARY + S1 SAR FALLBACK)
@@ -404,6 +417,9 @@ def run_pipeline(
     t_l4_0 = time.time()
     logger.info("\n>>> EXECUTING LAYER 4: DAMAGE GRADING")
 
+    # Await OSM bbox data for Layer 4
+    f_osm_bbox.result()
+
     s2_valid_arr = np.load(interim_dir / "s2_event_valid.npy") if (interim_dir / "s2_event_valid.npy").exists() else None
     s2_vis_arr = np.load(interim_dir / "s2_post_visual.npy") if (interim_dir / "s2_post_visual.npy").exists() else None
 
@@ -487,7 +503,9 @@ def run_pipeline(
     # ==================================================================
     l5_start_time = datetime.now()
     t_l5_0 = time.time()
-    logger.info("\n>>> EXECUTING LAYER 5: ROUTING & SETTLEMENT ISOLATION")
+    # Await buffered OSM data for Layer 5
+    f_osm_buf.result()
+    l0_executor.shutdown()
 
     l5_res = run_layer5(
         config_path=config_path,
