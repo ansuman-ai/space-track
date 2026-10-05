@@ -1,0 +1,363 @@
+# Test questions benchmark for Situation-Report Copilot
+# Covers English, Nepali, Hindi, romanised, typos, follow-ups, ambiguous names, and unanswerable questions.
+
+questions:
+  # --- ENGLISH QUESTIONS ---
+  - id: en_01
+    question: "How many buildings were destroyed in the disaster?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [81]
+
+  - id: en_02
+    question: "How many settlements are cut off from vehicle access?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["cutoff_settlements"]
+    expected_facts: ["cutoff.vehicle.optimistic.count"]
+    expected_numbers: [44]
+
+  - id: en_03
+    question: "What is the total road length damaged or destroyed?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.roads.destroyed_km"]
+    expected_numbers: [3.98]
+
+  - id: en_04
+    question: "How many bridges are destroyed?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["bridges_status"]
+    expected_facts: ["damage.bridges.destroyed"]
+    expected_numbers: [10]
+
+  - id: en_05
+    question: "Which road repair should rescue teams prioritize first?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["repair_priority"]
+    expected_facts: ["repair.step_4.osm_id"]
+    expected_numbers: [19, 939]
+
+  - id: en_06
+    question: "What is the status of Bahun Danda?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_269569477.vehicle_status_opt"]
+    expected_numbers: [10]
+
+  - id: en_07
+    question: "What is the nearest hospital or emergency facility for Bahun Danda?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["nearest_destination"]
+    expected_facts: ["settlement.node_269569477.vehicle_pre_dist_km"]
+    expected_numbers: [24.4]
+
+  - id: en_08
+    question: "What are the limitations of the satellite data regarding cloud cover?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["limitations"]
+    expected_facts: ["limitations.cloud_covered_buildings"]
+    expected_numbers: [1382]
+
+  # --- NEPALI QUESTIONS (नेपाली) ---
+  - id: ne_01
+    question: "कति वटा भवनहरू पूर्ण रूपमा नष्ट भएका छन्?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [81]
+
+  - id: ne_02
+    question: "कति वटा बस्तीहरू सडक सम्पर्कविहीन भएका छन्?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["cutoff_settlements"]
+    expected_facts: ["cutoff.vehicle.optimistic.count"]
+    expected_numbers: [44]
+
+  - id: ne_03
+    question: "पुलहरूको अवस्था के छ र कति वटा पुल नष्ट भए?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["bridges_status"]
+    expected_facts: ["damage.bridges.destroyed"]
+    expected_numbers: [10]
+
+  - id: ne_04
+    question: "दुर्सागाङ बस्तीको अवस्था कस्तो छ?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_601106206.building_count"]
+    expected_numbers: [5]
+
+  - id: ne_05
+    question: "सबैभन्दा पहिले कुन सडक खण्ड मर्मत गर्नुपर्छ?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["repair_priority"]
+    expected_facts: ["repair.step_4.settlements_reconnected"]
+    expected_numbers: [19, 939]
+
+  - id: ne_06
+    question: "बाढीबाट कति वर्ग किलोमिटर क्षेत्र प्रत्यक्ष प्रभावित भएको छ?"
+    language: "ne"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["event_summary"]
+    expected_facts: ["metrics.affected_km2_observed"]
+    expected_numbers: [0.7989]
+
+  # --- HINDI QUESTIONS (हिन्दी) ---
+  - id: hi_01
+    question: "आपदा में कितने घर पूरी तरह नष्ट हुए?"
+    language: "hi"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [81]
+
+  - id: hi_02
+    question: "कितनी बस्तियां सड़क संपर्क से कट गई हैं?"
+    language: "hi"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["cutoff_settlements"]
+    expected_facts: ["cutoff.vehicle.optimistic.count"]
+    expected_numbers: [44]
+
+  - id: hi_03
+    question: "कितने पुल नष्ट हो चुके हैं?"
+    language: "hi"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["bridges_status"]
+    expected_facts: ["damage.bridges.destroyed"]
+    expected_numbers: [10]
+
+  - id: hi_04
+    question: "सड़क मरम्मत में सर्वोच्च प्राथमिकता कौन से खंड की है?"
+    language: "hi"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["repair_priority"]
+    expected_facts: ["repair.step_4.buildings_reconnected"]
+    expected_numbers: [19, 939]
+
+  # --- ROMANISED NEPALI / HINDI ---
+  - id: rom_01
+    question: "Kati basti cut off chhan vehicle access bata?"
+    language: "ne"
+    type: "romanised"
+    run: "test_A_trishuli"
+    expected_tools: ["cutoff_settlements"]
+    expected_facts: ["cutoff.vehicle.optimistic.count"]
+    expected_numbers: [44]
+
+  - id: rom_02
+    question: "Bahun Danda ma kati ghar chhan ra bato khula chha?"
+    language: "ne"
+    type: "romanised"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_269569477.building_count"]
+    expected_numbers: [10]
+
+  - id: rom_03
+    question: "Kun sadak marmat garne priority ma chha?"
+    language: "ne"
+    type: "romanised"
+    run: "test_A_trishuli"
+    expected_tools: ["repair_priority"]
+    expected_facts: ["repair.step_4.settlements_reconnected"]
+    expected_numbers: [19]
+
+  - id: rom_04
+    question: "Kitne makan nasht hue hain flood mein?"
+    language: "hi"
+    type: "romanised"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [81]
+
+  # --- TYPOS & MISSPELLED QUERIES ---
+  - id: typo_01
+    question: "How many builidngs were destoryed?"
+    language: "en"
+    type: "typo"
+    run: "test_A_trishuli"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [81]
+
+  - id: typo_02
+    question: "What is the sttaus of brdiges?"
+    language: "en"
+    type: "typo"
+    run: "test_A_trishuli"
+    expected_tools: ["bridges_status"]
+    expected_facts: ["damage.bridges.destroyed"]
+    expected_numbers: [10]
+
+  - id: typo_03
+    question: "What is the status of Bahundada?"
+    language: "en"
+    type: "typo"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_269569477.building_count"]
+    expected_numbers: [10]
+
+  - id: typo_04
+    question: "Dursagang basty ko sthiti kasto cha?"
+    language: "ne"
+    type: "typo"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_601106206.building_count"]
+    expected_numbers: [5]
+
+  # --- AMBIGUOUS PLACE NAMES ---
+  - id: amb_01
+    question: "Tell me about Bharkhu"
+    language: "en"
+    type: "ambiguous"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["ambiguous_clarification"]
+    expected_numbers: []
+
+  - id: amb_02
+    question: "भार्खु बस्तीको बारेमा जानकारी दिनुहोस्"
+    language: "ne"
+    type: "ambiguous"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["ambiguous_clarification"]
+    expected_numbers: []
+
+  - id: amb_03
+    question: "Tell me about Syabru"
+    language: "en"
+    type: "ambiguous"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["ambiguous_clarification"]
+    expected_numbers: []
+
+  # --- MULTI-TURN FOLLOW-UPS ---
+  - id: fol_01a
+    question: "What is the status of Bahun Danda?"
+    language: "en"
+    type: "standard"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_269569477.building_count"]
+    expected_numbers: [10]
+
+  - id: fol_01b
+    question: "And how many houses there?"
+    language: "en"
+    type: "follow_up"
+    run: "test_A_trishuli"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_269569477.building_count"]
+    expected_numbers: [10]
+
+  - id: fol_01c
+    question: "Can an emergency hospital be reached from there?"
+    language: "en"
+    type: "follow_up"
+    run: "test_A_trishuli"
+    expected_tools: ["nearest_destination"]
+    expected_facts: ["settlement.node_269569477.vehicle_pre_dist_km"]
+    expected_numbers: [24.4]
+
+  # --- UNANSWERABLE QUESTIONS (DATA GAPS) ---
+  - id: unans_01
+    question: "How many people died in the flood?"
+    language: "en"
+    type: "unanswerable"
+    run: "test_A_trishuli"
+    expected_tools: []
+    expected_facts: ["not_available_in_data"]
+    expected_numbers: []
+
+  - id: unans_02
+    question: "बाढीमा कति जना मानिसको ज्यान गयो वा घाइते भए?"
+    language: "ne"
+    type: "unanswerable"
+    run: "test_A_trishuli"
+    expected_tools: []
+    expected_facts: ["not_available_in_data"]
+    expected_numbers: []
+
+  - id: unans_03
+    question: "What is the weather forecast for tomorrow?"
+    language: "en"
+    type: "unanswerable"
+    run: "test_A_trishuli"
+    expected_tools: []
+    expected_facts: ["not_available_in_data"]
+    expected_numbers: []
+
+  - id: unans_04
+    question: "Who is the Prime Minister in charge of relief?"
+    language: "en"
+    type: "unanswerable"
+    run: "test_A_trishuli"
+    expected_tools: []
+    expected_facts: ["not_available_in_data"]
+    expected_numbers: []
+
+  # --- MELAMCHI RUN TEST QUESTIONS ---
+  - id: mel_01
+    question: "How many buildings were destroyed in the Melamchi flood?"
+    language: "en"
+    type: "standard"
+    run: "test_B_melamchi"
+    expected_tools: ["damage_summary"]
+    expected_facts: ["damage.buildings.destroyed"]
+    expected_numbers: [92]
+
+  - id: mel_02
+    question: "मेलम्चीमा कति बस्तीहरू सवारी साधनबाट सम्पर्कविहीन छन्?"
+    language: "ne"
+    type: "standard"
+    run: "test_B_melamchi"
+    expected_tools: ["cutoff_settlements"]
+    expected_facts: ["cutoff.vehicle.optimistic.count"]
+    expected_numbers: [11]
+
+  - id: mel_03
+    question: "What is the vehicle status of Melamchi?"
+    language: "en"
+    type: "standard"
+    run: "test_B_melamchi"
+    expected_tools: ["settlement_status"]
+    expected_facts: ["settlement.node_3476590124.building_count"]
+    expected_numbers: [150]
