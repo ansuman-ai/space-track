@@ -143,17 +143,25 @@ def download_and_clip_bands(
         env = get_shared_gdal_env()
 
         def _read_band(u):
-            with env:
-                with rasterio.open(u) as src:
-                    if src.crs and src.crs.to_string() != "EPSG:4326":
-                        proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
-                    else:
-                        proj_bounds = (min_lon, min_lat, max_lon, max_lat)
-                    window = from_bounds(*proj_bounds, transform=src.transform)
-                    d = src.read(1, window=window)
-                    out_trans = rasterio.windows.transform(window, src.transform)
-                    meta = src.meta.copy()
-                    return d, out_trans, meta
+            last_err = None
+            for attempt in range(3):
+                try:
+                    with env:
+                        with rasterio.open(u) as src:
+                            if src.crs and src.crs.to_string() != "EPSG:4326":
+                                proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
+                            else:
+                                proj_bounds = (min_lon, min_lat, max_lon, max_lat)
+                            window = from_bounds(*proj_bounds, transform=src.transform)
+                            d = src.read(1, window=window)
+                            out_trans = rasterio.windows.transform(window, src.transform)
+                            meta = src.meta.copy()
+                            return d, out_trans, meta
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"Attempt {attempt+1}/3 failed reading S1 band from Planetary Computer ({e}); retrying in 2s...")
+                    time.sleep(2)
+            raise last_err
 
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
