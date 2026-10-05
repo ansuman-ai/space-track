@@ -27,11 +27,13 @@ from src.common.plot_utils import (
 )
 
 
-def run_validation_l4():
+def run_validation_l4(processed_dir: str = "data/processed"):
     ems_dir = Path("validation/emsr927")
     out_dir = Path("validation")
     output_png = out_dir / "quicklook_validation_l4.png"
     utm_crs = "EPSG:32645"
+
+    proc_path = Path(processed_dir)
 
     # 1. Load Copernicus EMS Ground Truth
     aoi_gdf = reproject_vector(gpd.read_file(ems_dir / "EMSR927_AOI01_GRA_PRODUCT_areaOfInterestA_v1.shp"), utm_crs)
@@ -45,10 +47,10 @@ def run_validation_l4():
     ems_r["length_km"] = ems_r.length / 1000.0
 
     # 2. Load Our Layer 4 Predictions
-    our_b = reproject_vector(gpd.read_file("data/processed/buildings_graded.geojson"), utm_crs)
-    our_r = reproject_vector(gpd.read_file("data/processed/roads_graded.geojson"), utm_crs)
-    our_br = reproject_vector(gpd.read_file("data/processed/bridges_graded.geojson"), utm_crs)
-    haz_gdf = reproject_vector(gpd.read_file("data/processed/hazard_polygons.geojson"), utm_crs)
+    our_b = reproject_vector(gpd.read_file(proc_path / "buildings_graded.geojson"), utm_crs)
+    our_r = reproject_vector(gpd.read_file(proc_path / "roads_graded.geojson"), utm_crs)
+    our_br = reproject_vector(gpd.read_file(proc_path / "bridges_graded.geojson"), utm_crs)
+    haz_gdf = reproject_vector(gpd.read_file(proc_path / "hazard_polygons.geojson"), utm_crs)
 
     # Filter our features inside EMS AOI for apples-to-apples comparison
     our_b_aoi = our_b[our_b.intersects(aoi_poly)]
@@ -278,10 +280,12 @@ def run_validation_l4():
     plt.close()
     print(f"Validation plot saved to {output_png}")
 
-    # Copy to artifact directory
-    artifact_png = Path("/home/zeus/.gemini/antigravity/brain/52dd5215-6165-4f39-8912-cfce41bfdff1/quicklook_validation_l4.png")
-    shutil.copy2(output_png, artifact_png)
-    print(f"Copied to artifact: {artifact_png}")
+    # Copy to artifact directory if available
+    artifact_dir = Path(os.environ.get("ANTIGRAVITY_ARTIFACT_DIR", "/home/zeus/.gemini/antigravity/brain/9e2afbf7-ac9b-4fd3-9cad-b12786f88814"))
+    if artifact_dir.exists():
+        artifact_png = artifact_dir / "quicklook_validation_l4.png"
+        shutil.copy2(output_png, artifact_png)
+        print(f"Copied to artifact: {artifact_png}")
 
     return {
         "ems_matched_aff_30m": ems_matched_aff_30m,
@@ -304,4 +308,5 @@ def run_validation_l4():
 
 
 if __name__ == "__main__":
-    run_validation_l4()
+    p_dir = sys.argv[1] if len(sys.argv) > 1 else "data/processed"
+    run_validation_l4(processed_dir=p_dir)

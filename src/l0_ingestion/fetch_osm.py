@@ -82,7 +82,12 @@ def query_ohsome_layer(
                     ver = f.get("properties", {}).get("@version", 0)
                     if oid not in dedup or ver > dedup[oid].get("properties", {}).get("@version", 0):
                         dedup[oid] = f
-                res["features"] = list(dedup.values())
+                # Deterministic sort by @osmId / id
+                sorted_feats = sorted(
+                    dedup.values(),
+                    key=lambda f: str(f.get("properties", {}).get("@osmId", "") or f.get("id", ""))
+                )
+                res["features"] = sorted_feats
                 return res
             elif resp.status_code >= 500:
                 time.sleep(2)
@@ -200,6 +205,7 @@ def fetch_osm(
     counts = {}
     for layer_name, matcher in LAYER_MATCHERS.items():
         layer_feats = [f for f in all_features if matcher(f)]
+        layer_feats.sort(key=lambda f: str(f.get("properties", {}).get("@osmId", "") or f.get("id", "")))
         layer_file = out_path / f"osm_{layer_name}.geojson"
         layer_res = {
             "attribution": geojson_res.get("attribution", {}),

@@ -178,6 +178,7 @@ def fetch_buffered_osm(
     for layer_name, matcher in BUFFER_LAYER_MATCHERS.items():
         layer_file = out_path / f"osm_{layer_name}.geojson"
         layer_feats = [f for f in all_features if matcher(f)]
+        layer_feats.sort(key=lambda f: str(f.get("properties", {}).get("@osmId", "") or f.get("id", "")))
         layer_res = {
             "attribution": geojson_res.get("attribution", {}),
             "apiVersion": geojson_res.get("apiVersion", ""),
