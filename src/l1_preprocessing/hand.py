@@ -10,12 +10,22 @@ from scipy.ndimage import distance_transform_edt
 
 
 import ctypes
+import os
+import logging
 from pathlib import Path
 
+logger = logging.getLogger("l1_hand")
 _LIB_HAND = None
+_LOGGED_FALLBACK = False
 
 def _get_hand_lib():
-    global _LIB_HAND
+    global _LIB_HAND, _LOGGED_FALLBACK
+    if os.environ.get("HAND_DISABLE_C", "").lower() in ("1", "true", "yes"):
+        if not _LOGGED_FALLBACK:
+            logger.warning("HAND_DISABLE_C set: C-accelerated HAND module disabled; falling back to pure Python implementation.")
+            _LOGGED_FALLBACK = True
+        return None
+
     if _LIB_HAND is not None:
         return _LIB_HAND
     so_path = Path(__file__).parent / "libhand_fast.so"
@@ -24,8 +34,8 @@ def _get_hand_lib():
         import subprocess
         try:
             subprocess.run(["gcc", "-O3", "-shared", "-fPIC", str(c_path), "-o", str(so_path)], check=True, capture_output=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Automatic compilation of libhand_fast.so failed: {e}")
     if so_path.exists():
         try:
             lib = ctypes.CDLL(str(so_path))
@@ -42,8 +52,12 @@ def _get_hand_lib():
                 np.ctypeslib.ndpointer(dtype=np.float32, flags="C_CONTIGUOUS")
             ]
             _LIB_HAND = lib
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Loading libhand_fast.so failed: {e}")
             _LIB_HAND = None
+    if _LIB_HAND is None and not _LOGGED_FALLBACK:
+        logger.warning("C-accelerated HAND module unavailable; falling back to pure Python implementation.")
+        _LOGGED_FALLBACK = True
     return _LIB_HAND
 
 

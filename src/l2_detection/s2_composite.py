@@ -75,7 +75,10 @@ def process_s2_features(
     b11 = bands['B11'].astype(np.float32)
     b12 = bands.get('B12', bands.get('b12', b11)).astype(np.float32)
     scl = bands['SCL']
-    vis = bands['visual']
+    if 'visual' in bands:
+        vis = bands['visual']
+    else:
+        vis = np.clip(np.stack([b04, b03, b02], axis=0) / 3000.0 * 255.0, 0, 255).astype(np.uint8)
 
     # SCL invalid classes:
     # 0: NoData, 1: Saturated/Defective, 3: Cloud Shadows, 8: Cloud Medium Prob,

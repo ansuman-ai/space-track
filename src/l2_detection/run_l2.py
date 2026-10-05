@@ -234,7 +234,8 @@ def run_layer2(
     building_damage_proximity_m: float = 50.0,
     intact_min_post_ndvi: float = 0.40,
     intact_max_abs_d_ndvi: float = 0.20,
-    event_date: Optional[str] = None
+    event_date: Optional[str] = None,
+    enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
 
     in_path = Path(interim_dir)
@@ -598,24 +599,6 @@ def run_layer2(
         builtup_affected_mask=b_ev_affected
     )
 
-    # Render EVENT Quicklook (Full AOI + High-Impact 4x4 km zoom with S2 post true colour + affected outline)
-    out_quicklook = str(out_path / "quicklook_layer2.png")
-    optical_evidence_note = s2_data.get("optical_evidence_note", "")
-    stats_dict = {
-        "perm_water_km2": perm_km2,
-        "affected_km2": ev_aff_km2,
-        "inferred_km2": ev_inf_km2,
-        "optical_evidence_note": optical_evidence_note
-    }
-    render_layer2_quicklook(
-        post_vv=post_vv,
-        hazard_raster=hazard_raster,
-        output_png_path=out_quicklook,
-        stats=stats_dict,
-        post_vis=post_vis,
-        zoom_center=None
-    )
-
     # Control Outputs
     ctrl_hazard_raster = np.zeros((h, w), dtype=np.uint8)
     ctrl_hazard_raster[(perm_water_raw == 1) & (aff_ctrl_clean != 1)] = 1
@@ -635,15 +618,37 @@ def run_layer2(
         channel_affected_mask=(aff_ctrl_clean == 1) & (perm_water_raw == 1),
         builtup_affected_mask=(aff_ctrl_clean == 1) & (builtup_mask == 1)
     )
+
+    out_quicklook = str(out_path / "quicklook_layer2.png")
     ctrl_quicklook = str(ctrl_out_path / "quicklook_layer2.png")
-    render_layer2_quicklook(
-        post_vv=post_vv,
-        hazard_raster=ctrl_hazard_raster,
-        output_png_path=ctrl_quicklook,
-        stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2, "inferred_km2": ctrl_inf_km2},
-        post_vis=post_vis,
-        zoom_center=None
-    )
+
+    # Render Quicklooks (guarded by enable_quicklooks)
+    if enable_quicklooks:
+        optical_evidence_note = s2_data.get("optical_evidence_note", "")
+        stats_dict = {
+            "perm_water_km2": perm_km2,
+            "affected_km2": ev_aff_km2,
+            "inferred_km2": ev_inf_km2,
+            "optical_evidence_note": optical_evidence_note
+        }
+        render_layer2_quicklook(
+            post_vv=post_vv,
+            hazard_raster=hazard_raster,
+            output_png_path=out_quicklook,
+            stats=stats_dict,
+            post_vis=post_vis,
+            zoom_center=None
+        )
+        render_layer2_quicklook(
+            post_vv=post_vv,
+            hazard_raster=ctrl_hazard_raster,
+            output_png_path=ctrl_quicklook,
+            stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2, "inferred_km2": ctrl_inf_km2},
+            post_vis=post_vis,
+            zoom_center=None
+        )
+
+    optical_evidence_note = s2_data.get("optical_evidence_note", "")
 
     # Summary dictionary
     l2_summary = {
@@ -713,6 +718,11 @@ def run_layer2(
     ctrl_json = str(ctrl_out_path / "l2_stats.json")
     with open(ctrl_json, "w") as f:
         json.dump(l2_summary, f, indent=2)
+
+    import gc
+    s2_data.clear()
+    del hazard_raster, ctrl_hazard_raster
+    gc.collect()
 
     return l2_summary
 

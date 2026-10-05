@@ -20,6 +20,13 @@ _BASE_NETWORKS_CACHE: Dict[Any, Tuple[nx.Graph, nx.Graph, List[Any], List[Any]]]
 _BASE_NETWORKS_LOCK = threading.Lock()
 
 
+def clear_networks_cache():
+    """Clears cached base graphs and road geodataframes to reclaim memory."""
+    with _BASE_NETWORKS_LOCK:
+        _ROADS_GDF_CACHE.clear()
+        _BASE_NETWORKS_CACHE.clear()
+
+
 def get_base_network(
     roads_path: str,
     bbox: List[float],

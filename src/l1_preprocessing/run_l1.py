@@ -62,7 +62,9 @@ def run_layer1(
     drainage_threshold: int = 1000,
     look_angle_deg: float = 38.0,
     orbit_heading_deg: float = 350.0,
-    dem_buffer_km: float = 10.0
+    dem_buffer_km: float = 10.0,
+    enable_quicklooks: bool = True,
+    max_threads: int = 2
 ) -> Dict[str, Any]:
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -130,7 +132,7 @@ def run_layer1(
 
     # 3. Speckle filter (Lee 5x5) in parallel - keeping raw copies
     logger.info(f"Applying Lee speckle filter (window={window_size}x{window_size}) in parallel...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as pool:
         f_filt_pre_vv = pool.submit(apply_lee_filter, pre_vv_db, window_size=window_size)
         f_filt_pre_vh = pool.submit(apply_lee_filter, pre_vh_db, window_size=window_size)
         f_filt_post_vv = pool.submit(apply_lee_filter, post_vv_db, window_size=window_size)
@@ -262,22 +264,23 @@ def run_layer1(
         save_single_band_geotiff(out_f, arr, pre_profile, dtype=dtype, nodata=nd)
         return name, out_f
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as pool:
         for name, out_f in pool.map(_save_task, save_specs):
             output_paths[name] = out_f
 
     # 11. Quick-look visualization
     quicklook_path = str(out_path / "quicklook_layer1.png")
-    logger.info(f"Rendering quicklook diagnostic to {quicklook_path}...")
-    render_quicklook(
-        pre_vv_db=pre_vv_filt,
-        post_vv_db=post_vv_filt,
-        log_ratio_vv=log_ratio_vv,
-        hand=hand,
-        shadow_layover_mask=shadow_layover_mask,
-        output_png_path=quicklook_path,
-        title_suffix="SatFlood L1"
-    )
+    if enable_quicklooks:
+        logger.info(f"Rendering quicklook diagnostic to {quicklook_path}...")
+        render_quicklook(
+            pre_vv_db=pre_vv_filt,
+            post_vv_db=post_vv_filt,
+            log_ratio_vv=log_ratio_vv,
+            hand=hand,
+            shadow_layover_mask=shadow_layover_mask,
+            output_png_path=quicklook_path,
+            title_suffix="SatFlood L1"
+        )
     output_paths["quicklook_png"] = quicklook_path
 
     # Clean up arrays

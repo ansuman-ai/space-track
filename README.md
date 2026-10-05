@@ -81,6 +81,27 @@ The selected default configuration (`min_d_bsi_floor: 0.18`, `inferred_min_reach
 
 ---
 
+## Installation & Build
+
+### 1. Requirements
+Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. C Extension Compilation (HAND Acceleration)
+To accelerate D8 flow accumulation and downstream drainage elevation propagation in Layer 1, compile the shared C library:
+```bash
+gcc -O3 -shared -fPIC src/l1_preprocessing/hand_c.c -o src/l1_preprocessing/libhand_fast.so
+```
+
+### 3. Portability & Automatic Python Fallback
+- If `gcc` is not available or `libhand_fast.so` cannot be loaded, the pipeline automatically detects the missing module, logs a warning, and falls back seamlessly to the vectorized pure-Python implementation.
+- To explicitly force the pure-Python implementation (e.g. for testing or non-C environments), set `HAND_DISABLE_C=1` in your environment.
+- **Byte-Identity Guarantee**: The C extension and the Python fallback produce bit-for-bit identical results (`Max diff HAND: 0.0`, byte-identical `hand.tif`).
+
+---
+
 ## Required Data Attribution
 
 - *"Contains modified Copernicus Sentinel data 2026."*

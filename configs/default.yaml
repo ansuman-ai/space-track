@@ -82,3 +82,7 @@ routing:
     - steps
     - pedestrian
     - cycleway
+
+performance:
+  max_threads: 2
+  enable_quicklooks: true

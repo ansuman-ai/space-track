@@ -45,7 +45,8 @@ def run_layer4(
     bridge_distance_m: float = 30.0,
     bridge_reach_radius_m: float = 100.0,
     s2_valid_mask: Optional[np.ndarray] = None,
-    s2_post_visual: Optional[np.ndarray] = None
+    s2_post_visual: Optional[np.ndarray] = None,
+    enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
 
     """
@@ -198,23 +199,8 @@ def run_layer4(
     br_graded.to_file(br_out_file, driver="GeoJSON")
     br_counts = br_graded["damage_grade"].value_counts().to_dict() if len(br_graded) > 0 else {}
 
-    # 7. Render Quicklook
+    # 7. Damage Summary JSON
     out_quicklook = str(out_path / "quicklook_l4.png")
-    logger.info(f"Rendering Layer 4 damage overview quicklook to {out_quicklook}...")
-    render_l4_quicklook(
-        s2_post_visual=s2_post_visual,
-        buildings_gdf=b_graded,
-        roads_gdf=r_graded,
-        bridges_gdf=br_graded,
-        hazard_gdf=hazard_gdf,
-        output_png_path=out_quicklook,
-        zoom_center_utm=None,
-        zoom_half_width_m=2000.0,
-        utm_crs=utm_crs,
-        transform_matrix=trans
-    )
-
-    # 8. Damage Summary JSON
     damage_summary = {
         "status": "COMPLETED",
         "osm_coverage": coverage,
@@ -260,6 +246,27 @@ def run_layer4(
         json.dump(damage_summary, f, indent=2)
 
     logger.info(f"Layer 4 damage summary saved to {out_json}")
+
+    # 8. Render Quicklook (guarded by enable_quicklooks)
+    if enable_quicklooks:
+        logger.info(f"Rendering Layer 4 damage overview quicklook to {out_quicklook}...")
+        render_l4_quicklook(
+            s2_post_visual=s2_post_visual,
+            buildings_gdf=b_graded,
+            roads_gdf=r_graded,
+            bridges_gdf=br_graded,
+            hazard_gdf=hazard_gdf,
+            output_png_path=out_quicklook,
+            zoom_center_utm=None,
+            zoom_half_width_m=2000.0,
+            utm_crs=utm_crs,
+            transform_matrix=trans
+        )
+
+    import gc
+    del hazard_gdf, b_graded, r_graded, br_graded
+    gc.collect()
+
     return damage_summary
 
 

@@ -248,26 +248,30 @@ def fetch_s2(
             url = assets[b_src]['href']
             if token and "?" not in url:
                 url = f"{url}?{token}"
-            with env:
-                try:
-                    with rasterio.open(url) as s:
-                        b_s = transform_bounds(utm_crs, s.crs, *utm_bounds) if s.crs.to_string() != utm_crs else utm_bounds
-                        w = from_bounds(*b_s, transform=s.transform)
-                        out_s = (3, *target_shape) if b_name == 'visual' else target_shape
-                        arr = s.read(window=w, out_shape=out_s)
-                        if b_name != 'visual' and arr.ndim == 3 and arr.shape[0] == 1:
-                            arr = arr[0]
-                        return b_name, arr
-                except Exception as e:
-                    logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
-                    return None, None
+            for attempt in range(2):
+                with env:
+                    try:
+                        with rasterio.open(url) as s:
+                            b_s = transform_bounds(utm_crs, s.crs, *utm_bounds) if s.crs.to_string() != utm_crs else utm_bounds
+                            w = from_bounds(*b_s, transform=s.transform)
+                            out_s = (3, *target_shape) if b_name == 'visual' else target_shape
+                            arr = s.read(window=w, out_shape=out_s)
+                            if b_name != 'visual' and arr.ndim == 3 and arr.shape[0] == 1:
+                                arr = arr[0]
+                            return b_name, arr
+                    except Exception as e:
+                        if attempt == 0:
+                            time.sleep(1)
+                            continue
+                        logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
+                        return None, None
 
         bands = {
             "sun_elevation": np.array(sun_elev, dtype=np.float32),
             "sun_azimuth": np.array(sun_az, dtype=np.float32)
         }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as b_ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as b_ex:
             futs = [b_ex.submit(_read_band, b) for b in band_names]
             for fut in futs:
                 k, v = fut.result()
@@ -275,13 +279,16 @@ def fetch_s2(
                     bands[k] = v
 
         if "B04" in bands and "B08" in bands:
+            if "visual" not in bands and "B03" in bands and "B02" in bands:
+                r, g, b = bands["B04"], bands["B03"], bands["B02"]
+                bands["visual"] = np.clip(np.stack([r, g, b], axis=0) / 3000.0 * 255.0, 0, 255).astype(np.uint8)
             np.savez_compressed(save_fn, **bands)
             logger.info(f"Saved S2 scene to {save_fn.name}")
             return save_fn.name
         return None
 
     all_downloaded = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as sc_ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as sc_ex:
         sc_futs = [sc_ex.submit(_fetch_scene_bands, item) for item in selected_scenes_to_fetch]
         for fut in sc_futs:
             res_fn = fut.result()

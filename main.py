@@ -78,6 +78,18 @@ def get_peak_ram_mb() -> float:
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 2)
 
 
+def get_current_rss_mb() -> float:
+    """Returns current resident set size (RSS) in MB from /proc/self/status."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return round(float(line.split()[1]) / 1024.0, 2)
+    except Exception:
+        pass
+    return get_peak_ram_mb()
+
+
 def get_dir_size_mb(path: Path) -> float:
     """Returns total size of files in a directory in MB."""
     if not path.exists():
@@ -102,7 +114,8 @@ def run_pipeline(
     event_date: str,
     out_dir: str,
     config_path: str = "configs/default.yaml",
-    no_cache: bool = False
+    no_cache: bool = False,
+    no_quicklooks: bool = False
 ) -> Dict[str, Any]:
     """
     Executes full end-to-end disaster impact assessment pipeline (L0 -> L5).
@@ -137,6 +150,12 @@ def run_pipeline(
     det_cfg = cfg.get("detection", {})
     dmg_cfg = cfg.get("damage_grading", {})
     rt_cfg = cfg.get("routing", {})
+    perf_cfg = cfg.get("performance", {})
+
+    max_threads = int(perf_cfg.get("max_threads", 2))
+    enable_quicklooks = not no_quicklooks
+    if not perf_cfg.get("enable_quicklooks", True):
+        enable_quicklooks = False
 
     logger.info("==================================================================")
     logger.info("      DISASTER IMPACT ASSESSMENT END-TO-END PIPELINE (L0 - L5)    ")
@@ -180,7 +199,7 @@ def run_pipeline(
     l0_start_time = datetime.now()
     t_l0_0 = time.time()
     s2_cache_path = interim_dir / "s2_cache"
-    size_raw_before = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir) + get_dir_size_mb(s2_cache_path)
+    size_raw_before = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_raw_dir) + get_dir_size_mb(s2_cache_path)
 
     logger.info("\n>>> EXECUTING LAYER 0: DATA INGESTION (PARALLEL)")
     s1_pre_path = raw_dir / "s1" / "pre.tif"
@@ -190,27 +209,45 @@ def run_pipeline(
     dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
 
     l0_notes = []
+    l0_sources = {}
 
     def _task_s1():
+        t0_src = time.time()
+        s_before = get_dir_size_mb(raw_dir / "s1") + get_dir_size_mb(ctrl_raw_dir)
         if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
             logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
             fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
         else:
             logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+        dur = round(time.time() - t0_src, 2)
+        s_after = get_dir_size_mb(raw_dir / "s1") + get_dir_size_mb(ctrl_raw_dir)
+        l0_sources["s1"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     def _task_dem():
+        t0_src = time.time()
+        s_before = get_dir_size_mb(raw_dir / "dem")
         if no_cache or not dem_file.exists():
             logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
             fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0), force=no_cache)
         else:
             logger.info(f"Using verified existing DEM in {dem_file}")
+        dur = round(time.time() - t0_src, 2)
+        s_after = get_dir_size_mb(raw_dir / "dem")
+        l0_sources["dem"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     def _task_osm_bbox():
+        t0_src = time.time()
+        s_before = get_dir_size_mb(raw_dir / "osm")
         logger.info("Fetching pre-event OSM inside bbox...")
         fetch_osm(bbox, event_date, str(raw_dir / "osm"), force=no_cache)
+        dur = round(time.time() - t0_src, 2)
+        s_after = get_dir_size_mb(raw_dir / "osm")
+        l0_sources["osm_bbox"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     def _task_osm_buf():
+        t0_src = time.time()
         buf_osm_dir = raw_dir / "osm_buffered"
+        s_before = get_dir_size_mb(buf_osm_dir)
         logger.info("Fetching pre-event buffered OSM (roads, health facilities, places)...")
         fetch_buffered_osm(
             bbox=bbox,
@@ -220,8 +257,13 @@ def run_pipeline(
             out_dir=str(buf_osm_dir),
             force=no_cache
         )
+        dur = round(time.time() - t0_src, 2)
+        s_after = get_dir_size_mb(buf_osm_dir)
+        l0_sources["osm_buffered"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     def _task_s2():
+        t0_src = time.time()
+        s_before = get_dir_size_mb(s2_cache_path)
         logger.info("Fetching Sentinel-2 optical scenes...")
         fetch_s2(
             bbox=bbox,
@@ -235,6 +277,9 @@ def run_pipeline(
             s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
             force=no_cache
         )
+        dur = round(time.time() - t0_src, 2)
+        s_after = get_dir_size_mb(s2_cache_path)
+        l0_sources["s2"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     try:
         l0_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -278,7 +323,9 @@ def run_pipeline(
             drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
             look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
             orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
-            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
+            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0),
+            enable_quicklooks=enable_quicklooks,
+            max_threads=max_threads
         )
         if ctrl_pre.exists() and ctrl_post.exists():
             f_ctrl = l1_pool.submit(
@@ -292,7 +339,9 @@ def run_pipeline(
                 drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
                 look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
                 orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
-                dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0)
+                dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0),
+                enable_quicklooks=enable_quicklooks,
+                max_threads=max_threads
             )
         else:
             f_ctrl = None
@@ -307,6 +356,7 @@ def run_pipeline(
         "end": datetime.now().isoformat(),
         "duration_s": l1_duration_s,
         "peak_ram_mb": get_peak_ram_mb(),
+        "current_rss_mb": get_current_rss_mb(),
         "downloaded_mb": 0.0,
         "s1_cloud_fallback": False,
         "notes": "Grid shape: " + str(l1_res.get("shape", ""))
@@ -317,8 +367,8 @@ def run_pipeline(
     # Await Sentinel-2 download for Layer 2
     f_s2.result()
 
-    # Finalize L0 metrics
-    size_raw_after = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir) + get_dir_size_mb(s2_cache_path)
+    # Finalize L0 metrics (raw files only, excluding L1 interim rasters)
+    size_raw_after = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_raw_dir) + get_dir_size_mb(s2_cache_path)
     l0_downloaded_mb = round(max(0.0, size_raw_after - size_raw_before), 2)
     l0_duration_s = round(time.time() - t_l0_0, 2)
     layer_logs["L0"] = {
@@ -326,13 +376,14 @@ def run_pipeline(
         "end": datetime.now().isoformat(),
         "duration_s": l0_duration_s,
         "peak_ram_mb": get_peak_ram_mb(),
+        "current_rss_mb": get_current_rss_mb(),
         "downloaded_mb": l0_downloaded_mb,
         "s1_cloud_fallback": False,
+        "sources": l0_sources,
         "notes": "; ".join(l0_notes) if l0_notes else "OK"
     }
     update_status_file(status_file, "RUNNING", 0.20, time.time() - t0, "L0 Data Ingestion Completed")
     logger.info(f"[PROGRESS] Step L0 (Data Ingestion) finished in {l0_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
-
     # ==================================================================
     # LAYER 2: MULTI-SENSOR DETECTION (S2 PRIMARY + S1 SAR FALLBACK)
     # ==================================================================
@@ -372,7 +423,8 @@ def run_pipeline(
         building_damage_proximity_m=det_cfg.get("building_damage_proximity_m", 50.0),
         intact_min_post_ndvi=det_cfg.get("intact_min_post_ndvi", 0.40),
         intact_max_abs_d_ndvi=det_cfg.get("intact_max_abs_d_ndvi", 0.20),
-        event_date=event_date
+        event_date=event_date,
+        enable_quicklooks=enable_quicklooks
     )
 
     ev_s1_km2 = l2_res.get("areas_km2", {}).get("event_s1_affected", 0.0)
@@ -385,6 +437,7 @@ def run_pipeline(
         "end": datetime.now().isoformat(),
         "duration_s": l2_duration_s,
         "peak_ram_mb": get_peak_ram_mb(),
+        "current_rss_mb": get_current_rss_mb(),
         "downloaded_mb": 0.0,
         "s1_cloud_fallback": s1_used_for_clouds,
         "notes": f"Affected S2: {ev_s2_km2} km², S1: {ev_s1_km2} km², Inferred: {l2_res.get('areas_km2', {}).get('event_inferred_affected', 0.0)} km²"
@@ -438,7 +491,8 @@ def run_pipeline(
         bridge_distance_m=dmg_cfg.get("bridge_distance_m", 30.0),
         bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0),
         s2_valid_mask=s2_valid_arr,
-        s2_post_visual=s2_vis_arr
+        s2_post_visual=s2_vis_arr,
+        enable_quicklooks=enable_quicklooks
     )
 
     # 2. Control L4
@@ -460,7 +514,8 @@ def run_pipeline(
             bridge_distance_m=dmg_cfg.get("bridge_distance_m", 30.0),
             bridge_reach_radius_m=dmg_cfg.get("bridge_reach_radius_m", 100.0),
             s2_valid_mask=s2_valid_arr,
-            s2_post_visual=s2_vis_arr
+            s2_post_visual=s2_vis_arr,
+            enable_quicklooks=enable_quicklooks
         )
 
     l4_duration_s = round(time.time() - t_l4_0, 2)
@@ -471,6 +526,7 @@ def run_pipeline(
         "end": datetime.now().isoformat(),
         "duration_s": l4_duration_s,
         "peak_ram_mb": get_peak_ram_mb(),
+        "current_rss_mb": get_current_rss_mb(),
         "downloaded_mb": 0.0,
         "s1_cloud_fallback": False,
         "notes": f"Buildings: {b_counts}, Bridges: {br_counts}"
@@ -519,7 +575,8 @@ def run_pipeline(
         bbox_osm_dir=str(raw_dir / "osm"),
         out_dir=str(processed_dir / "routing"),
         control_out_dir=str(ctrl_processed_dir / "routing"),
-        artifact_dir=str(out_path / "artifacts")
+        artifact_dir=str(out_path / "artifacts"),
+        enable_quicklooks=enable_quicklooks
     )
 
     l5_duration_s = round(time.time() - t_l5_0, 2)
@@ -529,6 +586,7 @@ def run_pipeline(
         "end": datetime.now().isoformat(),
         "duration_s": l5_duration_s,
         "peak_ram_mb": get_peak_ram_mb(),
+        "current_rss_mb": get_current_rss_mb(),
         "downloaded_mb": 0.0,
         "s1_cloud_fallback": False,
         "notes": f"Cut-off settlements: {cut_off_veh}"
@@ -570,6 +628,7 @@ def run_pipeline(
         "peak_ram_mb": peak_ram_overall,
         "sensors_used": sensors_used,
         "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
+        "l0_sources": l0_sources,
         "metrics": {
             "affected_km2_observed": l2_res.get("areas_km2", {}).get("event_total_affected", 0.0),
             "affected_km2_s2": l2_res.get("areas_km2", {}).get("event_s2_affected", 0.0),
@@ -635,6 +694,7 @@ def main():
     parser.add_argument("--out-dir", type=str, required=True, help="Output directory path")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to default config yaml")
     parser.add_argument("--no-cache", action="store_true", help="Disable copying pre-existing cache from data/")
+    parser.add_argument("--no-quicklooks", action="store_true", help="Disable rendering quicklook visualization plots")
 
     args = parser.parse_args()
     run_pipeline(
@@ -642,7 +702,8 @@ def main():
         event_date=args.event_date,
         out_dir=args.out_dir,
         config_path=args.config,
-        no_cache=args.no_cache
+        no_cache=args.no_cache,
+        no_quicklooks=args.no_quicklooks
     )
 
 
