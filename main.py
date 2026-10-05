@@ -90,6 +90,22 @@ def get_current_rss_mb() -> float:
     return get_peak_ram_mb()
 
 
+def get_swap_used_mb() -> float:
+    """Returns system swap used in MB from /proc/meminfo."""
+    try:
+        with open("/proc/meminfo") as f:
+            lines = f.readlines()
+        total, free = 0.0, 0.0
+        for l in lines:
+            if l.startswith("SwapTotal:"):
+                total = float(l.split()[1])
+            elif l.startswith("SwapFree:"):
+                free = float(l.split()[1])
+        return round((total - free) / 1024.0, 2)
+    except Exception:
+        return 0.0
+
+
 def get_dir_size_mb(path: Path) -> float:
     """Returns total size of files in a directory in MB."""
     if not path.exists():
@@ -265,7 +281,7 @@ def run_pipeline(
         t0_src = time.time()
         s_before = get_dir_size_mb(s2_cache_path)
         logger.info("Fetching Sentinel-2 optical scenes...")
-        fetch_s2(
+        s2_res = fetch_s2(
             bbox=bbox,
             event_date=event_date,
             out_dir=str(s2_cache_path),
@@ -275,11 +291,19 @@ def run_pipeline(
             s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
             s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
             s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
+            s2_scene_timeout_s=det_cfg.get("s2_scene_timeout_s", 40.0),
+            s2_total_budget_s=det_cfg.get("s2_total_budget_s", 120.0),
             force=no_cache
         )
         dur = round(time.time() - t0_src, 2)
         s_after = get_dir_size_mb(s2_cache_path)
-        l0_sources["s2"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
+        l0_sources["s2"] = {
+            "duration_s": dur,
+            "downloaded_mb": round(max(0.0, s_after - s_before), 2),
+            "scenes_used": s2_res.get("scenes", []),
+            "scenes_skipped": s2_res.get("skipped_scenes", []),
+            "budget_exceeded": s2_res.get("budget_exceeded", False)
+        }
 
     try:
         l0_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -626,8 +650,11 @@ def run_pipeline(
         "utm_crs": utm_crs,
         "total_duration_seconds": total_duration_s,
         "peak_ram_mb": peak_ram_overall,
+        "swap_used_mb": get_swap_used_mb(),
         "sensors_used": sensors_used,
         "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
+        "s2_scenes_used": l0_sources.get("s2", {}).get("scenes_used", []),
+        "s2_scenes_skipped": l0_sources.get("s2", {}).get("scenes_skipped", []),
         "l0_sources": l0_sources,
         "metrics": {
             "affected_km2_observed": l2_res.get("areas_km2", {}).get("event_total_affected", 0.0),
