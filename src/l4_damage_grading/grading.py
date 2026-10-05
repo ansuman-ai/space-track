@@ -7,6 +7,7 @@ and cloud/nodata validity masks.
 
 from typing import Dict, Any, Tuple, List, Optional
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
 from shapely.ops import substring
@@ -265,7 +266,7 @@ def grade_bridges(
         w_utm = waterways_gdf.to_crs(utm_crs)
         rivers = w_utm[w_utm["waterway"] == "river"]
     else:
-        rivers = gpd.GeoDataFrame([], crs=utm_crs)
+        rivers = gpd.GeoDataFrame(columns=["geometry"], crs=utm_crs)
 
     # Precompute raster distance maps if raster available
     d2_map = None

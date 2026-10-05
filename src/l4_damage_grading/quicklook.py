@@ -65,9 +65,17 @@ def render_l4_quicklook(
             cy = float(dmg_b.geometry.centroid.y.median())
         elif not haz_utm.empty:
             c2_haz = haz_utm[haz_utm["class"] == 2] if "class" in haz_utm.columns else haz_utm
-            cx = float(c2_haz.geometry.centroid.x.median())
-            cy = float(c2_haz.geometry.centroid.y.median())
+            target_haz = c2_haz if not c2_haz.empty else haz_utm
+            cx = float(target_haz.geometry.centroid.x.median())
+            cy = float(target_haz.geometry.centroid.y.median())
         elif not b_utm.empty:
+            cx = float(b_utm.geometry.centroid.x.median())
+            cy = float(b_utm.geometry.centroid.y.median())
+        else:
+            cx, cy = 0.0, 0.0
+
+    if np.isnan(cx) or np.isnan(cy):
+        if not b_utm.empty:
             cx = float(b_utm.geometry.centroid.x.median())
             cy = float(b_utm.geometry.centroid.y.median())
         else:

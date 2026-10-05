@@ -181,26 +181,27 @@ def load_s1_features(
         else:
             z_vv_asc_ctrl = np.zeros_like(post_vv_db)
 
-    # Descending Orbit 19 log-ratio
-    o19_file = s1_cache_dir / "o19_desc.npz"
-    if o19_file.exists():
-        o19_data = np.load(o19_file)
-        o19_pre_vv = o19_data['vv_pre']
-        o19_post_vv = o19_data['vv_post']
-        if o19_pre_vv.shape == (h, w):
-            o19_lr_event = (
-                10.0 * np.log10(np.maximum(o19_post_vv, 1e-5)) -
-                10.0 * np.log10(np.maximum(o19_pre_vv, 1e-5))
+    # Descending SAR log-ratio (if available in s1_cache_dir)
+    desc_files = sorted(list(s1_cache_dir.glob("*desc*.npz")))
+    if desc_files:
+        desc_data = np.load(desc_files[0])
+        desc_pre_vv = desc_data.get('vv_pre')
+        desc_post_vv = desc_data.get('vv_post')
+        if desc_pre_vv is not None and desc_pre_vv.shape == (h, w):
+            desc_lr_event = (
+                10.0 * np.log10(np.maximum(desc_post_vv, 1e-5)) -
+                10.0 * np.log10(np.maximum(desc_pre_vv, 1e-5))
             )
         else:
-            o19_lr_event = np.zeros_like(post_vv_db)
+            desc_lr_event = np.zeros_like(post_vv_db)
     else:
-        o19_lr_event = np.zeros_like(post_vv_db)
+        desc_lr_event = np.zeros_like(post_vv_db)
 
     return {
         "z_vv_asc_event": z_vv_asc_event,
         "z_vv_asc_ctrl": z_vv_asc_ctrl,
-        "o19_lr_event": o19_lr_event,
+        "desc_lr_event": desc_lr_event,
+        "o19_lr_event": desc_lr_event,
         "post_vv": post_vv
     }
 
@@ -223,7 +224,12 @@ def run_layer2(
     simplify_tol_m: float = 8.0,
     reach_length_m: float = 250.0,
     inferred_hand_percentile: float = 90.0,
-    inferred_min_observed_pixels: int = 20,
+    inferred_min_observed_pixels: int = 35,
+    inferred_min_reach_fraction: float = 0.20,
+    min_abs_d_ndvi_floor: Optional[float] = -0.20,
+    min_d_bsi_floor: Optional[float] = 0.10,
+    min_channel_cvm_floor: Optional[float] = 0.20,
+    min_builtup_cvm_floor: Optional[float] = 0.15,
     building_buffer_m: float = 10.0,
     building_damage_proximity_m: float = 50.0,
     intact_min_post_ndvi: float = 0.40,
@@ -275,7 +281,8 @@ def run_layer2(
         cache_dir=s2_cache_dir,
         dilation_buffer_m=cloud_dilation_buffer_m,
         pixel_size_m=dx,
-        event_date=event_date
+        event_date=event_date,
+        interim_dir=interim_dir
     )
 
     if s2_data.get('s2_event_valid') is False or s2_data.get('pre_composite') is None:
@@ -386,7 +393,33 @@ def run_layer2(
     )
     t_lr_o19 = -3.5  # dB threshold for descending S1
 
-    print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR) ---")
+    # Principled false-alarm guard 2b: Seasonal control (stricter of normal and seasonal control thresholds)
+    d_ndvi_seas = s2_data.get('d_ndvi_seasonal')
+    d_bsi_seas = s2_data.get('d_bsi_seasonal')
+    s2_seas_valid = s2_data.get('s2_seasonal_valid')
+    if d_ndvi_seas is not None and d_bsi_seas is not None and s2_seas_valid is not None and np.any(s2_seas_valid):
+        t_d_ndvi_seas, t_d_bsi_seas = compute_s2_control_thresholds(
+            d_ndvi_ctrl=d_ndvi_seas,
+            d_bsi_ctrl=d_bsi_seas,
+            ctrl_valid=s2_seas_valid,
+            hand=hand,
+            max_hand_m=max_hand_corridor_m,
+            false_alarm_rate_pct=false_alarm_rate_pct
+        )
+        t_d_ndvi = min(float(t_d_ndvi), float(t_d_ndvi_seas))
+        t_d_bsi = max(float(t_d_bsi), float(t_d_bsi_seas))
+
+    # Principled false-alarm guard 2a: Physical floors (stricter of control percentile and minimum change floor)
+    if min_abs_d_ndvi_floor is not None:
+        t_d_ndvi = min(float(t_d_ndvi), float(min_abs_d_ndvi_floor))
+    if min_d_bsi_floor is not None:
+        t_d_bsi = max(float(t_d_bsi), float(min_d_bsi_floor))
+    if min_channel_cvm_floor is not None:
+        t_channel = max(float(t_channel), float(min_channel_cvm_floor))
+    if min_builtup_cvm_floor is not None:
+        t_builtup = max(float(t_builtup), float(min_builtup_cvm_floor))
+
+    print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR + GUARDS) ---")
     print(f"  Sentinel-2 ΔNDVI threshold:          {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")
     print(f"  Sentinel-2 ΔBSI threshold:           +{t_d_bsi:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
     print(f"  In-channel S2 change vector threshold: {t_channel:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
@@ -460,6 +493,7 @@ def run_layer2(
         reach_length_m=reach_length_m,
         hand_percentile=inferred_hand_percentile,
         min_observed_pixels=inferred_min_observed_pixels,
+        min_reach_fraction=inferred_min_reach_fraction,
         touch_distance_m=stream_proximity_m,
         max_hand_corridor_m=max_hand_corridor_m,
         post_ndvi=post_ndvi_arr,
@@ -518,6 +552,7 @@ def run_layer2(
         reach_length_m=reach_length_m,
         hand_percentile=inferred_hand_percentile,
         min_observed_pixels=inferred_min_observed_pixels,
+        min_reach_fraction=inferred_min_reach_fraction,
         touch_distance_m=stream_proximity_m,
         max_hand_corridor_m=max_hand_corridor_m,
         post_ndvi=ctrl_post_ndvi,
@@ -571,7 +606,7 @@ def run_layer2(
         output_png_path=out_quicklook,
         stats=stats_dict,
         post_vis=post_vis,
-        zoom_center=(992, 431)
+        zoom_center=None
     )
 
     # Control Outputs
@@ -600,7 +635,7 @@ def run_layer2(
         output_png_path=ctrl_quicklook,
         stats={"perm_water_km2": perm_km2, "affected_km2": ctrl_aff_km2, "inferred_km2": ctrl_inf_km2},
         post_vis=post_vis,
-        zoom_center=(992, 431)
+        zoom_center=None
     )
 
     # Summary dictionary

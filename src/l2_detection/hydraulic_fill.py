@@ -81,6 +81,7 @@ def compute_inferred_flood_corridor(
     reach_length_m: float = 250.0,
     hand_percentile: float = 90.0,
     min_observed_pixels: int = 20,
+    min_reach_fraction: float = 0.20,
     touch_distance_m: float = 100.0,
     max_hand_corridor_m: float = 40.0,
     post_ndvi: Optional[np.ndarray] = None,
@@ -103,6 +104,7 @@ def compute_inferred_flood_corridor(
     )
 
     dist_to_stream = distance_transform_edt(stream_mask == 0) * pixel_size_m
+    dist_to_obs = distance_transform_edt(~observed_class2_mask) * pixel_size_m
     touching_observed = observed_class2_mask & (dist_to_stream <= touch_distance_m) & (hand <= max_hand_corridor_m)
 
     inferred_mask = np.zeros((h, w), dtype=bool)
@@ -115,6 +117,13 @@ def compute_inferred_flood_corridor(
         n_obs = int(np.sum(mask_r))
         if n_obs < min_observed_pixels:
             continue
+
+        n_stream = int(np.sum(reach_cells))
+        if n_stream > 0 and min_reach_fraction > 0:
+            stream_touch = reach_cells & (dist_to_obs <= 2.0 * pixel_size_m)
+            reach_fraction = float(np.sum(stream_touch)) / float(n_stream)
+            if reach_fraction < min_reach_fraction:
+                continue
 
         active_reaches += 1
         h_flood = float(np.percentile(hand[mask_r], hand_percentile))

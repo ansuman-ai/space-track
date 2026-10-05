@@ -29,7 +29,7 @@ def render_layer2_quicklook(
     output_png_path: str,
     stats: Dict[str, Any],
     post_vis: Optional[np.ndarray] = None,
-    zoom_center: Tuple[int, int] = (992, 431),
+    zoom_center: Optional[Tuple[int, int]] = None,
     transform_matrix: Any = None
 ) -> str:
     """
@@ -82,8 +82,8 @@ def render_layer2_quicklook(
         if len(c2_r) > 0:
             cx, cy = transform_matrix * (float(np.median(c2_c)), float(np.median(c2_r)))
         else:
-            cx = (full_extent[0] + full_extent[1]) / 2.0
-            cy = (full_extent[2] + full_extent[3]) / 2.0
+            cx = (extent_full[0] + extent_full[1]) / 2.0 if 'extent_full' in locals() else 0.0
+            cy = (extent_full[2] + extent_full[3]) / 2.0 if 'extent_full' in locals() else 0.0
     else:
         cx, cy = 0.0, 0.0
     xmin, xmax = cx - half_w, cx + half_w

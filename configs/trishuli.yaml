@@ -4,8 +4,6 @@
 case_study:
   name: "Trishuli - Syapru Besi Flood"
   country: "Nepal"
-  event_date: "2026-08-26"
-  bbox: [85.30, 28.10, 85.42, 28.25]  # [min_lon, min_lat, max_lon, max_lat]
   utm_crs: "EPSG:32645"
 
 orbit:
