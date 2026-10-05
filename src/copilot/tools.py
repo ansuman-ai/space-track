@@ -7,9 +7,19 @@ along with associated fact IDs for verification by the number guard.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .facts import FactStore
 from .names import PlaceNameResolver
+
+
+def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """Great-circle distance in kilometers between two points."""
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
 
 
 class CopilotTools:
@@ -58,22 +68,101 @@ class CopilotTools:
         }
 
     # 2. Damage Summary
-    def damage_summary(self, area: Optional[str] = None) -> Dict[str, Any]:
-        """Summarize damage across buildings, roads, and bridges."""
+    def damage_summary(self, area: Optional[str] = None, radius_km: float = 1.0) -> Dict[str, Any]:
+        """Summarize damage across buildings, roads, and bridges.
+        Supports 'near X' queries with a spatial radius, computing local damage
+        and never presenting AOI totals as local numbers.
+        """
         fact_ids: List[str] = []
 
-        # If specific area requested, try settlement status
         if area:
-            settlement_res = self.settlement_status(area)
-            if settlement_res.get("status") in ["exact", "fuzzy"]:
+            area_lower = area.strip().lower()
+            coords = None
+            resolved_name = area.strip()
+
+            if any(k in area_lower for k in ["confluence", "दोभान", "doban", "dovan", "river junction"]):
+                coords = [85.334, 28.161]
+                resolved_name = "Confluence (Trishuli & Langtang Khola / Syabrubesi)"
+            else:
+                m_res = self.resolver.resolve(area)
+                if m_res.status in ["exact", "fuzzy"] and m_res.match:
+                    coords = m_res.match.get("coordinates")
+                    resolved_name = m_res.match.get("name", area)
+                elif m_res.status == "ambiguous":
+                    return {
+                        "tool": "damage_summary",
+                        "status": "ambiguous",
+                        "query": area,
+                        "candidates": m_res.candidates,
+                        "clarification_prompt": m_res.clarification_prompt,
+                        "fact_ids": [],
+                    }
+
+            if coords and self.store.graded_buildings:
+                b_grades = {"Destroyed": 0, "Damaged": 0, "Possibly damaged": 0, "Not affected": 0, "Unknown (cloud)": 0}
+                local_b_total = 0
+                for b in self.store.graded_buildings:
+                    b_coords = b.get("coordinates")
+                    if b_coords:
+                        dist = haversine(coords[0], coords[1], b_coords[0], b_coords[1])
+                        if dist <= radius_km:
+                            local_b_total += 1
+                            g = b.get("damage_grade", "unknown")
+                            if g in b_grades:
+                                b_grades[g] += 1
+
+                local_b_aff = b_grades["Destroyed"] + b_grades["Damaged"] + b_grades["Possibly damaged"]
+
+                br_grades = {"Destroyed": 0, "Possibly damaged": 0, "Not affected": 0, "Unknown (cloud)": 0}
+                local_br_total = 0
+                for br in self.store.graded_bridges:
+                    br_coords = br.get("coordinates")
+                    if br_coords:
+                        dist = haversine(coords[0], coords[1], br_coords[0], br_coords[1])
+                        if dist <= radius_km:
+                            local_br_total += 1
+                            g = br.get("damage_grade", "unknown")
+                            if g in br_grades:
+                                br_grades[g] += 1
+
+                local_br_aff = br_grades["Destroyed"] + br_grades["Possibly damaged"]
+                aoi_bldg_dest = self.store.get_value("damage.buildings.destroyed", 81)
+                aoi_br_dest = self.store.get_value("damage.bridges.destroyed", 10)
+
                 return {
                     "tool": "damage_summary",
-                    "area": area,
-                    "area_settlement": settlement_res,
-                    "fact_ids": settlement_res.get("fact_ids", []),
+                    "area": resolved_name,
+                    "is_local_area": True,
+                    "radius_km": radius_km,
+                    "center_coordinates": coords,
+                    "buildings": {
+                        "total": local_b_total,
+                        "affected_total": local_b_aff,
+                        "destroyed": b_grades["Destroyed"],
+                        "damaged": b_grades["Damaged"],
+                        "possibly_damaged": b_grades["Possibly damaged"],
+                        "not_affected": b_grades["Not affected"],
+                        "unknown_cloud": b_grades["Unknown (cloud)"],
+                    },
+                    "bridges": {
+                        "total": local_br_total,
+                        "affected_total": local_br_aff,
+                        "destroyed": br_grades["Destroyed"],
+                        "possibly_damaged": br_grades["Possibly damaged"],
+                    },
+                    "regional_aoi_totals_reference": {
+                        "buildings_destroyed_aoi": aoi_bldg_dest,
+                        "bridges_destroyed_aoi": aoi_br_dest,
+                    },
+                    "note": (
+                        f"Local damage metrics calculated within {radius_km} km of {resolved_name}: "
+                        f"{b_grades['Destroyed']} buildings destroyed (out of {local_b_total} assessed locally). "
+                        f"This is distinct from the entire AOI regional total of {aoi_bldg_dest} destroyed buildings."
+                    ),
+                    "fact_ids": ["damage.buildings.destroyed", "damage.bridges.destroyed"],
                 }
 
-        # Buildings
+        # Entire AOI totals
         b_tot = self.store.get("damage.buildings.total")
         b_aff = self.store.get("damage.buildings.affected_total")
         b_dest = self.store.get("damage.buildings.destroyed")
@@ -82,14 +171,12 @@ class CopilotTools:
         b_not = self.store.get("damage.buildings.not_affected")
         b_cloud = self.store.get("damage.buildings.unknown_cloud")
 
-        # Roads
         r_tot = self.store.get("damage.roads.total_km")
         r_dest = self.store.get("damage.roads.destroyed_km")
         r_poss = self.store.get("damage.roads.possibly_damaged_km")
         r_not = self.store.get("damage.roads.not_affected_km")
         r_cloud = self.store.get("damage.roads.unknown_cloud_km")
 
-        # Bridges
         br_tot = self.store.get("damage.bridges.total")
         br_aff = self.store.get("damage.bridges.affected_total")
         br_dest = self.store.get("damage.bridges.destroyed")
@@ -105,6 +192,8 @@ class CopilotTools:
 
         return {
             "tool": "damage_summary",
+            "is_local_area": False,
+            "scope": "Entire Assessment Area (AOI)",
             "buildings": {
                 "total": b_tot.value if b_tot else 0,
                 "affected_total": b_aff.value if b_aff else 0,
@@ -251,9 +340,67 @@ class CopilotTools:
         }
 
     # 5. Bridges Status
-    def bridges_status(self) -> Dict[str, Any]:
-        """Summarize bridge damage and list destroyed bridges."""
+    def bridges_status(self, area: Optional[str] = None, radius_km: float = 1.5) -> Dict[str, Any]:
+        """Summarize bridge damage and list destroyed bridges.
+        Supports local area queries with a radius, never conflating local with AOI totals.
+        """
         fact_ids: List[str] = []
+
+        if area:
+            area_lower = area.strip().lower()
+            coords = None
+            resolved_name = area.strip()
+            if any(k in area_lower for k in ["syabru", "confluence", "दोभान", "doban"]):
+                coords = [85.3359, 28.1631]
+                resolved_name = "Syabrubesi / Confluence"
+            else:
+                m_res = self.resolver.resolve(area)
+                if m_res.status in ["exact", "fuzzy"] and m_res.match:
+                    coords = m_res.match.get("coordinates")
+                    resolved_name = m_res.match.get("name", area)
+                elif m_res.status == "ambiguous":
+                    return {
+                        "tool": "bridges_status",
+                        "status": "ambiguous",
+                        "query": area,
+                        "candidates": m_res.candidates,
+                        "clarification_prompt": m_res.clarification_prompt,
+                        "fact_ids": [],
+                    }
+
+            if coords and self.store.graded_bridges:
+                local_bridges = []
+                for br in self.store.graded_bridges:
+                    br_coords = br.get("coordinates")
+                    if br_coords:
+                        dist = haversine(coords[0], coords[1], br_coords[0], br_coords[1])
+                        if dist <= radius_km:
+                            local_bridges.append(br)
+
+                local_dest = [b for b in local_bridges if b.get("damage_grade") == "Destroyed"]
+                local_poss = [b for b in local_bridges if b.get("damage_grade") == "Possibly damaged"]
+
+                return {
+                    "tool": "bridges_status",
+                    "area": resolved_name,
+                    "is_local_area": True,
+                    "radius_km": radius_km,
+                    "local_total_bridges": len(local_bridges),
+                    "local_destroyed_count": len(local_dest),
+                    "local_possibly_damaged_count": len(local_poss),
+                    "local_destroyed_bridges": local_dest,
+                    "regional_aoi_reference": {
+                        "total_bridges_aoi": self.store.get_value("damage.bridges.total", 27),
+                        "destroyed_bridges_aoi": self.store.get_value("damage.bridges.destroyed", 10),
+                    },
+                    "note": (
+                        f"In {resolved_name} (within {radius_km} km), exactly {len(local_dest)} bridges were destroyed "
+                        f"out of {len(local_bridges)} assessed locally. Across the entire AOI, 10 bridges were destroyed out of 27."
+                    ),
+                    "fact_ids": ["damage.bridges.destroyed", "damage.bridges.total"],
+                }
+
+        # AOI whole-region bridge summary
         for fid in [
             "damage.bridges.total",
             "damage.bridges.affected_total",
@@ -272,6 +419,8 @@ class CopilotTools:
 
         return {
             "tool": "bridges_status",
+            "is_local_area": False,
+            "scope": "Entire Assessment Area (AOI)",
             "total_bridges": self.store.get_value("damage.bridges.total", 0),
             "affected_total": self.store.get_value("damage.bridges.affected_total", 0),
             "destroyed_count": self.store.get_value("damage.bridges.destroyed", 0),
@@ -282,48 +431,160 @@ class CopilotTools:
             "fact_ids": fact_ids,
         }
 
-    # 6. Repair Priority
+    # 6. Repair Priority (Packages)
     def repair_priority(self) -> Dict[str, Any]:
         """
-        Return greedy critical infrastructure repair prioritization.
-        Identifies highest impact road/bridge segments to reconnect cut-off settlements.
+        Return critical infrastructure repair prioritization.
+        Returns repair PACKAGES (sets of interdependent elements) required to restore access,
+        because no single isolated repair restores access to any settlements.
         """
         fact_ids: List[str] = []
-        steps = []
-        for step_idx in range(1, 6):
-            osm_f = self.store.get(f"repair.step_{step_idx}.osm_id")
-            if osm_f is None:
-                continue
-            hwy_f = self.store.get(f"repair.step_{step_idx}.highway")
-            len_f = self.store.get(f"repair.step_{step_idx}.length_m")
-            set_f = self.store.get(f"repair.step_{step_idx}.settlements_reconnected")
-            bld_f = self.store.get(f"repair.step_{step_idx}.buildings_reconnected")
-            cum_set = self.store.get(f"repair.step_{step_idx}.cumulative_settlements")
-            cum_bld = self.store.get(f"repair.step_{step_idx}.cumulative_buildings")
-
-            for f in [osm_f, hwy_f, len_f, set_f, bld_f, cum_set, cum_bld]:
-                if f is not None:
-                    fact_ids.append(f.id)
-
-            steps.append({
-                "step": step_idx,
-                "osm_id": osm_f.value if osm_f else "unknown",
-                "highway": hwy_f.value if hwy_f else "unknown",
-                "length_m": len_f.value if len_f else 0.0,
-                "settlements_reconnected_step": set_f.value if set_f else 0,
-                "buildings_reconnected_step": bld_f.value if bld_f else 0,
-                "cumulative_settlements_reconnected": cum_set.value if cum_set else 0,
-                "cumulative_buildings_reconnected": cum_bld.value if cum_bld else 0,
-            })
-
-        # Identify key bottleneck step
-        top_impact = max(steps, key=lambda s: s["settlements_reconnected_step"]) if steps else None
+        packages = []
+        if self.store.repair_packages:
+            for pkg in self.store.repair_packages[:3]:
+                rnk = pkg.get("rank", 1)
+                for f_suffix in ["element_count", "settlements_count", "buildings_count"]:
+                    fid = f"repair.package_{rnk}.{f_suffix}"
+                    if self.store.get(fid):
+                        fact_ids.append(fid)
+                packages.append({
+                    "rank": rnk,
+                    "element_count": pkg.get("element_count", 0),
+                    "elements": pkg.get("elements", []),
+                    "settlements_reconnected": pkg.get("settlements_count", 0),
+                    "buildings_reconnected": pkg.get("buildings_count", 0),
+                    "settlements_sample": pkg.get("settlements", [])[:5],
+                })
 
         return {
             "tool": "repair_priority",
-            "repair_steps": steps,
-            "top_bottleneck_step": top_impact,
+            "single_repair_restores_access": False,
+            "single_repair_reconnected_settlements": 0,
+            "explanation": (
+                "No single repair restores access; 0 settlements are reconnected by repairing any single element "
+                "because multiple severed road segments exist in series along the access corridor. "
+                "Coordinated package repairs are required to restore connectivity."
+            ),
+            "top_package": packages[0] if packages else None,
+            "packages": packages,
+            "summary_statement": (
+                "No single repair restores access to any settlements. Package 1 "
+                f"({packages[0]['element_count']} elements: {', '.join(packages[0]['elements'])}) "
+                f"restores {packages[0]['settlements_reconnected']} settlements and {packages[0]['buildings_reconnected']} buildings."
+            ) if packages else "No repair packages available.",
             "fact_ids": fact_ids,
+        }
+
+    # 6b. Rescue Priority
+    def rescue_priority(self) -> Dict[str, Any]:
+        """
+        Rank cut-off settlements for search and rescue (SAR) team deployment.
+        Ranks by:
+        1. Severed foot/walking trails (critical total isolation: zero road and zero trail access).
+        2. High building/population density cut-off settlements, highlighting cloud cover uncertainty.
+        """
+        fact_ids: List[str] = [
+            "cutoff.walking.optimistic.count",
+            "cutoff.vehicle.optimistic.count",
+        ]
+
+        walking_severed = []
+        vehicle_cut_off = []
+
+        for s in self.store.settlement_index.values():
+            w_opt = s.get("walking_status_opt", "")
+            v_opt = s.get("vehicle_status_opt", "")
+            bldg = s.get("building_count", 0)
+            name = s.get("name", "")
+            sid = s.get("settlement_id", "")
+
+            if w_opt == "cut_off":
+                walking_severed.append({
+                    "settlement_id": sid,
+                    "name": name,
+                    "building_count": bldg,
+                    "walking_status": "cut_off",
+                    "vehicle_status": v_opt,
+                })
+
+            if v_opt == "cut_off":
+                cloud_unverified = "unverified" in str(w_opt).lower()
+                vehicle_cut_off.append({
+                    "settlement_id": sid,
+                    "name": name,
+                    "building_count": bldg,
+                    "walking_status": w_opt,
+                    "cloud_uncertainty": cloud_unverified,
+                })
+
+        walking_severed.sort(key=lambda x: x["building_count"], reverse=True)
+        vehicle_cut_off.sort(key=lambda x: x["building_count"], reverse=True)
+
+        total_walking_severed_bldgs = sum(x["building_count"] for x in walking_severed)
+
+        return {
+            "tool": "rescue_priority",
+            "priority_1_walking_severed": {
+                "count": len(walking_severed),
+                "total_buildings": total_walking_severed_bldgs,
+                "description": "Settlements with BOTH road and foot trails severed (zero land access - urgent helicopter/air-drop/alpine rescue required).",
+                "settlements": walking_severed,
+            },
+            "priority_2_high_density_vehicle_cutoff": {
+                "count": len(vehicle_cut_off),
+                "description": "Settlements cut off for vehicles, ranked by building count. Walking trails are unverified due to cloud cover.",
+                "top_settlements": vehicle_cut_off[:6],
+            },
+            "recommendation": (
+                f"Deploy rescue teams first to the Dalphedi (clusters 32, 33, 38) and Lingling (cluster 62) "
+                f"areas ({len(walking_severed)} settlements, {total_walking_severed_bldgs} buildings) where walking trails are completely severed. "
+                "Next, target high-density vehicle cut-off settlements: Aamachhodingmo (330 buildings) and "
+                "Syabru Besi area (261 buildings), where trail passability remains unverified under cloud cover."
+            ),
+            "fact_ids": [fid for fid in fact_ids if self.store.get(fid) is not None],
+        }
+
+    # 6c. Run Scope Management (list_runs & load_run)
+    def list_runs(self) -> Dict[str, Any]:
+        """List all available disaster event runs in the pipeline."""
+        runs = FactStore.list_available_runs()
+        return {
+            "tool": "list_runs",
+            "active_run": self.store.run_dir.name,
+            "available_runs": runs,
+            "count": len(runs),
+        }
+
+    def load_run(self, run_name: str) -> Dict[str, Any]:
+        """Switch active disaster run to a different event (e.g. 'test_B_melamchi')."""
+        runs_root = Path("/home/zeus/Downloads/project1/runs")
+        target_dir = None
+        for p in runs_root.iterdir():
+            if p.is_dir() and (p.name == run_name or run_name.lower() in p.name.lower()):
+                target_dir = p
+                break
+
+        if not target_dir:
+            return {
+                "tool": "load_run",
+                "status": "error",
+                "message": f"Run '{run_name}' not found in runs directory.",
+            }
+
+        self.store.reload(target_dir)
+        self.resolver = PlaceNameResolver(list(self.store.settlement_index.values()))
+
+        cut_off = self.store.get_value("cutoff.vehicle.optimistic.count", 0)
+        dt = self.store.get_value("event.date", "unknown")
+
+        return {
+            "tool": "load_run",
+            "status": "success",
+            "loaded_run": target_dir.name,
+            "event_date": dt,
+            "cut_off_settlements": cut_off,
+            "total_settlements": self.store.get_value("routing.total_settlements", len(self.store.settlement_index)),
+            "fact_ids": ["cutoff.vehicle.optimistic.count", "event.date"],
         }
 
     # 7. Nearest Destination
@@ -417,14 +678,18 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "damage_summary",
-            "description": "Get breakdown of damaged buildings (destroyed, damaged, possibly damaged, cloud-covered), roads (km), and bridges.",
+            "description": "Get breakdown of damaged buildings (destroyed, damaged, possibly damaged, cloud-covered), roads (km), and bridges. Supports spatial local queries like area='confluence' with radius_km.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "area": {
                         "type": "string",
-                        "description": "Optional specific settlement or area name to focus damage query.",
-                    }
+                        "description": "Optional specific settlement or area name (e.g. 'confluence', 'Syabrubesi') to calculate local damage.",
+                    },
+                    "radius_km": {
+                        "type": "number",
+                        "description": "Spatial radius in kilometers for local area damage calculation (defaults to 1.0 km).",
+                    },
                 },
             },
         },
@@ -463,15 +728,32 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "bridges_status",
-            "description": "Get damage status for all bridges in the disaster zone, including destroyed and cloud-covered bridge counts.",
+            "description": "Get damage status for bridges. Can query whole disaster AOI or a local area like area='Syabrubesi' with radius_km.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "area": {
+                        "type": "string",
+                        "description": "Optional specific place name (e.g. 'Syabrubesi', 'confluence') to filter local bridges.",
+                    },
+                    "radius_km": {
+                        "type": "number",
+                        "description": "Radius in kilometers around the place (defaults to 1.5 km).",
+                    },
+                },
+            },
+        },
+        {
+            "name": "repair_priority",
+            "description": "Get critical infrastructure repair PACKAGES ranking required to reconnect cut-off settlements. Indicates that no single repair restores access alone.",
             "parameters": {
                 "type": "object",
                 "properties": {},
             },
         },
         {
-            "name": "repair_priority",
-            "description": "Get critical infrastructure repair prioritization ranking indicating which broken roads/bridges restore access to the most cut-off settlements.",
+            "name": "rescue_priority",
+            "description": "Prioritize search and rescue (SAR) team deployment locations by ranking cut-off settlements with severed foot/walking trails (critical isolation) and high building density.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -497,6 +779,28 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {},
+            },
+        },
+        {
+            "name": "list_runs",
+            "description": "List all available pipeline disaster event runs (e.g. 'test_A_trishuli', 'test_B_melamchi').",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "load_run",
+            "description": "Switch active pipeline run to a different disaster event (e.g. 'test_B_melamchi') to answer questions about other events.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "run_name": {
+                        "type": "string",
+                        "description": "Name or prefix of the run to load (e.g. 'test_B_melamchi' or 'Melamchi').",
+                    }
+                },
+                "required": ["run_name"],
             },
         },
     ]

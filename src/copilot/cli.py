@@ -11,6 +11,7 @@ Supports:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -63,6 +64,24 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Execute a single question non-interactively and print answer",
     )
+    parser.add_argument(
+        "--questions-file",
+        type=str,
+        default=None,
+        help="Path to file containing questions (one per line) to run in a single session",
+    )
+    parser.add_argument(
+        "--transcript-out",
+        type=str,
+        default=None,
+        help="Path to save markdown transcript of the session",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Model name (e.g. gemini-3.8-flash)",
+    )
     return parser.parse_args()
 
 
@@ -96,8 +115,108 @@ def run_cli() -> None:
 
     # Provider setup
     provider = "offline" if args.offline else args.provider
-    agent = CopilotAgent(fact_store, provider=provider)
+    agent = CopilotAgent(fact_store, provider=provider, model=args.model)
+    active_model = agent.model or ("gemini-3.8-flash" if agent.provider == "gemini" else "offline-rule-engine")
     print(f"Active Provider: {agent.provider.upper()}")
+    print(f"Active Model:    {active_model}")
+
+    # Batch Questions File Mode (Held-Out Evaluation)
+    if args.questions_file:
+        q_path = Path(args.questions_file).resolve()
+        if not q_path.exists():
+            print(f"Error: Questions file not found: {q_path}", file=sys.stderr)
+            sys.exit(1)
+
+        raw_lines = [line.strip() for line in q_path.read_text(encoding="utf-8").splitlines()]
+        # Filter out comments and blank lines
+        questions = [q for q in raw_lines if q and not q.startswith("#")]
+        print(f"\nRunning {len(questions)} evaluation questions in a single continuous session...\n")
+
+        transcript_sections = [
+            "# Independent Held-out Benchmark Transcript (v2)\n",
+            f"- **Provider:** {agent.provider.upper()}",
+            f"- **Model:** {active_model}",
+            f"- **Run:** `{run_path.name}`",
+            f"- **Total Questions:** {len(questions)}",
+            "- **Conversation Context:** Single continuous multi-turn session",
+            "- **Grounding Policy:** Zero hallucinated numbers; strict field-level semantic verification.\n",
+            "---\n",
+        ]
+
+        for q_idx, q_text in enumerate(questions, 1):
+            print(f"[{q_idx}/{len(questions)}] Asking: {q_text}")
+            resp = agent.ask(q_text)
+            print(f"       -> Tools: {resp.tools_called}")
+            print(f"       -> Guard: {'PASS' if resp.guard_passed else 'FAIL'}")
+
+            # Format tool outputs JSON
+            if resp.tool_outputs:
+                if len(resp.tool_outputs) == 1:
+                    tools_json = json.dumps(resp.tool_outputs[0], indent=2, ensure_ascii=False)
+                else:
+                    tools_json = json.dumps(resp.tool_outputs, indent=2, ensure_ascii=False)
+            else:
+                tools_json = "{}"
+
+            # Format API call logs
+            api_logs_md = ""
+            if resp.api_call_logs:
+                api_logs_md = "\n**API Calls:**\n" + "\n".join(
+                    f"- Model: `{log['model']}` | Time: `{log['timestamp']}` | Latency: `{log['latency_s']}s`"
+                    for log in resp.api_call_logs
+                )
+
+            # Format Guard result
+            guard_details = resp.guard_result or {}
+            ext_nums = guard_details.get("extracted_numbers", [])
+            viol_nums = guard_details.get("violating_numbers", [])
+            guard_md = (
+                f"- Valid: `{resp.guard_passed}`\n"
+                f"- Extracted Numbers: `{ext_nums}`\n"
+                f"- Violating Numbers: `{viol_nums}`\n"
+                f"- Details: `{guard_details.get('details', 'Verified against grounded tool outputs.')}`"
+            )
+
+            section = f"""### Question {q_idx}
+
+**Question:** `{q_text}`
+
+**Tools Called:** `{resp.tools_called}`
+
+**Tool Output:**
+```json
+{tools_json}
+```
+
+**Final Answer:**
+
+{resp.text}
+
+**Guard Result:**
+{guard_md}
+{api_logs_md}
+
+
+---
+"""
+            transcript_sections.append(section)
+            if q_idx < len(questions):
+                import time
+                time.sleep(12)
+
+        # Update model header with actual active model used
+        final_model = agent.model or active_model
+        transcript_sections[2] = f"- **Model:** {final_model}"
+
+        full_transcript = "\n".join(transcript_sections)
+
+        if args.transcript_out:
+            out_file = Path(args.transcript_out).resolve()
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            out_file.write_text(full_transcript, encoding="utf-8")
+            print(f"\nSaved full raw transcript to: {out_file}")
+
+        return
 
     # Single Query Mode
     if args.query:

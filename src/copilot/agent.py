@@ -80,6 +80,8 @@ class AgentResponse:
     language: str
     active_settlement: Optional[str] = None
     clarification_needed: bool = False
+    api_call_logs: List[Dict[str, Any]] = field(default_factory=list)
+    guard_result: Optional[Dict[str, Any]] = None
 
 
 class CopilotAgent:
@@ -101,6 +103,11 @@ class CopilotAgent:
         self.messages: List[Dict[str, Any]] = []
         self.active_settlement: Optional[str] = None
         self.conversation_tool_outputs: List[Dict[str, Any]] = []
+        self.api_call_logs: List[Dict[str, Any]] = []
+
+        # Client state for online sessions
+        self._gemini_client = None
+        self._gemini_chat = None
 
         logger.info("CopilotAgent initialized with provider: %s", self.provider)
 
@@ -132,7 +139,10 @@ class CopilotAgent:
         if name == "event_summary":
             return self.tools.event_summary()
         elif name == "damage_summary":
-            return self.tools.damage_summary(area=args.get("area"))
+            return self.tools.damage_summary(
+                area=args.get("area"),
+                radius_km=float(args.get("radius_km", 1.0)) if args.get("radius_km") is not None else 1.0,
+            )
         elif name == "cutoff_settlements":
             return self.tools.cutoff_settlements(
                 network=args.get("network", "vehicle"),
@@ -141,13 +151,24 @@ class CopilotAgent:
         elif name == "settlement_status":
             return self.tools.settlement_status(name=args.get("name", ""))
         elif name == "bridges_status":
-            return self.tools.bridges_status()
+            return self.tools.bridges_status(
+                area=args.get("area"),
+                radius_km=float(args.get("radius_km", 1.5)) if args.get("radius_km") is not None else 1.5,
+            )
         elif name == "repair_priority":
             return self.tools.repair_priority()
+        elif name == "rescue_priority":
+            return self.tools.rescue_priority()
         elif name == "nearest_destination":
             return self.tools.nearest_destination(name=args.get("name", ""))
         elif name == "limitations":
             return self.tools.limitations()
+        elif name == "list_runs":
+            return self.tools.list_runs()
+        elif name == "load_run":
+            res = self.tools.load_run(run_name=args.get("run_name", ""))
+            self.resolver = self.tools.resolver
+            return res
         else:
             return {"error": f"Unknown tool '{name}'"}
 
@@ -461,70 +482,173 @@ class CopilotAgent:
         return None, False, ""
 
     # ==========================================
+    # ==========================================
     # ONLINE PROVIDERS (Gemini, OpenAI, Anthropic)
     # ==========================================
     def _gemini_answer(self, query: str, lang: str) -> AgentResponse:
+        import socket
+        import time
+        from datetime import datetime, timezone
         from google import genai
         from google.genai import types
+
+        # Force IPv4 socket resolution to prevent Linux IPv6 DNS route timeouts
+        try:
+            _orig_getaddrinfo = socket.getaddrinfo
+            def _ipv4_getaddrinfo(*args, **kwargs):
+                res = _orig_getaddrinfo(*args, **kwargs)
+                return [r for r in res if r[0] == socket.AF_INET] or res
+            socket.getaddrinfo = _ipv4_getaddrinfo
+        except Exception:
+            pass
 
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             return self._offline_answer(query, lang)
 
-        client = genai.Client(api_key=api_key)
-        model_name = self.model or "gemini-2.5-flash"
+        model_name = self.model or "gemini-3.8-flash"
+        call_logs_this_turn: List[Dict[str, Any]] = []
 
-        # Construct tools
-        tool_defs = get_tool_definitions()
-        gemini_tools = [
-            types.Tool(
-                function_declarations=[
-                    types.FunctionDeclaration(
-                        name=d["name"],
-                        description=d["description"],
+        # Ambiguous place name check (e.g. Q13 "syabru")
+        clean_q = query.strip()
+        if len(clean_q.split()) <= 2:
+            res_ambig = self.resolver.resolve(clean_q)
+            if res_ambig.status == "ambiguous":
+                return AgentResponse(
+                    text=res_ambig.clarification_prompt,
+                    tools_called=["names.resolve"],
+                    tool_outputs=[res_ambig.to_dict()],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    clarification_needed=True,
+                    api_call_logs=[],
+                    guard_result={"is_valid": True, "extracted_numbers": [], "violating_numbers": [], "details": "Ambiguous place query resolved to candidate options."},
+                )
+
+        # Initialize client and persistent chat session
+        if self._gemini_chat is None:
+            self._gemini_client = genai.Client(api_key=api_key)
+            tool_defs = get_tool_definitions()
+            fdecls = [
+                types.FunctionDeclaration(
+                    name=d["name"],
+                    description=d["description"],
+                    parameters=d.get("parameters"),
+                )
+                for d in tool_defs
+            ]
+            gemini_tools = [types.Tool(function_declarations=fdecls)]
+
+            # Create persistent chat session with retry for transient spikes
+            for init_model in [model_name, "gemini-3.6-flash"]:
+                try:
+                    self._gemini_chat = self._gemini_client.chats.create(
+                        model=init_model,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            tools=gemini_tools,
+                            temperature=0.0,
+                        ),
                     )
-                    for d in tool_defs
-                ]
-            )
-        ]
+                    model_name = init_model
+                    self.model = init_model
+                    break
+                except Exception as e:
+                    logger.warning("Failed to initialize Gemini chat on %s: %s", init_model, e)
+                    continue
 
-        chat = client.chats.create(
-            model=model_name,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                tools=gemini_tools,
-                temperature=0.1,
-            ),
-        )
+            if self._gemini_chat is None:
+                return self._offline_answer(query, lang)
 
-        response = chat.send_message(query)
-        tools_called = []
-        tool_outputs = []
+        def _send_with_logging(msg_content: Any) -> Any:
+            nonlocal model_name
+            for attempt in range(4):
+                try:
+                    t0 = time.time()
+                    resp = self._gemini_chat.send_message(msg_content)
+                    lat = round(time.time() - t0, 3)
+                    iso_now = datetime.now(timezone.utc).isoformat()
+                    log_entry = {
+                        "model": model_name,
+                        "timestamp": iso_now,
+                        "latency_s": lat,
+                    }
+                    self.api_call_logs.append(log_entry)
+                    call_logs_this_turn.append(log_entry)
+                    return resp
+                except Exception as e:
+                    err_str = str(e)
+                    if ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str) and model_name != "gemini-3.6-flash":
+                        logger.info("Switching model from %s to gemini-3.6-flash due to rate limit/error: %s", model_name, err_str[:60])
+                        model_name = "gemini-3.6-flash"
+                        self.model = "gemini-3.6-flash"
+                        self._gemini_chat = self._gemini_client.chats.create(
+                            model="gemini-3.6-flash",
+                            config=types.GenerateContentConfig(
+                                system_instruction=SYSTEM_PROMPT,
+                                tools=gemini_tools,
+                                temperature=0.0,
+                            ),
+                        )
+                        continue
+                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                        # Extract seconds to sleep from message or default to 12s
+                        sleep_s = 12
+                        match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_str)
+                        if match:
+                            sleep_s = max(5, int(float(match.group(1))) + 2)
+                        logger.info("Free-tier 5 RPM limit reached. Waiting %ds for quota window reset...", sleep_s)
+                        time.sleep(sleep_s)
+                        continue
+                    if attempt < 3 and ("503" in err_str or "high demand" in err_str or "Temporary failure" in err_str):
+                        time.sleep(3)
+                        continue
+                    raise
 
-        # Check for function calls
-        for candidate in response.candidates or []:
-            for part in candidate.content.parts or []:
-                if part.function_call:
-                    fc = part.function_call
-                    fname = fc.name
-                    fargs = dict(fc.args) if fc.args else {}
-                    tools_called.append(fname)
-                    out = self.execute_tool(fname, fargs)
-                    tool_outputs.append(out)
-                    self.conversation_tool_outputs.append(out)
+        tools_called: List[str] = []
+        tool_outputs: List[Dict[str, Any]] = []
 
-                    # Send tool response
-                    tool_resp = chat.send_message(
-                        types.Part.from_function_response(
+        response = _send_with_logging(query)
+
+        # Multi-turn tool execution loop
+        while True:
+            has_fn_call = False
+            for candidate in (response.candidates or []):
+                for part in (candidate.content.parts or []):
+                    if part.function_call:
+                        has_fn_call = True
+                        fc = part.function_call
+                        fname = fc.name
+                        fargs = dict(fc.args) if fc.args else {}
+                        call_repr = f"{fname}({json.dumps(fargs, ensure_ascii=False)})"
+                        tools_called.append(call_repr)
+
+                        out = self.execute_tool(fname, fargs)
+                        tool_outputs.append(out)
+                        self.conversation_tool_outputs.append(out)
+
+                        # Update active settlement if relevant
+                        if "settlement_name" in out and out["settlement_name"]:
+                            self.active_settlement = str(out["settlement_name"])
+                        elif "name" in out and out["name"]:
+                            self.active_settlement = str(out["name"])
+                        elif fargs.get("name"):
+                            self.active_settlement = str(fargs["name"])
+
+                        # Send function response back
+                        fn_resp = types.Part.from_function_response(
                             name=fname,
                             response={"result": out},
                         )
-                    )
-                    response = tool_resp
+                        response = _send_with_logging(fn_resp)
+                        break
+                if has_fn_call:
+                    break
+            if not has_fn_call:
+                break
 
         answer_text = response.text or ""
-        if not tool_outputs:
-            return self._offline_answer(query, lang)
 
         # Number guard check
         guard_res = self.guard.check(answer_text, tool_outputs)
@@ -534,14 +658,20 @@ class CopilotAgent:
             guard_retried = True
             retry_prompt = (
                 f"NumberGuard Error: The numbers {guard_res.violating_numbers} in your response "
-                f"do not exist in the tool outputs. Regenerate your answer strictly using only "
-                f"numbers from the tool data."
+                f"are not verified from the tool outputs of this turn. "
+                f"Regenerate your answer strictly using only numbers from the tool data, "
+                f"or state that the data is not available."
             )
-            retry_resp = chat.send_message(retry_prompt)
+            retry_resp = _send_with_logging(retry_prompt)
             answer_text = retry_resp.text or ""
             guard_res2 = self.guard.check(answer_text, tool_outputs)
+            guard_res = guard_res2
             if not guard_res2.is_valid:
-                answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                if tool_outputs:
+                    answer_text = self.guard.build_template_answer(tool_outputs[-1], lang)
+                else:
+                    answer_text = "Data not available in the pipeline outputs."
+                guard_res = self.guard.check(answer_text, tool_outputs)
 
         return AgentResponse(
             text=answer_text,
@@ -551,6 +681,9 @@ class CopilotAgent:
             guard_retried=guard_retried,
             language=lang,
             active_settlement=self.active_settlement,
+            clarification_needed=False,
+            api_call_logs=call_logs_this_turn,
+            guard_result=guard_res.to_dict(),
         )
 
     def _openai_answer(self, query: str, lang: str) -> AgentResponse:

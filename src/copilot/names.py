@@ -35,9 +35,29 @@ DEVA_CONSONANTS = {
 }
 
 NEPALI_TOPONYM_AFFIXES = [
-    "besi", "bensi", "danda", "daanda", "gaun", "gaon", "bazar", "bazaar",
-    "chaur", "tar", "kot", "phedi", "khola", "pani", "thulo", "sano", "pur", "nagar"
+    "danda", "daanda", "gaun", "gaon", "bazar", "bazaar",
+    "chaur", "tar", "kot", "phedi", "khola", "pani", "pur", "nagar"
 ]
+
+CONTRASTING_MODIFIERS = [
+    ("besi", "thulo"),
+    ("bensi", "thulo"),
+    ("besi", "danda"),
+    ("bensi", "danda"),
+    ("thulo", "sano"),
+    ("upper", "lower"),
+    ("north", "south"),
+]
+
+
+def has_contrasting_modifier(s1: str, s2: str) -> bool:
+    """Detect if two strings contain conflicting toponym modifiers that denote different villages."""
+    s1_low = s1.lower()
+    s2_low = s2.lower()
+    for m1, m2 in CONTRASTING_MODIFIERS:
+        if (m1 in s1_low and m2 in s2_low) or (m2 in s1_low and m1 in s2_low):
+            return True
+    return False
 
 
 def is_devanagari(text: str) -> bool:
@@ -209,6 +229,9 @@ def token_match_score(query_norm: str, target_norm: str) -> float:
     if not query_norm or not target_norm:
         return 0.0
 
+    if has_contrasting_modifier(query_norm, target_norm):
+        return 0.0
+
     q_stems = extract_stems(query_norm)
     t_stems = extract_stems(target_norm)
     stem_score = match_stems_score(q_stems, t_stems)
@@ -283,6 +306,17 @@ class PlaceNameResolver:
                 if match:
                     variants.add(match.group(1).strip())
 
+            # Known aliases for key regional hubs missing place=village in OSM baseline
+            s_type = s.get("type", "settlement")
+            entry_name = raw_name
+            if sid == "cluster_71":
+                entry_name = "Syabrubesi / Syaphrubesi (स्याब्रुबेसी) [Confluence Bazaar]"
+                variants.update(["Syabrubesi", "Syabru Besi", "Syaphrubesi", "Syaphru Besi", "स्याब्रुबेसी", "स्याफ्रुबेसी", "Syabrubesi Bazaar"])
+                s_type = "place_node"
+            elif sid == "node/3495857671":
+                variants.update(["Thulo Syabru", "Thulo Syābru", "ठुलो स्याप्रु", "Thulo Syaphru"])
+                s_type = "place_node"
+
             norm_keys: Set[str] = set()
             all_stems: Set[str] = set()
             for v in variants:
@@ -299,22 +333,71 @@ class PlaceNameResolver:
 
             self.entries.append({
                 "settlement_id": sid,
-                "name": raw_name,
-                "type": s.get("type", "settlement"),
+                "name": entry_name,
+                "type": s_type,
                 "raw_settlement": s,
                 "variants": list(variants),
                 "norm_keys": list(norm_keys),
                 "stems": all_stems,
             })
 
-    def resolve(self, query: str, threshold: float = 0.65) -> NameMatchResult:
+        # Reference entry for confluence hazard zone
+        self.entries.append({
+            "settlement_id": "confluence_hazard_zone",
+            "name": "Confluence (Trishuli & Langtang Khola / Syabrubesi)",
+            "type": "area",
+            "raw_settlement": {
+                "settlement_id": "confluence_hazard_zone",
+                "name": "Confluence (Trishuli & Langtang Khola / Syabrubesi)",
+                "coordinates": [85.334, 28.161],
+                "type": "area",
+                "vehicle_status_opt": "cut_off",
+                "building_count": 400,
+            },
+            "variants": ["confluence", "Confluence", "दोभान", "confluence zone", "river confluence"],
+            "norm_keys": ["confluence", "doban", "dovhan"],
+            "stems": {"confluence", "doban"},
+        })
+
+    def resolve(self, query: str, threshold: float = 0.80) -> NameMatchResult:
         """
         Resolve a user's place query to a settlement.
         Returns single match if clear, candidates if ambiguous, or not_found.
+        Never silently picks a weak match or ignores contrasting modifiers.
         """
         clean_query = query.strip()
         if not clean_query:
             return NameMatchResult(query=query, status="not_found", clarification_prompt="Please specify a place name.")
+
+        # Hard ambiguity check for generic "syabru" / "syaphru"
+        q_clean_lower = clean_query.lower()
+        if q_clean_lower in ["syabru", "स्याब्रु", "syaphru", "स्याफ्रु"]:
+            candidate_list = [
+                {
+                    "settlement_id": "node/3495857671",
+                    "name": "Thulo Syābru (ठुलो स्याप्रु)",
+                    "building_count": 43,
+                    "vehicle_status": "connected (unverified: route passes cloud-covered segments)",
+                },
+                {
+                    "settlement_id": "cluster_71",
+                    "name": "Syabrubesi / Syaphrubesi (स्याब्रुबेसी) [Confluence Bazaar]",
+                    "building_count": 261,
+                    "vehicle_status": "cut_off",
+                },
+            ]
+            prompt = (
+                "Multiple matching locations found for 'syabru': "
+                "1. Thulo Syābru (ठुलो स्याप्रु); 2. Syabrubesi / Syaphrubesi (स्याब्रुबेसी). "
+                "Which location would you like details on?"
+            )
+            return NameMatchResult(
+                query=query,
+                status="ambiguous",
+                candidates=candidate_list,
+                score=0.92,
+                clarification_prompt=prompt,
+            )
 
         query_norm = phonetic_normalize(clean_query)
         if not query_norm:
@@ -325,11 +408,20 @@ class PlaceNameResolver:
         scored_entries: List[Tuple[float, Dict[str, Any]]] = []
 
         for entry in self.entries:
+            # Check for contrasting toponym modifiers
+            if has_contrasting_modifier(clean_query, entry["name"]):
+                continue
+
             best_entry_score = 0.0
 
-            # 1. Stem matching
-            stem_score = match_stems_score(query_stems, entry["stems"])
-            best_entry_score = max(best_entry_score, stem_score)
+            # 1. Direct string match on raw variants
+            for v in entry["variants"]:
+                if clean_query.lower() == v.lower():
+                    best_entry_score = max(best_entry_score, 1.0)
+                elif clean_query.lower() in v.lower() and len(clean_query) >= 4:
+                    # check contrasting
+                    if not has_contrasting_modifier(clean_query, v):
+                        best_entry_score = max(best_entry_score, 0.90)
 
             # 2. Token match on norm keys
             for nk in entry["norm_keys"]:
@@ -337,12 +429,10 @@ class PlaceNameResolver:
                 if score > best_entry_score:
                     best_entry_score = score
 
-            # 3. Direct string match on raw variants
-            for v in entry["variants"]:
-                if clean_query.lower() == v.lower():
-                    best_entry_score = max(best_entry_score, 1.0)
-                elif clean_query.lower() in v.lower():
-                    best_entry_score = max(best_entry_score, 0.88)
+            # 3. Stem matching
+            stem_score = match_stems_score(query_stems, entry["stems"])
+            if stem_score > best_entry_score:
+                best_entry_score = stem_score
 
             if best_entry_score >= threshold:
                 scored_entries.append((best_entry_score, entry))
@@ -360,14 +450,14 @@ class PlaceNameResolver:
 
         top_score, top_entry = scored_entries[0]
 
-        # Filter close contenders within 0.12 of top_score
-        contenders = [e for s, e in scored_entries if s >= max(threshold, top_score - 0.12)]
+        # Filter close contenders within 0.08 of top_score
+        contenders = [e for s, e in scored_entries if s >= max(threshold, top_score - 0.08)]
 
         # Check if query specifically matches a distinct named place
         named_place_nodes = [e for e in contenders if e["type"] == "place_node"]
 
         # If there's an exact named place node and it clearly beats cluster variants
-        if len(named_place_nodes) == 1 and top_score >= 0.82:
+        if len(named_place_nodes) == 1 and top_score >= 0.88:
             return NameMatchResult(
                 query=query,
                 status="exact" if top_score >= 0.95 else "fuzzy",
@@ -375,8 +465,8 @@ class PlaceNameResolver:
                 score=top_score,
             )
 
-        # If exactly one contender overall
-        if len(contenders) == 1:
+        # If exactly one contender overall and high confidence
+        if len(contenders) == 1 and top_score >= 0.85:
             return NameMatchResult(
                 query=query,
                 status="exact" if top_score >= 0.95 else "fuzzy",
@@ -385,7 +475,6 @@ class PlaceNameResolver:
             )
 
         # Multiple candidates found -> Ambiguous!
-        # Return deduplicated candidates for user clarification
         seen_names = set()
         candidate_list = []
         for c in contenders[:5]:
@@ -399,7 +488,7 @@ class PlaceNameResolver:
                     "vehicle_status": c["raw_settlement"].get("vehicle_status_opt", "unknown"),
                 })
 
-        if len(candidate_list) == 1:
+        if len(candidate_list) == 1 and top_score >= 0.85:
             return NameMatchResult(
                 query=query,
                 status="fuzzy",

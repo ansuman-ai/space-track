@@ -149,11 +149,74 @@ class NumberGuard:
             # percentage (* 100)
             expanded.add(round(num * 100, 1))
 
-        # Always allow list numbering indices 1 to 10
-        for i in range(1, 11):
-            expanded.add(i)
-
         return expanded
+
+    def extract_semantic_number_sets(
+        self,
+        tool_outputs: List[Dict[str, Any]],
+    ) -> Dict[str, Set[Union[int, float]]]:
+        """Categorize allowed numbers into semantic entities: bridges, buildings, settlements, etc."""
+        categories: Dict[str, Set[Union[int, float]]] = {
+            "bridge": set(),
+            "building": set(),
+            "settlement": set(),
+            "distance": set(),
+            "area": set(),
+            "date": set(),
+        }
+
+        def _walk_category(obj: Any, current_cat: Optional[str] = None) -> None:
+            if isinstance(obj, (int, float)) and not isinstance(obj, bool):
+                if current_cat and current_cat in categories:
+                    categories[current_cat].add(obj)
+                    if isinstance(obj, float) and obj.is_integer():
+                        categories[current_cat].add(int(obj))
+            elif isinstance(obj, str):
+                # Date check
+                m_date = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", obj.strip())
+                if m_date:
+                    for g in m_date.groups():
+                        categories["date"].add(int(g))
+                for num_str in re.findall(r"\b\d+(?:\.\d+)?\b", obj):
+                    try:
+                        n = float(num_str) if "." in num_str else int(num_str)
+                        if current_cat and current_cat in categories:
+                            categories[current_cat].add(n)
+                    except ValueError:
+                        pass
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    k_low = k.lower()
+                    cat = current_cat
+                    if "bridge" in k_low:
+                        cat = "bridge"
+                    elif any(b in k_low for b in ["building", "bldg", "house"]):
+                        cat = "building"
+                    elif any(s in k_low for s in ["settlement", "cutoff", "cut_off", "village"]):
+                        cat = "settlement"
+                    elif any(d in k_low for d in ["dist", "length", "detour", "km", "_m"]):
+                        cat = "distance"
+                    elif "area" in k_low or "km2" in k_low:
+                        cat = "area"
+                    _walk_category(v, cat)
+            elif isinstance(obj, (list, tuple)):
+                for item in obj:
+                    _walk_category(item, current_cat)
+
+        for out in tool_outputs:
+            tname = out.get("tool", "")
+            base_cat = None
+            if "bridge" in tname:
+                base_cat = "bridge"
+            elif "damage" in tname or "building" in tname:
+                base_cat = "building"
+            elif "cutoff" in tname or "rescue" in tname or "settlement" in tname:
+                base_cat = "settlement"
+            elif "repair" in tname:
+                base_cat = "distance"
+            _walk_category(out, base_cat)
+
+        return categories
 
     def is_number_allowed(
         self,
@@ -164,10 +227,8 @@ class NumberGuard:
         if val in allowed_set:
             return True
         for a in allowed_set:
-            # Exact equality or within absolute tolerance
             if abs(val - a) <= self.tolerance:
                 return True
-            # Relative tolerance for larger numbers
             if abs(a) > 1.0 and abs(val - a) / abs(a) <= 0.005:
                 return True
         return False
@@ -179,8 +240,8 @@ class NumberGuard:
         extra_numbers: Optional[Set[Union[int, float]]] = None,
     ) -> GuardResult:
         """
-        Verify that all numbers in answer are present in tool outputs.
-        Returns GuardResult with is_valid=True or violating numbers.
+        Verify that all numbers in answer are present in tool outputs from this turn,
+        strictly tied to the semantic field/entity they describe.
         """
         extracted = self.extract_numbers(answer)
         if not extracted:
@@ -192,17 +253,47 @@ class NumberGuard:
             )
 
         allowed = self.extract_allowed_numbers(tool_outputs, extra_numbers)
-        violating = []
+        categories = self.extract_semantic_number_sets(tool_outputs)
+        violating: List[Union[int, float]] = []
+
+        # Convert Devanagari numerals for localized pattern checks
+        norm_answer = "".join(DEVA_DIGITS_MAP.get(ch, ch) for ch in answer)
 
         for num in extracted:
+            # 1. Base check: must exist in tool outputs
             if not self.is_number_allowed(num, allowed):
                 violating.append(num)
+                continue
+
+            # 2. Semantic entity check
+            num_pattern = str(num).rstrip(".0") if isinstance(num, float) and num.is_integer() else str(num)
+            # Find surrounding window around the number
+            matches = list(re.finditer(rf"\b{re.escape(num_pattern)}\b", norm_answer))
+            for m in matches:
+                start = max(0, m.start() - 35)
+                end = min(len(norm_answer), m.end() + 35)
+                window = norm_answer[start:end].lower()
+
+                # Bridges context check
+                if any(w in window for w in ["bridge", "bridges", "पुल", "पुलहरू"]):
+                    # Number must belong to bridge numbers or general tool output
+                    if categories["bridge"] and not self.is_number_allowed(num, categories["bridge"]):
+                        if not any(self.is_number_allowed(num, s) for s in [categories["date"], categories["distance"]]):
+                            violating.append(num)
+                            break
+
+                # Buildings context check
+                elif any(w in window for w in ["building", "buildings", "house", "houses", "भवन", "भवनहरू", "घर", "घरहरू", "मकान"]):
+                    if categories["building"] and not self.is_number_allowed(num, categories["building"]):
+                        if not any(self.is_number_allowed(num, s) for s in [categories["date"]]):
+                            violating.append(num)
+                            break
 
         is_valid = len(violating) == 0
         details = (
             "All numbers verified against tool outputs."
             if is_valid
-            else f"Unverified numbers found: {violating}."
+            else f"Unverified or semantically mismatched numbers found: {violating}."
         )
 
         return GuardResult(

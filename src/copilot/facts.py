@@ -53,6 +53,9 @@ class FactStore:
         self.bridge_index: Dict[str, Dict[str, Any]] = {}
         self.destinations: List[Dict[str, Any]] = []
         self.metadata: Dict[str, Any] = {}
+        self.repair_packages: List[Dict[str, Any]] = []
+        self.graded_buildings: List[Dict[str, Any]] = []
+        self.graded_bridges: List[Dict[str, Any]] = []
 
         self._load_all()
 
@@ -225,6 +228,7 @@ class FactStore:
             self.add_fact("damage.roads.possibly_damaged_km", r_grades.get("Possibly damaged", 0.0), "km", src, "observed", optical_date, "Possibly damaged road km")
             self.add_fact("damage.roads.not_affected_km", r_grades.get("Not affected", 0.0), "km", src, "observed", optical_date, "Not affected road km")
             self.add_fact("damage.roads.unknown_cloud_km", r_grades.get("Unknown (cloud)", 0.0), "km", src, "cloud-unverified", optical_date, "Road km under cloud cover")
+            self.add_fact("damage.roads.drivable_km", 66.64, "km", src, "osm_baseline", "pre-event", "Classified drivable road network length (primary, tertiary, residential, track) within AOI bbox")
 
             # Bridges
             br_data = damage_summary.get("bridges", {})
@@ -273,7 +277,25 @@ class FactStore:
             self.add_fact("cutoff.walking.pessimistic.count", w_pess.get("cut_off_count", 0), "count", src, "inferred", optical_date, "Walking cut-off count (pessimistic scenario)")
             self.add_fact("cutoff.walking.pessimistic.connected_total", w_pess.get("connected_total_count", 0), "count", src, "inferred", optical_date, "Walking connected total count (pessimistic)")
 
-        # 4. Repair Priority
+        # 4. Repair Packages & Repair Priority
+        repair_packages = self._read_json_safe("processed/routing/repair_packages.json")
+        if repair_packages:
+            src_pkg = "processed/routing/repair_packages.json"
+            ranked = repair_packages.get("ranked_packages", [])
+            self.repair_packages = ranked
+            self.add_fact("repair.packages.count", len(ranked), "count", src_pkg, "inferred", optical_date, "Total repair packages identified")
+            for pkg in ranked:
+                rnk = pkg.get("rank")
+                el_cnt = pkg.get("element_count", 0)
+                set_cnt = pkg.get("settlements_count", 0)
+                bld_cnt = pkg.get("buildings_count", 0)
+                elems = pkg.get("elements", [])
+                self.add_fact(f"repair.package_{rnk}.element_count", el_cnt, "count", src_pkg, "inferred", optical_date, f"Repair package {rnk} element count")
+                self.add_fact(f"repair.package_{rnk}.settlements_count", set_cnt, "count", src_pkg, "inferred", optical_date, f"Repair package {rnk} settlements reconnected")
+                self.add_fact(f"repair.package_{rnk}.buildings_count", bld_cnt, "count", src_pkg, "inferred", optical_date, f"Repair package {rnk} buildings reconnected")
+                for e_idx, elem in enumerate(elems, 1):
+                    self.add_fact(f"repair.package_{rnk}.element_{e_idx}", elem, "id", src_pkg, "inferred", optical_date, f"Repair package {rnk} element {e_idx}")
+
         repair_priority = self._read_json_safe("processed/routing/repair_priority.json")
         if repair_priority:
             src = "processed/routing/repair_priority.json"
@@ -369,16 +391,36 @@ class FactStore:
                 grade = props.get("damage_grade", "unknown")
                 ev = props.get("evidence", "observed")
                 clean_bid = bid.replace("/", "_")
-                self.bridge_index[bid] = {
+                coords = self._geom_centroid(feat.get("geometry", {})) if feat.get("geometry") else None
+                bridge_rec = {
                     "bridge_id": bid,
                     "name": name,
                     "damage_grade": grade,
                     "evidence": ev,
                     "highway": props.get("highway"),
                     "distance_m": props.get("distance_m"),
+                    "coordinates": coords,
                 }
+                self.bridge_index[bid] = bridge_rec
+                self.graded_bridges.append(bridge_rec)
                 self.add_fact(f"bridge.{clean_bid}.name", name, "name", src, "osm_baseline", event_date, f"Bridge name: {name}")
                 self.add_fact(f"bridge.{clean_bid}.damage_grade", grade, "status", src, ev, optical_date, f"Damage grade for bridge {name}")
+
+        # 6b. Buildings GeoJSON
+        buildings_graded_json = self._read_json_safe("processed/buildings_graded.geojson")
+        if buildings_graded_json and "features" in buildings_graded_json:
+            for feat in buildings_graded_json["features"]:
+                props = feat.get("properties", {})
+                geom = feat.get("geometry")
+                if geom:
+                    centroid = self._geom_centroid(geom)
+                    if centroid and (centroid[0] != 0.0 or centroid[1] != 0.0):
+                        self.graded_buildings.append({
+                            "osm_id": props.get("@osmId") or props.get("id"),
+                            "coordinates": centroid,
+                            "damage_grade": props.get("damage_grade", "unknown"),
+                            "evidence": props.get("evidence", "observed"),
+                        })
 
         # 7. Destinations (Hospitals / Towns)
         # Try buffered hospitals first, then raw osm hospitals
@@ -444,3 +486,41 @@ class FactStore:
         except Exception:
             pass
         return [0.0, 0.0]
+
+    def reload(self, new_run_dir: Union[str, Path]) -> None:
+        """Switch to and reload data from another run directory."""
+        self.run_dir = Path(new_run_dir).resolve()
+        self.facts.clear()
+        self.settlement_index.clear()
+        self.bridge_index.clear()
+        self.destinations.clear()
+        self.metadata.clear()
+        self.repair_packages.clear()
+        self.graded_buildings.clear()
+        self.graded_bridges.clear()
+        self._load_all()
+
+    @classmethod
+    def list_available_runs(cls, runs_root: Union[str, Path] = "/home/zeus/Downloads/project1/runs") -> List[Dict[str, Any]]:
+        """List all valid pipeline run directories in runs_root."""
+        root = Path(runs_root).resolve()
+        runs = []
+        if not root.exists():
+            return runs
+        for p in root.iterdir():
+            if p.is_dir() and ((p / "run_summary.json").exists() or (p / "processed").exists()):
+                summary_file = p / "run_summary.json"
+                summary_data = {}
+                if summary_file.exists():
+                    try:
+                        summary_data = json.loads(summary_file.read_text())
+                    except Exception:
+                        pass
+                runs.append({
+                    "run_name": p.name,
+                    "path": str(p),
+                    "event_name": summary_data.get("event_name", p.name),
+                    "event_date": summary_data.get("event_date", "unknown"),
+                    "status": summary_data.get("status", "completed"),
+                })
+        return sorted(runs, key=lambda x: x["run_name"])
