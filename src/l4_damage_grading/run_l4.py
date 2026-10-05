@@ -234,10 +234,10 @@ def run_layer4(
             }
         },
         "outputs": {
-            "buildings_graded": b_out_file,
-            "roads_graded": r_out_file,
-            "bridges_graded": br_out_file,
-            "quicklook": out_quicklook
+            "buildings_graded": "processed/buildings_graded.geojson",
+            "roads_graded": "processed/roads_graded.geojson",
+            "bridges_graded": "processed/bridges_graded.geojson",
+            "quicklook": "processed/quicklook_l4.png"
         }
     }
 

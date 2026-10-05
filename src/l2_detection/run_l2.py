@@ -701,13 +701,13 @@ def run_layer2(
             "control_inferred": ctrl_inf_count
         },
         "outputs": {
-            "hazard_raster": out_tif,
-            "source_mask": out_source_tif,
-            "hazard_polygons": out_geojson,
-            "quicklook": out_quicklook,
-            "quicklook_zoom": out_quicklook.replace("quicklook_layer2.png", "quicklook_zoom.png"),
-            "control_hazard_raster": ctrl_out_tif,
-            "control_quicklook": ctrl_quicklook
+            "hazard_raster": "processed/hazard_classes.tif",
+            "source_mask": "processed/source_mask.tif",
+            "hazard_polygons": "processed/hazard_polygons.geojson",
+            "quicklook": "processed/quicklook_layer2.png",
+            "quicklook_zoom": "processed/quicklook_zoom.png",
+            "control_hazard_raster": "control/processed/hazard_classes.tif",
+            "control_quicklook": "control/processed/quicklook_layer2.png"
         }
     }
 

@@ -676,17 +676,17 @@ def run_pipeline(
         },
         "layer_performance": layer_logs,
         "outputs": {
-            "hazard_classes_tif": str(processed_dir / "hazard_classes.tif"),
-            "hazard_polygons_geojson": str(processed_dir / "hazard_polygons.geojson"),
-            "l2_quicklook": str(processed_dir / "quicklook_layer2.png"),
-            "buildings_graded_geojson": str(processed_dir / "buildings_graded.geojson"),
-            "bridges_graded_geojson": str(processed_dir / "bridges_graded.geojson"),
-            "roads_graded_geojson": str(processed_dir / "roads_graded.geojson"),
-            "l4_quicklook": str(processed_dir / "quicklook_l4.png"),
-            "settlements_geojson": str(processed_dir / "routing" / "settlements.geojson"),
-            "repair_priority_json": str(processed_dir / "routing" / "repair_priority.json"),
-            "repair_packages_json": str(processed_dir / "routing" / "repair_packages.json"),
-            "l5_quicklook": str(processed_dir / "routing" / "quicklook_l5.png")
+            "hazard_classes_tif": "processed/hazard_classes.tif",
+            "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+            "l2_quicklook": "processed/quicklook_layer2.png",
+            "buildings_graded_geojson": "processed/buildings_graded.geojson",
+            "bridges_graded_geojson": "processed/bridges_graded.geojson",
+            "roads_graded_geojson": "processed/roads_graded.geojson",
+            "l4_quicklook": "processed/quicklook_l4.png",
+            "settlements_geojson": "processed/routing/settlements.geojson",
+            "repair_priority_json": "processed/routing/repair_priority.json",
+            "repair_packages_json": "processed/routing/repair_packages.json",
+            "l5_quicklook": "processed/routing/quicklook_l5.png"
         }
     }
 

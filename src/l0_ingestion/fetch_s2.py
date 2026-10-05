@@ -1,29 +1,24 @@
 """
-Sentinel-2 Optical Data Ingestion Module for Layer 0.
-Searches and downloads pre-event, post-event (with configurable extended search window),
-control, and seasonal Sentinel-2 L2A scenes via Planetary Computer STAC.
-Applies s2_max_scenes and s2_search_timeout_s limits to avoid hanging or unbounded downloads.
+Sentinel-2 Optical L2A Data Fetcher for Layer 0 Ingestion.
+Queries Planetary Computer STAC, applies multi-temporal filtering (pre, post, control, seasonal),
+and downloads cropped spectral bands and metadata for active footprints.
 """
 
 import os
-import sys
-import json
 import time
-import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Optional
+import numpy as np
 import requests
 import rasterio
 from rasterio.windows import from_bounds
-from rasterio.warp import transform_bounds
-import numpy as np
+import logging
 
-# Clear proxy variables for direct STAC access
-for _k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
-    os.environ.pop(_k, None)
+from .gdal_env import get_shared_gdal_env
 
 logger = logging.getLogger("fetch_s2")
+
 http_client = requests.Session()
 http_client.trust_env = False
 
@@ -75,6 +70,148 @@ def search_s2_stac(
         return []
 
 
+def get_orbit_str(feat: Dict[str, Any]) -> str:
+    """Extract relative orbit string (e.g. 'R119', 'R076') from STAC properties."""
+    props = feat.get("properties", {})
+    orbit = props.get("sat:relative_orbit") or props.get("s2:relative_orbit", "")
+    return f"R{orbit:03d}" if isinstance(orbit, int) else (f"R{orbit}" if orbit else "R000")
+
+
+def select_s2_scenes(
+    bbox: List[float],
+    event_date: str,
+    s2_pre_days: int = 15,
+    s2_post_days: int = 15,
+    s2_post_max_days: int = 45,
+    max_cloud_cover_pct: Optional[float] = None,
+    s2_max_scenes: int = 10,
+    s2_search_timeout_s: float = 60.0,
+    enable_seasonal_control: bool = True
+) -> List[Tuple[str, Dict[str, Any]]]:
+    """
+    Deterministic Sentinel-2 scene selection rules for disaster impact assessment.
+
+    Selection Rules:
+    1. Search Windows:
+       - Post-event: [event_date, event_date + post_max_days]
+       - Pre-event: [event_date - pre_days, event_date]
+       - Pre-event Control: [event_date - 2*pre_days, event_date - pre_days]
+       - Seasonal Pre: [event_date - 365d - pre_days, event_date - 365d]
+       - Seasonal Post: [event_date - 365d, event_date - 365d + post_days]
+    2. Cloud Coverage Filtering:
+       - If max_cloud_cover_pct is specified, scenes with properties['eo:cloud_cover'] > threshold are excluded.
+    3. Deterministic Sorting:
+       - Post-event: ASCENDING by datetime (earliest post-event observation prioritized).
+       - Pre-event & Control: DESCENDING by datetime (observation closest to event date prioritized).
+       - Seasonal Pre: DESCENDING by datetime.
+       - Seasonal Post: ASCENDING by datetime.
+    4. Orbit Matching & Scene Caps:
+       - Relative orbit (RXXX) extracted from STAC properties.
+       - Post-event: up to 2 earliest clear scenes per relative orbit.
+       - Pre-event: 1 closest clear scene per relative orbit.
+       - Control: 1 closest clear scene per relative orbit.
+       - Seasonal: 1 scene per relative orbit for seasonal pre and post.
+    5. Seasonal Control Guard:
+       - Included only if enable_seasonal_control is True.
+    """
+    ev_dt = datetime.fromisoformat(event_date)
+    logger.info(f"Selecting Sentinel-2 L2A scenes for bbox {bbox}, event {event_date}...")
+
+    pre_start = (ev_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
+    pre_end = ev_dt.strftime("%Y-%m-%dT23:59:59Z")
+
+    post_start = ev_dt.strftime("%Y-%m-%dT00:00:00Z")
+    post_end = (ev_dt + timedelta(days=s2_post_max_days)).strftime("%Y-%m-%dT23:59:59Z")
+
+    ctrl_start = (ev_dt - timedelta(days=2 * s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
+    ctrl_end = (ev_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT23:59:59Z")
+
+    def _filter_cloud(feats):
+        if max_cloud_cover_pct is None:
+            return feats
+        return [f for f in feats if float(f.get("properties", {}).get("eo:cloud_cover", 100.0)) <= max_cloud_cover_pct]
+
+    t_search_0 = time.time()
+    post_feats = search_s2_stac(bbox, post_start, post_end, timeout_s=s2_search_timeout_s)
+    post_feats = _filter_cloud(post_feats)
+    post_feats = sorted(post_feats, key=lambda x: x.get("properties", {}).get("datetime", ""))
+    if len(post_feats) > s2_max_scenes:
+        post_feats = post_feats[:s2_max_scenes]
+
+    pre_feats = search_s2_stac(bbox, pre_start, pre_end, timeout_s=s2_search_timeout_s)
+    pre_feats = _filter_cloud(pre_feats)
+    pre_feats = sorted(pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
+    if len(pre_feats) > s2_max_scenes:
+        pre_feats = pre_feats[:s2_max_scenes]
+
+    ctrl_feats = search_s2_stac(bbox, ctrl_start, ctrl_end, timeout_s=s2_search_timeout_s)
+    ctrl_feats = _filter_cloud(ctrl_feats)
+    ctrl_feats = sorted(ctrl_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
+    if len(ctrl_feats) > s2_max_scenes:
+        ctrl_feats = ctrl_feats[:s2_max_scenes]
+
+    selected = []
+
+    # 1. Post: sort ascending by datetime, pick up to 2 per orbit
+    post_by_orb = {}
+    for f in post_feats:
+        orb = get_orbit_str(f)
+        post_by_orb.setdefault(orb, []).append(f)
+    for orb, f_list in post_by_orb.items():
+        for f in f_list[:2]:
+            selected.append(("post", f))
+
+    # 2. Pre: sort descending by datetime, pick 1 per orbit
+    pre_by_orb = {}
+    for f in pre_feats:
+        orb = get_orbit_str(f)
+        if orb not in pre_by_orb:
+            pre_by_orb[orb] = f
+            selected.append(("pre", f))
+
+    # 3. Ctrl: sort descending by datetime, pick 1 per orbit
+    ctrl_by_orb = {}
+    for f in ctrl_feats:
+        orb = get_orbit_str(f)
+        if orb not in ctrl_by_orb:
+            ctrl_by_orb[orb] = f
+            selected.append(("ctrl", f))
+
+    # 4. Seasonal control (if enabled)
+    if enable_seasonal_control:
+        seas_dt = ev_dt - timedelta(days=365)
+        seas_pre_start = (seas_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
+        seas_pre_end = seas_dt.strftime("%Y-%m-%dT23:59:59Z")
+        seas_post_start = seas_dt.strftime("%Y-%m-%dT00:00:00Z")
+        seas_post_end = (seas_dt + timedelta(days=s2_post_days)).strftime("%Y-%m-%dT23:59:59Z")
+
+        seas_pre_feats = search_s2_stac(bbox, seas_pre_start, seas_pre_end, timeout_s=s2_search_timeout_s)
+        seas_pre_feats = _filter_cloud(seas_pre_feats)
+        seas_pre_feats = sorted(seas_pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
+
+        seas_post_feats = search_s2_stac(bbox, seas_post_start, seas_post_end, timeout_s=s2_search_timeout_s)
+        seas_post_feats = _filter_cloud(seas_post_feats)
+        seas_post_feats = sorted(seas_post_feats, key=lambda x: x.get("properties", {}).get("datetime", ""))
+
+        seas_pre_by_orb = {}
+        for f in seas_pre_feats:
+            orb = get_orbit_str(f)
+            if orb not in seas_pre_by_orb:
+                seas_pre_by_orb[orb] = f
+                selected.append(("seas_pre", f))
+
+        seas_post_by_orb = {}
+        for f in seas_post_feats:
+            orb = get_orbit_str(f)
+            if orb not in seas_post_by_orb:
+                seas_post_by_orb[orb] = f
+                selected.append(("seas_post", f))
+
+    logger.info(f"S2 scene selection completed in {round(time.time() - t_search_0, 2)}s: "
+                f"{len(selected)} candidate scenes selected across categories.")
+    return selected
+
+
 def fetch_s2(
     bbox: List[float],
     event_date: str,
@@ -87,6 +224,7 @@ def fetch_s2(
     s2_search_timeout_s: float = 60.0,
     s2_scene_timeout_s: float = 40.0,
     s2_total_budget_s: float = 120.0,
+    enable_seasonal_control: bool = True,
     force: bool = False
 ) -> Dict[str, Any]:
     """
@@ -122,59 +260,17 @@ def fetch_s2(
                 "scenes": [pf.name for pf in proj_files]
             }
 
-    ev_dt = datetime.fromisoformat(event_date)
-    logger.info(f"Searching Sentinel-2 L2A scenes for bbox {bbox}, event {event_date}...")
+    selected_scenes_to_fetch = select_s2_scenes(
+        bbox=bbox,
+        event_date=event_date,
+        s2_pre_days=s2_pre_days,
+        s2_post_days=s2_post_days,
+        s2_post_max_days=s2_post_max_days,
+        s2_max_scenes=s2_max_scenes,
+        s2_search_timeout_s=s2_search_timeout_s,
+        enable_seasonal_control=enable_seasonal_control
+    )
 
-    # Define search intervals
-    pre_start = (ev_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
-    pre_end = ev_dt.strftime("%Y-%m-%dT23:59:59Z")
-
-    # Extended post window: search up to s2_post_max_days
-    post_start = ev_dt.strftime("%Y-%m-%dT00:00:00Z")
-    post_end = (ev_dt + timedelta(days=s2_post_max_days)).strftime("%Y-%m-%dT23:59:59Z")
-
-    ctrl_start = (ev_dt - timedelta(days=2 * s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
-    ctrl_end = (ev_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT23:59:59Z")
-
-    seas_dt = ev_dt - timedelta(days=365)
-    seas_pre_start = (seas_dt - timedelta(days=s2_pre_days)).strftime("%Y-%m-%dT00:00:00Z")
-    seas_pre_end = seas_dt.strftime("%Y-%m-%dT23:59:59Z")
-    seas_post_start = seas_dt.strftime("%Y-%m-%dT00:00:00Z")
-    seas_post_end = (seas_dt + timedelta(days=s2_post_days)).strftime("%Y-%m-%dT23:59:59Z")
-
-    t_search_0 = time.time()
-    logger.info(f"Searching post-event scenes in extended window [{post_start} -> {post_end}] (timeout: {s2_search_timeout_s}s)...")
-    post_feats = search_s2_stac(bbox, post_start, post_end, timeout_s=s2_search_timeout_s)
-
-    # Sort post_feats ASCENDING by datetime (earliest after event) before slicing s2_max_scenes
-    post_feats = sorted(post_feats, key=lambda x: x.get("properties", {}).get("datetime", ""))
-    if len(post_feats) > s2_max_scenes:
-        logger.info(f"S2 extended post search hit limit s2_max_scenes={s2_max_scenes}; using {s2_max_scenes} earliest scenes found.")
-        post_feats = post_feats[:s2_max_scenes]
-    else:
-        logger.info(f"Found {len(post_feats)} post-event S2 scenes.")
-
-    pre_feats = search_s2_stac(bbox, pre_start, pre_end, timeout_s=s2_search_timeout_s)
-    pre_feats = sorted(pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
-    if len(pre_feats) > s2_max_scenes:
-        pre_feats = pre_feats[:s2_max_scenes]
-
-    ctrl_feats = search_s2_stac(bbox, ctrl_start, ctrl_end, timeout_s=s2_search_timeout_s)
-    ctrl_feats = sorted(ctrl_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
-    if len(ctrl_feats) > s2_max_scenes:
-        ctrl_feats = ctrl_feats[:s2_max_scenes]
-
-    seas_pre_feats = search_s2_stac(bbox, seas_pre_start, seas_pre_end, timeout_s=s2_search_timeout_s)
-    seas_pre_feats = sorted(seas_pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
-
-    seas_post_feats = search_s2_stac(bbox, seas_post_start, seas_post_end, timeout_s=s2_search_timeout_s)
-    seas_post_feats = sorted(seas_post_feats, key=lambda x: x.get("properties", {}).get("datetime", ""))
-
-    logger.info(f"S2 search completed in {round(time.time() - t_search_0, 2)}s: "
-                f"pre={len(pre_feats)}, post={len(post_feats)}, ctrl={len(ctrl_feats)}, "
-                f"seas_pre={len(seas_pre_feats)}, seas_post={len(seas_post_feats)}")
-
-    from .gdal_env import get_shared_gdal_env
     # Token retrieval
     token = get_s2_sas_token()
     env = get_shared_gdal_env()
@@ -186,62 +282,13 @@ def fetch_s2(
     target_height = int(round((utm_bounds[3] - utm_bounds[1]) / 10.0))
     target_shape = (target_height, target_width)
 
-    def _get_orbit_str(feat):
-        props = feat.get("properties", {})
-        orbit = props.get("sat:relative_orbit") or props.get("s2:relative_orbit", "")
-        return f"R{orbit:03d}" if isinstance(orbit, int) else (f"R{orbit}" if orbit else "R000")
-
-    # Select best scenes per orbit in priority order (post, then pre, then ctrl, then seas)
-    selected_scenes_to_fetch = []
-
-    # 1. Post: sort ascending by datetime (earliest after event), pick up to 2 per orbit
-    post_by_orb = {}
-    for f in post_feats:
-        orb = _get_orbit_str(f)
-        post_by_orb.setdefault(orb, []).append(f)
-    for orb, f_list in post_by_orb.items():
-        for f in f_list[:2]:
-            selected_scenes_to_fetch.append(("post", f))
-
-    # 2. Pre: sort descending by datetime (closest to event), pick 1 per orbit
-    pre_by_orb = {}
-    for f in pre_feats:
-        orb = _get_orbit_str(f)
-        if orb not in pre_by_orb:
-            pre_by_orb[orb] = f
-            selected_scenes_to_fetch.append(("pre", f))
-
-    # 3. Ctrl: sort descending by datetime (closest to pre window), pick 1 per orbit
-    ctrl_by_orb = {}
-    for f in ctrl_feats:
-        orb = _get_orbit_str(f)
-        if orb not in ctrl_by_orb:
-            ctrl_by_orb[orb] = f
-            selected_scenes_to_fetch.append(("ctrl", f))
-
-    # 4. Seasonal pre: pick 1 per orbit
-    seas_pre_by_orb = {}
-    for f in seas_pre_feats:
-        orb = _get_orbit_str(f)
-        if orb not in seas_pre_by_orb:
-            seas_pre_by_orb[orb] = f
-            selected_scenes_to_fetch.append(("seas_pre", f))
-
-    # 5. Seasonal post: pick 1 per orbit
-    seas_post_by_orb = {}
-    for f in seas_post_feats:
-        orb = _get_orbit_str(f)
-        if orb not in seas_post_by_orb:
-            seas_post_by_orb[orb] = f
-            selected_scenes_to_fetch.append(("seas_post", f))
-
     import concurrent.futures
 
     def _fetch_scene_bands(item_tuple):
         prefix, feat = item_tuple
         scene_id = feat.get("id", "")
         props = feat.get("properties", {})
-        orbit_str = _get_orbit_str(feat)
+        orbit_str = get_orbit_str(feat)
 
         save_fn = out_path / f"{prefix}_{orbit_str}_{scene_id[:30]}.npz"
         if save_fn.exists():
