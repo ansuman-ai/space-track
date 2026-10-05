@@ -152,14 +152,20 @@ def select_s2_scenes(
 
     selected = []
 
-    # 1. Post: sort ascending by datetime, pick up to 2 per orbit
+    # 1. Post: sort ascending by datetime, pick up to 2 distinct passes per orbit
     post_by_orb = {}
     for f in post_feats:
         orb = get_orbit_str(f)
         post_by_orb.setdefault(orb, []).append(f)
     for orb, f_list in post_by_orb.items():
-        for f in f_list[:2]:
-            selected.append(("post", f))
+        seen_dts = set()
+        for f in f_list:
+            dt_key = f.get("properties", {}).get("datetime", "")[:16]
+            if dt_key not in seen_dts:
+                seen_dts.add(dt_key)
+                selected.append(("post", f))
+                if len(seen_dts) >= 2:
+                    break
 
     # 2. Pre: sort descending by datetime, pick 1 per orbit
     pre_by_orb = {}
@@ -347,7 +353,9 @@ def fetch_s2(
             if "visual" not in bands and "B03" in bands and "B02" in bands:
                 r, g, b = bands["B04"], bands["B03"], bands["B02"]
                 bands["visual"] = np.clip(np.stack([r, g, b], axis=0) / 3000.0 * 255.0, 0, 255).astype(np.uint8)
-            np.savez_compressed(save_fn, **bands)
+            tmp_fn = save_fn.with_suffix(".tmp.npz")
+            np.savez_compressed(tmp_fn, **bands)
+            os.replace(tmp_fn, save_fn)
             logger.info(f"Saved S2 scene to {save_fn.name}")
             return save_fn.name
         return None
