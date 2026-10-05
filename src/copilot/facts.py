@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
@@ -96,18 +97,34 @@ class FactStore:
         return results
 
     def all_numbers(self) -> Set[Union[int, float]]:
-        """Extract all numeric values across all stored facts."""
+        """Extract all numeric values across all stored facts and metadata."""
         nums: Set[Union[int, float]] = set()
+
+        def _add_num(v: Any) -> None:
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                nums.add(v)
+                if isinstance(v, float) and v.is_integer():
+                    nums.add(int(v))
+            elif isinstance(v, str):
+                for match in re.findall(r"\b\d+(?:\.\d+)?\b", v):
+                    try:
+                        n = float(match) if "." in match else int(match)
+                        nums.add(n)
+                    except ValueError:
+                        pass
+            elif isinstance(v, (list, tuple)):
+                for item in v:
+                    _add_num(item)
+            elif isinstance(v, dict):
+                for sub in v.values():
+                    _add_num(sub)
+
         for fact in self.facts.values():
-            val = fact.value
-            if isinstance(val, (int, float)) and not isinstance(val, bool):
-                nums.add(val)
-                if isinstance(val, float) and val.is_integer():
-                    nums.add(int(val))
-            elif isinstance(val, list):
-                for item in val:
-                    if isinstance(item, (int, float)) and not isinstance(item, bool):
-                        nums.add(item)
+            _add_num(fact.value)
+
+        for meta_val in self.metadata.values():
+            _add_num(meta_val)
+
         return nums
 
     def _read_json_safe(self, rel_path: str) -> Optional[Dict[str, Any]]:
