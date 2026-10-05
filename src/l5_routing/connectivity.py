@@ -58,6 +58,65 @@ def find_breaking_edge(
     return all_b[0] if all_b else None
 
 
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
+
+
+def _solve_scenario_csgraph(
+    G: nx.Graph,
+    nodes_list: List[Any],
+    node_to_idx: Dict[Any, int],
+    dest_idx: int,
+    valid_d_nodes: Set[Any],
+    blocked_grades: Optional[Set[str]] = None
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Solves multi-source Dijkstra from __DEST__ using scipy.sparse.csgraph.
+    Returns (dist_arr, pred_arr).
+    """
+    rows = []
+    cols = []
+    weights = []
+    for u, v, data in G.edges(data=True):
+        grade = data.get("damage_grade", "Not affected")
+        if blocked_grades and grade in blocked_grades:
+            continue
+        u_idx = node_to_idx[u]
+        v_idx = node_to_idx[v]
+        w = float(data.get("weight", 0.0))
+        rows.extend([u_idx, v_idx])
+        cols.extend([v_idx, u_idx])
+        weights.extend([w, w])
+
+    for d_node in valid_d_nodes:
+        d_idx = node_to_idx[d_node]
+        rows.extend([dest_idx, d_idx])
+        cols.extend([d_idx, dest_idx])
+        weights.extend([0.0, 0.0])
+
+    n_total = len(nodes_list) + 1
+    csr = csr_matrix((weights, (rows, cols)), shape=(n_total, n_total), dtype=np.float64)
+    dist_arr, pred_arr = dijkstra(csr, directed=False, indices=dest_idx, return_predecessors=True)
+    return dist_arr, pred_arr
+
+
+def _reconstruct_path_to_dest(
+    s_idx: int,
+    dest_idx: int,
+    nodes_list: List[Any],
+    pred_arr: np.ndarray
+) -> List[Any]:
+    path = []
+    curr = s_idx
+    while curr != dest_idx and curr != -9999:
+        path.append(nodes_list[curr])
+        curr = pred_arr[curr]
+    if curr == dest_idx:
+        path.append("__DEST__")
+        return path
+    return []
+
+
 def evaluate_network_connectivity(
     G: nx.Graph,
     settlements_gdf: gpd.GeoDataFrame,
@@ -66,7 +125,8 @@ def evaluate_network_connectivity(
     max_snap_distance_m: float = 500.0
 ) -> Dict[str, Any]:
     """
-    Computes pre-event and post-event connectivity across optimistic and pessimistic scenarios.
+    Computes pre-event and post-event connectivity across optimistic and pessimistic scenarios
+    using multi-source Dijkstra from all destinations via scipy.sparse.csgraph.
     """
     nodes_list = list(G.nodes)
     if len(nodes_list) == 0:
@@ -74,6 +134,8 @@ def evaluate_network_connectivity(
 
     nodes_arr = np.array(nodes_list)
     nodes_tree = cKDTree(nodes_arr)
+    node_to_idx = {n: i for i, n in enumerate(nodes_list)}
+    dest_idx = len(nodes_list)
 
     # 1. Snap Destinations
     d_pts = np.array([(d.geometry.x, d.geometry.y) for _, d in destinations_gdf.iterrows()])
@@ -83,36 +145,12 @@ def evaluate_network_connectivity(
         if dist <= max_snap_distance_m:
             valid_d_nodes.add(nodes_list[d_indices[i]])
 
-    # 2. Setup Graphs
-    # Pre-event:
-    G_pre = G.copy()
-    for d_node in valid_d_nodes:
-        G_pre.add_edge("__DEST__", d_node, weight=0.0)
+    # 2. Multi-source Dijkstra from __DEST__ using scipy.sparse.csgraph
+    dist_pre, pred_pre = _solve_scenario_csgraph(G, nodes_list, node_to_idx, dest_idx, valid_d_nodes, blocked_grades=None)
+    dist_opt, pred_opt = _solve_scenario_csgraph(G, nodes_list, node_to_idx, dest_idx, valid_d_nodes, blocked_grades={"Destroyed"})
+    dist_pess, pred_pess = _solve_scenario_csgraph(G, nodes_list, node_to_idx, dest_idx, valid_d_nodes, blocked_grades={"Destroyed", "Possibly damaged"})
 
-    # Post-event Optimistic (Destroyed removed, Possibly damaged passable):
-    G_opt = G.copy()
-    for u, v, data in list(G_opt.edges(data=True)):
-        if data.get("damage_grade") == "Destroyed":
-            G_opt.remove_edge(u, v)
-    for d_node in valid_d_nodes:
-        if d_node in G_opt:
-            G_opt.add_edge("__DEST__", d_node, weight=0.0)
-
-    # Post-event Pessimistic (Destroyed + Possibly damaged removed):
-    G_pess = G.copy()
-    for u, v, data in list(G_pess.edges(data=True)):
-        if data.get("damage_grade") in ["Destroyed", "Possibly damaged"]:
-            G_pess.remove_edge(u, v)
-    for d_node in valid_d_nodes:
-        if d_node in G_pess:
-            G_pess.add_edge("__DEST__", d_node, weight=0.0)
-
-    # 3. Multi-source Dijkstra from __DEST__
-    dist_pre = nx.single_source_dijkstra_path_length(G_pre, "__DEST__")
-    dist_opt = nx.single_source_dijkstra_path_length(G_opt, "__DEST__")
-    dist_pess = nx.single_source_dijkstra_path_length(G_pess, "__DEST__")
-
-    # 4. Evaluate Each Settlement
+    # 3. Evaluate Each Settlement
     s_results = []
     cut_off_optimistic = []
     cut_off_pessimistic = []
@@ -156,7 +194,7 @@ def evaluate_network_connectivity(
             continue
 
         s_node = nodes_list[n_idx]
-        can_pre = s_node in dist_pre
+        can_pre = not np.isinf(dist_pre[n_idx])
 
         if not can_pre:
             res = {
@@ -182,23 +220,23 @@ def evaluate_network_connectivity(
             no_access_list.append(s_id)
             continue
 
-        pre_dist_m = float(dist_pre[s_node])
+        pre_dist_m = float(dist_pre[n_idx])
         pre_dist_km = round(pre_dist_m / 1000.0, 3)
-        path_from_s = nx.shortest_path(G_pre, s_node, "__DEST__", weight="weight")
+        path_from_s = _reconstruct_path_to_dest(n_idx, dest_idx, nodes_list, pred_pre)
 
         # Optimistic scenario
-        can_opt = s_node in dist_opt
+        can_opt = not np.isinf(dist_opt[n_idx])
         if can_opt:
-            post_dist_opt_km = round(float(dist_opt[s_node]) / 1000.0, 3)
+            post_dist_opt_km = round(float(dist_opt[n_idx]) / 1000.0, 3)
             detour_opt_km = round(max(0.0, post_dist_opt_km - pre_dist_km), 3)
             breaks_opt = []
             broken_opt = None
 
             # Verify if post-event shortest route contains cloud-covered edges
-            path_opt = nx.shortest_path(G_opt, s_node, "__DEST__", weight="weight")
+            path_opt = _reconstruct_path_to_dest(n_idx, dest_idx, nodes_list, pred_opt)
             has_cloud_opt = False
             for i in range(len(path_opt) - 2):  # exclude __DEST__
-                e = G_opt.get_edge_data(path_opt[i], path_opt[i + 1])
+                e = G.get_edge_data(path_opt[i], path_opt[i + 1])
                 if e and e.get("damage_grade") == "Unknown (cloud)":
                     has_cloud_opt = True
                     break
@@ -227,17 +265,17 @@ def evaluate_network_connectivity(
             })
 
         # Pessimistic scenario
-        can_pess = s_node in dist_pess
+        can_pess = not np.isinf(dist_pess[n_idx])
         if can_pess:
-            post_dist_pess_km = round(float(dist_pess[s_node]) / 1000.0, 3)
+            post_dist_pess_km = round(float(dist_pess[n_idx]) / 1000.0, 3)
             detour_pess_km = round(max(0.0, post_dist_pess_km - pre_dist_km), 3)
             breaks_pess = []
             broken_pess = None
 
-            path_pess = nx.shortest_path(G_pess, s_node, "__DEST__", weight="weight")
+            path_pess = _reconstruct_path_to_dest(n_idx, dest_idx, nodes_list, pred_pess)
             has_cloud_pess = False
             for i in range(len(path_pess) - 2):  # exclude __DEST__
-                e = G_pess.get_edge_data(path_pess[i], path_pess[i + 1])
+                e = G.get_edge_data(path_pess[i], path_pess[i + 1])
                 if e and e.get("damage_grade") == "Unknown (cloud)":
                     has_cloud_pess = True
                     break

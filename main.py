@@ -23,11 +23,12 @@ from typing import List, Dict, Any, Optional
 import yaml
 import numpy as np
 
-# Pipeline modules
+import concurrent.futures
 from src.l0_ingestion.run_l0 import run_layer0
 from src.l0_ingestion.fetch_osm import fetch_osm
 from src.l0_ingestion.fetch_dem import fetch_dem
 from src.l0_ingestion.fetch_s1 import fetch_pair
+from src.l0_ingestion.fetch_s2 import fetch_s2
 from src.l5_routing.fetch_data import fetch_buffered_osm
 from src.l1_preprocessing.run_l1 import run_layer1
 from src.l2_detection.run_l2 import run_layer2
@@ -40,6 +41,35 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("main_pipeline")
+
+
+def update_status_file(
+    status_file: Path,
+    stage: str,
+    progress: float,
+    elapsed_s: float,
+    current_step: str,
+    outputs: Optional[Dict[str, Any]] = None,
+    metrics: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None
+):
+    """Writes polling status file for UI/dashboard monitoring."""
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "stage": stage,
+        "progress_pct": round(progress * 100, 1),
+        "elapsed_seconds": round(elapsed_s, 2),
+        "current_step": current_step,
+        "outputs": outputs or {},
+        "metrics": metrics or {}
+    }
+    if error:
+        payload["error"] = error
+    try:
+        with open(status_file, "w") as f:
+            json.dump(payload, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not write status file: {e}")
 
 
 def get_peak_ram_mb() -> float:
@@ -71,7 +101,8 @@ def run_pipeline(
     bbox: List[float],
     event_date: str,
     out_dir: str,
-    config_path: str = "configs/default.yaml"
+    config_path: str = "configs/default.yaml",
+    no_cache: bool = False
 ) -> Dict[str, Any]:
     """
     Executes full end-to-end disaster impact assessment pipeline (L0 -> L5).
@@ -120,7 +151,7 @@ def run_pipeline(
 
     # Check for pre-existing cached data in project data/ directory for this bbox/date
     data_dir = Path("data").resolve()
-    if data_dir.exists() and (raw_dir / "s1" / "pre.tif").exists() is False:
+    if not no_cache and data_dir.exists() and (raw_dir / "s1" / "pre.tif").exists() is False:
         cached_meta = data_dir / "raw" / "s1" / "meta.json"
         if cached_meta.exists():
             try:
@@ -140,48 +171,79 @@ def run_pipeline(
             except Exception as e:
                 logger.warning(f"Could not reuse cached data: {e}")
 
+    status_file = out_path / "status.json"
+    update_status_file(status_file, "RUNNING", 0.05, 0.0, "Starting Pipeline Execution")
+
     # ==================================================================
-    # LAYER 0: DATA INGESTION
+    # LAYER 0: DATA INGESTION (PARALLEL: S1, DEM, OSM BBOX, OSM BUFFER, S2)
     # ==================================================================
     l0_start_time = datetime.now()
     t_l0_0 = time.time()
     size_raw_before = get_dir_size_mb(raw_dir) + get_dir_size_mb(ctrl_dir)
 
-    logger.info("\n>>> EXECUTING LAYER 0: DATA INGESTION")
+    logger.info("\n>>> EXECUTING LAYER 0: DATA INGESTION (PARALLEL)")
     s1_pre_path = raw_dir / "s1" / "pre.tif"
     s1_post_path = raw_dir / "s1" / "post.tif"
     s1_meta_path = raw_dir / "s1" / "meta.json"
     dem_cands = [raw_dir / "dem" / "dem_buffered.tif", raw_dir / "dem" / "dem_glo30_buffered.tif", raw_dir / "dem" / "dem.tif"]
     dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
+    s2_cache_path = interim_dir / "s2_cache"
 
     l0_notes = []
     try:
-        # Step 0a: Sentinel-1 RTC event & control pair
-        if not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
-            logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
-            fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir))
-        else:
-            logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+        def _task_s1():
+            if not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
+                logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
+                fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir))
+            else:
+                logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
 
-        # Step 0b: Copernicus DEM GLO-30
-        if not dem_file.exists():
-            logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
-            fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0))
-        else:
-            logger.info(f"Using verified existing DEM in {dem_file}")
+        def _task_dem():
+            if not dem_file.exists():
+                logger.info("Fetching Copernicus DEM GLO-30 via STAC...")
+                fetch_dem(bbox, str(raw_dir / "dem"), buffer_km=prep_cfg.get("dem_buffer_km", 10.0))
+            else:
+                logger.info(f"Using verified existing DEM in {dem_file}")
 
-        # Step 0c: Pre-event OSM inside bbox
-        fetch_osm(bbox, event_date, str(raw_dir / "osm"))
+        def _task_osm_bbox():
+            logger.info("Fetching pre-event OSM inside bbox...")
+            fetch_osm(bbox, event_date, str(raw_dir / "osm"))
 
-        # Step 0d: Pre-event buffered OSM for L5 routing
-        buf_osm_dir = raw_dir / "osm_buffered"
-        fetch_buffered_osm(
-            bbox=bbox,
-            buffer_km=rt_cfg.get("buffer_km", 30.0),
-            event_date=event_date,
-            utm_crs=utm_crs,
-            out_dir=str(buf_osm_dir)
-        )
+        def _task_osm_buf():
+            buf_osm_dir = raw_dir / "osm_buffered"
+            logger.info("Fetching pre-event buffered OSM (roads, health facilities, places)...")
+            fetch_buffered_osm(
+                bbox=bbox,
+                buffer_km=rt_cfg.get("buffer_km", 30.0),
+                event_date=event_date,
+                utm_crs=utm_crs,
+                out_dir=str(buf_osm_dir)
+            )
+
+        def _task_s2():
+            logger.info("Fetching Sentinel-2 optical scenes...")
+            fetch_s2(
+                bbox=bbox,
+                event_date=event_date,
+                out_dir=str(s2_cache_path),
+                utm_crs=utm_crs,
+                s2_pre_days=det_cfg.get("s2_pre_days", 15),
+                s2_post_days=det_cfg.get("s2_post_days", 15),
+                s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
+                s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
+                s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0)
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futs = {
+                executor.submit(_task_s1): "Sentinel-1",
+                executor.submit(_task_dem): "DEM",
+                executor.submit(_task_osm_bbox): "OSM (bbox)",
+                executor.submit(_task_osm_buf): "OSM (buffered)",
+                executor.submit(_task_s2): "Sentinel-2"
+            }
+            for fut in concurrent.futures.as_completed(futs):
+                fut.result()
     except Exception as e:
         logger.error(f"[ERROR] Layer 0 ingestion failed: {e}")
         l0_notes.append(f"Ingestion error: {e}")
@@ -199,6 +261,8 @@ def run_pipeline(
         "s1_cloud_fallback": False,
         "notes": "; ".join(l0_notes) if l0_notes else "OK"
     }
+    update_status_file(status_file, "RUNNING", 0.20, time.time() - t0, "L0 Data Ingestion Completed")
+    logger.info(f"[PROGRESS] Step L0 (Data Ingestion) finished in {l0_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
 
     # ==================================================================
     # LAYER 1: PREPROCESSING (EVENT & CONTROL)
@@ -251,6 +315,8 @@ def run_pipeline(
         "s1_cloud_fallback": False,
         "notes": "Grid shape: " + str(l1_res.get("shape", ""))
     }
+    update_status_file(status_file, "RUNNING", 0.40, time.time() - t0, "L1 Preprocessing Completed")
+    logger.info(f"[PROGRESS] Step L1 (Preprocessing) finished in {l1_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
 
     # ==================================================================
     # LAYER 2: MULTI-SENSOR DETECTION (S2 PRIMARY + S1 SAR FALLBACK)
@@ -309,6 +375,26 @@ def run_pipeline(
         "notes": f"Affected S2: {ev_s2_km2} km², S1: {ev_s1_km2} km², Inferred: {l2_res.get('areas_km2', {}).get('event_inferred_affected', 0.0)} km²"
     }
 
+    # Progressive L2 output
+    l2_summary = {
+        "status": "L2_COMPLETED",
+        "timestamp": datetime.now().isoformat(),
+        "elapsed_seconds": round(time.time() - t0, 2),
+        "duration_s": l2_duration_s,
+        "areas_km2": l2_res.get("areas_km2", {}),
+        "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
+        "outputs": {
+            "hazard_classes_tif": str(processed_dir / "hazard_classes.tif"),
+            "hazard_polygons_geojson": str(processed_dir / "hazard_polygons.geojson"),
+            "l2_quicklook": str(processed_dir / "quicklook_layer2.png")
+        }
+    }
+    with open(processed_dir / "l2_summary.json", "w") as f:
+        json.dump(l2_summary, f, indent=2)
+
+    update_status_file(status_file, "RUNNING", 0.60, time.time() - t0, "L2 Detection Completed", outputs=l2_summary["outputs"], metrics=l2_summary["areas_km2"])
+    logger.info(f"[PROGRESS] Step L2 (Multi-Sensor Detection) finished in {l2_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
+
     # ==================================================================
     # LAYER 4: INFRASTRUCTURE DAMAGE GRADING
     # ==================================================================
@@ -365,6 +451,28 @@ def run_pipeline(
         "notes": f"Buildings: {b_counts}, Bridges: {br_counts}"
     }
 
+    # Progressive L4 output
+    l4_summary = {
+        "status": "L4_COMPLETED",
+        "timestamp": datetime.now().isoformat(),
+        "elapsed_seconds": round(time.time() - t0, 2),
+        "duration_s": l4_duration_s,
+        "buildings": l4_res.get("buildings", {}),
+        "bridges": l4_res.get("bridges", {}),
+        "roads": l4_res.get("roads", {}),
+        "outputs": {
+            "buildings_graded_geojson": str(processed_dir / "buildings_graded.geojson"),
+            "bridges_graded_geojson": str(processed_dir / "bridges_graded.geojson"),
+            "roads_graded_geojson": str(processed_dir / "roads_graded.geojson"),
+            "l4_quicklook": str(processed_dir / "quicklook_l4.png")
+        }
+    }
+    with open(processed_dir / "l4_summary.json", "w") as f:
+        json.dump(l4_summary, f, indent=2)
+
+    update_status_file(status_file, "RUNNING", 0.80, time.time() - t0, "L4 Damage Grading Completed", outputs=l4_summary["outputs"])
+    logger.info(f"[PROGRESS] Step L4 (Damage Grading) finished in {l4_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
+
     # ==================================================================
     # LAYER 5: ROUTING & SETTLEMENT ISOLATION
     # ==================================================================
@@ -398,6 +506,25 @@ def run_pipeline(
         "s1_cloud_fallback": False,
         "notes": f"Cut-off settlements: {cut_off_veh}"
     }
+
+    # Progressive L5 output
+    l5_summary = {
+        "status": "L5_COMPLETED",
+        "timestamp": datetime.now().isoformat(),
+        "elapsed_seconds": round(time.time() - t0, 2),
+        "duration_s": l5_duration_s,
+        "cut_off_settlements": cut_off_veh,
+        "outputs": {
+            "settlements_geojson": str(processed_dir / "routing" / "settlements.geojson"),
+            "repair_priority_json": str(processed_dir / "routing" / "repair_priority.json"),
+            "repair_packages_json": str(processed_dir / "routing" / "repair_packages.json"),
+            "l5_quicklook": str(processed_dir / "routing" / "quicklook_l5.png")
+        }
+    }
+    with open(processed_dir / "routing" / "l5_summary.json", "w") as f:
+        json.dump(l5_summary, f, indent=2)
+
+    logger.info(f"[PROGRESS] Step L5 (Disaster Routing & Isolation) finished in {l5_duration_s}s (elapsed: {round(time.time() - t0, 2)}s)")
 
     total_duration_s = round(time.time() - t0, 2)
     peak_ram_overall = get_peak_ram_mb()
@@ -454,6 +581,9 @@ def run_pipeline(
     with open(summary_file, "w") as f:
         json.dump(summary_payload, f, indent=2)
 
+    update_status_file(status_file, "COMPLETED", 1.0, total_duration_s, "Pipeline Completed", outputs=summary_payload["outputs"], metrics=summary_payload["metrics"])
+    logger.info(f"[PROGRESS] Pipeline COMPLETED in {total_duration_s}s")
+
     logger.info("\n==================================================================")
     logger.info("                  PIPELINE EXECUTION COMPLETED                     ")
     logger.info("==================================================================")
@@ -477,13 +607,15 @@ def main():
     parser.add_argument("--event-date", type=str, required=True, help="YYYY-MM-DD (event date)")
     parser.add_argument("--out-dir", type=str, required=True, help="Output directory path")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to default config yaml")
+    parser.add_argument("--no-cache", action="store_true", help="Disable copying pre-existing cache from data/")
 
     args = parser.parse_args()
     run_pipeline(
         bbox=args.bbox,
         event_date=args.event_date,
         out_dir=args.out_dir,
-        config_path=args.config
+        config_path=args.config,
+        no_cache=args.no_cache
     )
 
 
