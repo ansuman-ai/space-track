@@ -131,15 +131,9 @@ def download_and_clip_bands(
 
     min_lon, min_lat, max_lon, max_lat = bbox
 
+    from .gdal_env import get_shared_gdal_env
     try:
-        env = rasterio.Env(
-            GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
-            CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt',
-            GDAL_HTTP_VERSION='2',
-            GDAL_HTTP_MERGE_CONSECUTIVE_RANGES='YES',
-            VSI_CACHE='YES',
-            VSI_CACHE_SIZE='50000000'
-        )
+        env = get_shared_gdal_env()
 
         def _read_band(u):
             with env:

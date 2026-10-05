@@ -174,15 +174,10 @@ def fetch_s2(
                 f"pre={len(pre_feats)}, post={len(post_feats)}, ctrl={len(ctrl_feats)}, "
                 f"seas_pre={len(seas_pre_feats)}, seas_post={len(seas_post_feats)}")
 
+    from .gdal_env import get_shared_gdal_env
     # Token retrieval
     token = get_s2_sas_token()
-    env = rasterio.Env(
-        GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
-        CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt',
-        GDAL_HTTP_CONNECTTIMEOUT='15',
-        GDAL_HTTP_TIMEOUT='30',
-        GDAL_HTTP_MAX_RETRY='2'
-    )
+    env = get_shared_gdal_env()
 
     # Determine reference bounds and shape from bbox in UTM
     from rasterio.warp import transform_bounds

@@ -144,15 +144,10 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
         except Exception as e:
             logger.warning(f"PC STAC query failed: {e}; using direct AWS Open Data Copernicus DEM")
 
+    from .gdal_env import get_shared_gdal_env
     opened_datasets = []
     try:
-        with rasterio.Env(
-            AWS_NO_SIGN_REQUEST='YES',
-            GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
-            CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt',
-            GDAL_HTTP_MERGE_CONSECUTIVE_RANGES='YES',
-            GDAL_HTTP_VERSION='2'
-        ):
+        with get_shared_gdal_env(AWS_NO_SIGN_REQUEST='YES'):
             for lat in range(lat_min_int, lat_max_int + 1):
                 for lon in range(lon_min_int, lon_max_int + 1):
                     aws_url = get_aws_dem_tile_url(lat, lon)

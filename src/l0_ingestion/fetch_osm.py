@@ -71,7 +71,7 @@ def query_ohsome_layer(
     url_hist = f"{OHSOME_BASE_URL}/elementsFullHistory/geometry"
     for attempt in range(3):
         try:
-            resp = http_client.post(url_hist, data=data_hist, timeout=120)
+            resp = http_client.post(url_hist, data=data_hist, timeout=300)
             if resp.status_code == 200:
                 res = resp.json()
                 feats = res.get("features", [])
