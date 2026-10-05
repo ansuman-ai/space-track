@@ -337,9 +337,10 @@ def run_layer5(
     settlements_out["depends_on_construction_road"] = [depends_on_constr[sid] for sid in settlements_out["settlement_id"]]
     settlements_out["construction_road_osm_ids"] = [", ".join(constr_ways_per_sid[sid]) for sid in settlements_out["settlement_id"]]
 
-    # Save settlements.geojson in EPSG:4326 for standard GIS interoperability
+    # Save settlements.geojson in EPSG:4326 for standard GIS interoperability (deterministic sort by settlement_id)
     settle_geojson_path = out_path / "settlements.geojson"
-    settlements_out.to_crs("EPSG:4326").to_file(settle_geojson_path, driver="GeoJSON")
+    settlements_out_sorted = settlements_out.sort_values("settlement_id").reset_index(drop=True)
+    settlements_out_sorted.to_crs("EPSG:4326").to_file(settle_geojson_path, driver="GeoJSON")
     logger.info(f"Saved settlements to {settle_geojson_path}")
 
     # Build cutoff_summary.json
