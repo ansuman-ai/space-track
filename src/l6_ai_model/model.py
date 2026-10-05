@@ -1,152 +1,151 @@
 """
-UNet Architecture with ResNet-18/34 Encoder for 6-channel SAR Flood Segmentation.
-Pure PyTorch implementation with zero external vision library dependencies.
+SNUNet-CD (Densely Connected Siamese Network for Change Detection) architecture
+matching official KuroSiwo benchmark implementation.
 """
 
+import os
+from pathlib import Path
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from typing import List, Optional
 
 
-class ConvBlock(nn.Module):
-    """Two 3x3 convolutions with BatchNorm and ReLU."""
-
-    def __init__(self, in_channels: int, out_channels: int):
+class ConvBlockNested(nn.Module):
+    def __init__(self, in_ch: int, mid_ch: int, out_ch: int):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-        )
+        self.activation = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, bias=True)
+        self.bn1 = nn.BatchNorm2d(mid_ch)
+        self.conv2 = nn.Conv2d(mid_ch, out_ch, kernel_size=3, padding=1, bias=True)
+        self.bn2 = nn.BatchNorm2d(out_ch)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.conv(x)
+        x = self.conv1(x)
+        identity = x
+        x = self.bn1(x)
+        x = self.activation(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        return self.activation(x + identity)
 
 
-class BasicBlock(nn.Module):
-    """Standard ResNet Basic Block."""
-
-    expansion = 1
-
-    def __init__(self, in_planes: int, planes: int, stride: int = 1):
+class Up(nn.Module):
+    def __init__(self, in_ch: int, bilinear: bool = False):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion * planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion * planes)
-            )
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        else:
+            self.up = nn.ConvTranspose2d(in_ch, in_ch, kernel_size=2, stride=2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += self.shortcut(x)
-        return F.relu(out)
+        return self.up(x)
 
 
-class DecoderBlock(nn.Module):
-    """Upsampling followed by concatenation and double convolution."""
-
-    def __init__(self, in_channels: int, skip_channels: int, out_channels: int):
+class ChannelAttention(nn.Module):
+    def __init__(self, in_channels: int, ratio: int = 16):
         super().__init__()
-        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-        self.conv = ConvBlock(in_channels + skip_channels, out_channels)
-
-    def forward(self, x: torch.Tensor, skip: Optional[torch.Tensor] = None) -> torch.Tensor:
-        x = self.up(x)
-        if skip is not None:
-            # Handle padding if dimensions differ slightly due to odd resolutions
-            diff_y = skip.size(2) - x.size(2)
-            diff_x = skip.size(3) - x.size(3)
-            if diff_y != 0 or diff_x != 0:
-                x = F.pad(x, [diff_x // 2, diff_x - diff_x // 2, diff_y // 2, diff_y - diff_y // 2])
-            x = torch.cat([x, skip], dim=1)
-        return self.conv(x)
-
-
-class ResNetUNet(nn.Module):
-    """
-    UNet with ResNet-18 or ResNet-34 encoder.
-    Accepts 6 input channels: [pre_vv, pre_vh, post_vv, post_vh, log_ratio, dem_slope].
-    Outputs 1 logit channel for binary flood mask.
-    """
-
-    def __init__(
-        self,
-        in_channels: int = 6,
-        num_classes: int = 1,
-        encoder: str = "resnet18"
-    ):
-        super().__init__()
-        self.in_channels = in_channels
-        self.num_classes = num_classes
-
-        # Layers configuration for ResNet18 vs ResNet34
-        if encoder == "resnet34":
-            num_blocks = [3, 4, 6, 3]
-        else:  # default: resnet18
-            num_blocks = [2, 2, 2, 2]
-
-        # Initial stem: 6 channels -> 64
-        self.in_planes = 64
-        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        # Encoder stages
-        self.layer1 = self._make_layer(BasicBlock, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(BasicBlock, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(BasicBlock, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(BasicBlock, 512, num_blocks[3], stride=2)
-
-        # Decoder stages (skip connections from layer3, layer2, layer1, conv1)
-        self.dec4 = DecoderBlock(512, 256, 256)
-        self.dec3 = DecoderBlock(256, 128, 128)
-        self.dec2 = DecoderBlock(128, 64, 64)
-        self.dec1 = DecoderBlock(64, 64, 64)
-
-        # Final upsampling to original input size
-        self.final_up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-        self.final_conv = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, num_classes, kernel_size=1)
-        )
-
-    def _make_layer(self, block, planes: int, num_blocks: int, stride: int) -> nn.Sequential:
-        strides = [stride] + [1] * (num_blocks - 1)
-        layers = []
-        for s in strides:
-            layers.append(block(self.in_planes, planes, s))
-            self.in_planes = planes * block.expansion
-        return nn.Sequential(*layers)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.fc1 = nn.Conv2d(in_channels, in_channels // ratio, kernel_size=1, bias=False)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Conv2d(in_channels // ratio, in_channels, kernel_size=1, bias=False)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Encoder
-        x0 = F.relu(self.bn1(self.conv1(x)))  # 1/2 resolution, 64 channels
-        x_mp = self.maxpool(x0)               # 1/4 resolution, 64 channels
-        x1 = self.layer1(x_mp)                # 1/4 resolution, 64 channels
-        x2 = self.layer2(x1)                  # 1/8 resolution, 128 channels
-        x3 = self.layer3(x2)                  # 1/16 resolution, 256 channels
-        x4 = self.layer4(x3)                  # 1/32 resolution, 512 channels
+        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
+        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
+        return self.sigmoid(avg_out + max_out)
 
-        # Decoder with skips
-        d4 = self.dec4(x4, x3)               # 1/16 resolution
-        d3 = self.dec3(d4, x2)               # 1/8 resolution
-        d2 = self.dec2(d3, x1)               # 1/4 resolution
-        d1 = self.dec1(d2, x0)               # 1/2 resolution
 
-        # Final head to original resolution
-        d0 = self.final_up(d1)               # 1/1 original resolution
-        logits = self.final_conv(d0)
-        return logits
+class SNUNet_ECAM(nn.Module):
+    """SNUNet-CD with Ensemble Channel Attention Module (ECAM)."""
+
+    def __init__(self, in_channels: int = 3, out_ch: int = 3, base_channel: int = 32):
+        super().__init__()
+        torch.nn.Module.dump_patches = True
+        n1 = base_channel
+        filters = [n1, n1 * 2, n1 * 4, n1 * 8, n1 * 16]
+
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.conv0_0 = ConvBlockNested(in_channels, filters[0], filters[0])
+        self.conv1_0 = ConvBlockNested(filters[0], filters[1], filters[1])
+        self.Up1_0 = Up(filters[1])
+        self.conv2_0 = ConvBlockNested(filters[1], filters[2], filters[2])
+        self.Up2_0 = Up(filters[2])
+        self.conv3_0 = ConvBlockNested(filters[2], filters[3], filters[3])
+        self.Up3_0 = Up(filters[3])
+        self.conv4_0 = ConvBlockNested(filters[3], filters[4], filters[4])
+        self.Up4_0 = Up(filters[4])
+
+        self.conv0_1 = ConvBlockNested(filters[0] * 2 + filters[1], filters[0], filters[0])
+        self.conv1_1 = ConvBlockNested(filters[1] * 2 + filters[2], filters[1], filters[1])
+        self.Up1_1 = Up(filters[1])
+        self.conv2_1 = ConvBlockNested(filters[2] * 2 + filters[3], filters[2], filters[2])
+        self.Up2_1 = Up(filters[2])
+        self.conv3_1 = ConvBlockNested(filters[3] * 2 + filters[4], filters[3], filters[3])
+        self.Up3_1 = Up(filters[3])
+
+        self.conv0_2 = ConvBlockNested(filters[0] * 3 + filters[1], filters[0], filters[0])
+        self.conv1_2 = ConvBlockNested(filters[1] * 3 + filters[2], filters[1], filters[1])
+        self.Up1_2 = Up(filters[1])
+        self.conv2_2 = ConvBlockNested(filters[2] * 3 + filters[3], filters[2], filters[2])
+        self.Up2_2 = Up(filters[2])
+
+        self.conv0_3 = ConvBlockNested(filters[0] * 4 + filters[1], filters[0], filters[0])
+        self.conv1_3 = ConvBlockNested(filters[1] * 4 + filters[2], filters[1], filters[1])
+        self.Up1_3 = Up(filters[1])
+
+        self.conv0_4 = ConvBlockNested(filters[0] * 5 + filters[1], filters[0], filters[0])
+
+        self.ca = ChannelAttention(filters[0] * 4, ratio=16)
+        self.ca1 = ChannelAttention(filters[0], ratio=16 // 4)
+        self.conv_final = nn.Conv2d(filters[0] * 4, out_ch, kernel_size=1)
+
+    def forward(self, xA: torch.Tensor, xB: torch.Tensor) -> torch.Tensor:
+        x0_0A = self.conv0_0(xA)
+        x1_0A = self.conv1_0(self.pool(x0_0A))
+        x2_0A = self.conv2_0(self.pool(x1_0A))
+        x3_0A = self.conv3_0(self.pool(x2_0A))
+        x4_0A = self.conv4_0(self.pool(x3_0A))
+
+        x0_0B = self.conv0_0(xB)
+        x1_0B = self.conv1_0(self.pool(x0_0B))
+        x2_0B = self.conv2_0(self.pool(x1_0B))
+        x3_0B = self.conv3_0(self.pool(x2_0B))
+        x4_0B = self.conv4_0(self.pool(x3_0B))
+
+        x0_1 = self.conv0_1(torch.cat([x0_0A, x0_0B, self.Up1_0(x1_0A)], 1))
+        x1_1 = self.conv1_1(torch.cat([x1_0A, x1_0B, self.Up2_0(x2_0A)], 1))
+        x2_1 = self.conv2_1(torch.cat([x2_0A, x2_0B, self.Up3_0(x3_0A)], 1))
+        x3_1 = self.conv3_1(torch.cat([x3_0A, x3_0B, self.Up4_0(x4_0A)], 1))
+
+        x0_2 = self.conv0_2(torch.cat([x0_0A, x0_0B, x0_1, self.Up1_1(x1_1)], 1))
+        x1_2 = self.conv1_2(torch.cat([x1_0A, x1_0B, x1_1, self.Up2_1(x2_1)], 1))
+        x2_2 = self.conv2_2(torch.cat([x2_0A, x2_0B, x2_1, self.Up3_1(x3_1)], 1))
+
+        x0_3 = self.conv0_3(torch.cat([x0_0A, x0_0B, x0_1, x0_2, self.Up1_2(x1_2)], 1))
+        x1_3 = self.conv1_3(torch.cat([x1_0A, x1_0B, x1_1, x1_2, self.Up2_2(x2_2)], 1))
+
+        x0_4 = self.conv0_4(torch.cat([x0_0A, x0_0B, x0_1, x0_2, x0_3, self.Up1_3(x1_3)], 1))
+
+        out = torch.cat([x0_1, x0_2, x0_3, x0_4], 1)
+        intra = torch.sum(torch.stack((x0_1, x0_2, x0_3, x0_4)), dim=0)
+        ca1 = self.ca1(intra)
+        out = self.ca(out) * (out + ca1.repeat(1, 4, 1, 1))
+        return self.conv_final(out)
+
+
+def load_model(weights_path: str, device: str = "cpu") -> nn.Module:
+    """Load SNUNet-CD model with pretrained weights."""
+    model = SNUNet_ECAM(in_channels=3, out_ch=3, base_channel=32)
+    checkpoint = torch.load(weights_path, map_location=device)
+    if "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+    elif "state_dict" in checkpoint:
+        state_dict = checkpoint["state_dict"]
+    else:
+        state_dict = checkpoint
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    return model
