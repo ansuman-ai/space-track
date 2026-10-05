@@ -52,18 +52,18 @@ def detect_query_language(text: str) -> str:
     """Detect whether query is English, Nepali, Hindi, or romanised."""
     deva_chars = sum(1 for c in text if "\u0900" <= c <= "\u097F")
     if deva_chars > 0:
-        ne_markers = ["छ", "छन्", "थियो", "भयो", "भए", "कति", "बस्ती", "सडक", "पुल", "भत्किए", "बाढी", "कहाँ", "कसरी", "त्यहाँ", "के", "वटा", "मा"]
-        hi_markers = ["है", "हैं", "था", "थी", "थे", "कितने", "कितना", "कितनी", "सड़क", "गाँव", "बस्तियां", "टूटे", "हुए", "बाढ़", "कहाँ", "कैसे", "वहाँ", "क्या", "पूरी", "नष्ट"]
+        ne_markers = ["छ", "छन्", "थियो", "भयो", "भए", "कति", "बस्ती", "सडक", "पुल", "भत्किए", "बाढी", "कहाँ", "कसरी", "त्यहाँ", "के", "वटा", "मा", "भवन"]
+        hi_markers = ["है", "हैं", "था", "थी", "थे", "कितने", "कितना", "कितनी", "सड़क", "गाँव", "बस्तियां", "टूटे", "हुए", "बाढ़", "कहाँ", "कैसे", "वहाँ", "क्या", "पूरी", "मकान", "चुके", "हो चुके", "गए", "गई"]
         ne_score = sum(1 for m in ne_markers if m in text)
         hi_score = sum(1 for m in hi_markers if m in text)
         return "hi" if hi_score > ne_score else "ne"
 
-    lower = text.lower().split()
-    ne_rom = ["kati", "ghar", "basti", "bhatkie", "sadak", "chha", "chhan", "tyaha", "pul", "avastha", "kasari"]
-    hi_rom = ["kitne", "kitna", "makan", "basteeya", "sadak", "hai", "hain", "wahan", "kya", "hua"]
-    if any(m in lower for m in ne_rom):
+    lower_tokens = re.findall(r"[a-z0-9]+", text.lower())
+    ne_rom = ["kati", "ghar", "basti", "basty", "bhatkie", "sadak", "chha", "cha", "chhan", "tyaha", "pul", "avastha", "sthiti", "kasari", "kasto", "barema"]
+    hi_rom = ["kitne", "kitna", "makan", "basteeya", "sadak", "hai", "hain", "wahan", "kya", "hua", "nasht"]
+    if any(m in lower_tokens for m in ne_rom):
         return "ne"
-    if any(m in lower for m in hi_rom):
+    if any(m in lower_tokens for m in hi_rom):
         return "hi"
     return "en"
 
@@ -185,6 +185,20 @@ class CopilotAgent:
     def _offline_answer(self, query: str, lang: str) -> AgentResponse:
         """Rule-based natural language intent parser and template answer generator."""
         q_lower = query.lower()
+        q_tokens = re.findall(r"[a-z0-9]+", q_lower)
+
+        # Helper for fuzzy token matching
+        def _has_kw(keywords: List[str]) -> bool:
+            for kw in keywords:
+                if kw in q_lower or kw in query:
+                    return True
+                # Check fuzzy token distance for typos
+                for t in q_tokens:
+                    if len(t) >= 4 and len(kw) >= 4:
+                        from .names import similarity_ratio
+                        if similarity_ratio(t, kw) >= 0.70:
+                            return True
+            return False
 
         # 1. Unanswerable topics check
         unanswerable_keywords = [
@@ -194,7 +208,7 @@ class CopilotAgent:
             "घाइते", "मृतक", "मृत्यु", "मरेका", "मरे", "मौत", "मौसम", "पूर्वानुमान",
             "प्रधानमन्त्री", "प्रधानमंत्री", "बजेट", "पैसा"
         ]
-        if any(w in q_lower or w in query for w in unanswerable_keywords):
+        if _has_kw(unanswerable_keywords):
             msg = (
                 "यो जानकारी भूउपग्रह तथा ओपन्स्ट्रीटम्याप विश्लेषणमा उपलब्ध छैन (not available in the data)। प्रणालीले केवल भौतिक पूर्वाधार क्षति, बस्ती पहुँच तथा सडक मर्मत प्राथमिकताको विश्लेषण गर्दछ।"
                 if lang == "ne"
@@ -214,11 +228,24 @@ class CopilotAgent:
                 active_settlement=self.active_settlement,
             )
 
-        # 2. Domain-specific general intents
-        # Intent: Cut-off settlements
-        if any(w in q_lower or w in query for w in ["cut off", "cutoff", "isolated", "disconnect", "सम्पर्कविहीन", "सम्पर्क विच्छेद", "कट अफ", "कटऑफ", "अलग्गिए"]):
-            net = "walking" if any(w in q_lower or w in query for w in ["walk", "walking", "पैदल", "हिंडेर"]) else "vehicle"
-            scen = "pessimistic" if any(w in q_lower or w in query for w in ["pessimistic", "worst", "निराशावादी"]) else "optimistic"
+        # 2. Event summary intent (affected area, overview)
+        if _has_kw(["affected area", "square km", "km2", "वर्ग किलोमिटर", "वर्ग किमी", "प्रत्यक्ष प्रभावित", "विस्तृत अवस्था", "overview", "what happened"]):
+            out = self.tools.event_summary()
+            self.conversation_tool_outputs.append(out)
+            text = self.guard.build_template_answer(out, lang)
+            return AgentResponse(
+                text=text,
+                tools_called=["event_summary"],
+                tool_outputs=[out],
+                guard_passed=True,
+                guard_retried=False,
+                language=lang,
+            )
+
+        # 3. Cut-off settlements intent
+        if _has_kw(["cut off", "cutoff", "isolated", "disconnect", "सम्पर्कविहीन", "सम्पर्क विच्छेद", "कट अफ", "कटऑफ", "कट गई", "कट गए", "कटी", "अलग्गिए"]):
+            net = "walking" if _has_kw(["walk", "walking", "पैदल", "हिंडेर"]) else "vehicle"
+            scen = "pessimistic" if _has_kw(["pessimistic", "worst", "निराशावादी"]) else "optimistic"
             out = self.tools.cutoff_settlements(network=net, scenario=scen)
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -231,8 +258,8 @@ class CopilotAgent:
                 language=lang,
             )
 
-        # Intent: Repair priority
-        if any(w in q_lower or w in query for w in ["repair", "fix", "priority", "marmat", "मर्मत", "प्राथमिकता", "मरम्मत"]):
+        # 4. Repair priority intent
+        if _has_kw(["repair", "marmat", "priority", "मर्मत", "प्राथमिकता", "मरम्मत"]):
             out = self.tools.repair_priority()
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -245,8 +272,8 @@ class CopilotAgent:
                 language=lang,
             )
 
-        # Intent: Bridges status
-        if any(w in q_lower or w in query for w in ["bridge", "bridges", "pul", "पुल", "पुलहरू"]):
+        # 5. Bridges status intent
+        if _has_kw(["bridge", "bridges", "pul", "पुल", "पुलहरू", "पुलों"]):
             out = self.tools.bridges_status()
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -259,8 +286,8 @@ class CopilotAgent:
                 language=lang,
             )
 
-        # Intent: Limitations & Uncertainty
-        if any(w in q_lower or w in query for w in ["limitation", "limitations", "cloud", "clouds", "uncertain", "badal", "सीमितता", "बादल", "अनिश्चितता", "विश्वसनीयता"]):
+        # 6. Limitations & Uncertainty intent
+        if _has_kw(["limitation", "limitations", "cloud", "clouds", "uncertain", "badal", "सीमितता", "बादल", "अनिश्चितता", "विश्वसनीयता"]):
             out = self.tools.limitations()
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -273,29 +300,14 @@ class CopilotAgent:
                 language=lang,
             )
 
-        # 3. Follow-up detection (whole-word regex only)
+        # 7. Follow-up detection (whole-word regex only)
         follow_up_regex = r"\b(there|that place|that|it|tyaha|त्यहाँ|वहाँ|उक्त)\b"
         is_follow_up = bool(re.search(follow_up_regex, query, flags=re.IGNORECASE))
         target_place = self.active_settlement if (is_follow_up and self.active_settlement) else None
 
-        # 4. If not follow-up, try to extract specific place name candidate
-        if not target_place:
-            target_place, is_ambiguous, ambig_prompt = self._extract_and_resolve_place(query)
-            if is_ambiguous:
-                return AgentResponse(
-                    text=ambig_prompt,
-                    tools_called=["settlement_status"],
-                    tool_outputs=[{"status": "ambiguous"}],
-                    guard_passed=True,
-                    guard_retried=False,
-                    language=lang,
-                    clarification_needed=True,
-                )
-
-        # 5. If a target settlement is active/found
-        if target_place:
-            self.active_settlement = target_place
-            if any(h in q_lower or h in query for h in ["hospital", "destination", "facility", "clinic", "अस्पताल", "स्वास्थ्य", "डाक्टर", "pugna sakinchha", "can reach"]):
+        # 8. If follow-up on active settlement, answer about that settlement
+        if target_place and is_follow_up:
+            if _has_kw(["hospital", "destination", "facility", "clinic", "अस्पताल", "स्वास्थ्य", "डाक्टर", "pugna sakinchha", "reach"]):
                 out = self.tools.nearest_destination(target_place)
                 self.conversation_tool_outputs.append(out)
                 text = self.guard.build_template_answer(out, lang)
@@ -322,19 +334,77 @@ class CopilotAgent:
                     active_settlement=self.active_settlement,
                 )
 
-        # Intent: Damage breakdown (buildings, roads)
-        if any(w in q_lower or w in query for w in ["damage", "destroyed", "houses", "buildings", "roads", "भवन", "घर", "सडक", "क्षति"]):
-            out = self.tools.damage_summary()
-            self.conversation_tool_outputs.append(out)
-            text = self.guard.build_template_answer(out, lang)
-            return AgentResponse(
-                text=text,
-                tools_called=["damage_summary"],
-                tool_outputs=[out],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-            )
+        # 9. General damage breakdown intent (buildings, houses destroyed, road length)
+        if _has_kw(["destroyed", "destoryed", "damaged", "damages", "buildings", "builidngs", "houses", "makan", "nasht", "भवन", "घरहरू", "घर", "क्षति", "सडक लम्बाइ"]):
+            if _has_kw(["how many", "kati", "kitne", "कति", "कितने", "total", "overall", "flood", "disaster", "बाढी"]):
+                out = self.tools.damage_summary()
+                self.conversation_tool_outputs.append(out)
+                text = self.guard.build_template_answer(out, lang)
+                return AgentResponse(
+                    text=text,
+                    tools_called=["damage_summary"],
+                    tool_outputs=[out],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                )
+
+        # 10. Extract and resolve specific place name candidate
+        if not target_place:
+            target_place, is_ambiguous, ambig_prompt = self._extract_and_resolve_place(query)
+            if is_ambiguous:
+                return AgentResponse(
+                    text=ambig_prompt,
+                    tools_called=["settlement_status"],
+                    tool_outputs=[{"status": "ambiguous"}],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    clarification_needed=True,
+                )
+
+        # 11. If a target settlement is active/found
+        if target_place:
+            self.active_settlement = target_place
+            if _has_kw(["hospital", "destination", "facility", "clinic", "अस्पताल", "स्वास्थ्य", "डाक्टर", "pugna sakinchha", "reach"]):
+                out = self.tools.nearest_destination(target_place)
+                self.conversation_tool_outputs.append(out)
+                text = self.guard.build_template_answer(out, lang)
+                return AgentResponse(
+                    text=text,
+                    tools_called=["nearest_destination"],
+                    tool_outputs=[out],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    active_settlement=self.active_settlement,
+                )
+            else:
+                out = self.tools.settlement_status(target_place)
+                self.conversation_tool_outputs.append(out)
+                text = self.guard.build_template_answer(out, lang)
+                return AgentResponse(
+                    text=text,
+                    tools_called=["settlement_status"],
+                    tool_outputs=[out],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    active_settlement=self.active_settlement,
+                )
+
+        # Default fallback: event_summary
+        out = self.tools.event_summary()
+        self.conversation_tool_outputs.append(out)
+        text = self.guard.build_template_answer(out, lang)
+        return AgentResponse(
+            text=text,
+            tools_called=["event_summary"],
+            tool_outputs=[out],
+            guard_passed=True,
+            guard_retried=False,
+            language=lang,
+        )
 
         # Default fallback: event_summary
         out = self.tools.event_summary()
