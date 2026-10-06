@@ -376,7 +376,7 @@ def fetch_s2(
             if "visual" not in bands and "B03" in bands and "B02" in bands:
                 r, g, b = bands["B04"], bands["B03"], bands["B02"]
                 bands["visual"] = np.clip(np.stack([r, g, b], axis=0) / 3000.0 * 255.0, 0, 255).astype(np.uint8)
-            tmp_fn = save_fn.parent / f".tmp_{save_fn.stem}.tmp"
+            tmp_fn = save_fn.parent / f".tmp_{save_fn.stem}.npz"
             np.savez_compressed(tmp_fn, **bands)
             os.replace(tmp_fn, save_fn)
             logger.info(f"Saved S2 scene to {save_fn.name}")
