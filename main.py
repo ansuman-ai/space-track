@@ -477,9 +477,9 @@ def run_pipeline(
         "areas_km2": l2_res.get("areas_km2", {}),
         "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
         "outputs": {
-            "hazard_classes_tif": str(processed_dir / "hazard_classes.tif"),
-            "hazard_polygons_geojson": str(processed_dir / "hazard_polygons.geojson"),
-            "l2_quicklook": str(processed_dir / "quicklook_layer2.png")
+            "hazard_classes_tif": "processed/hazard_classes.tif",
+            "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+            "l2_quicklook": "processed/quicklook_layer2.png"
         }
     }
     with open(processed_dir / "l2_summary.json", "w") as f:
@@ -567,10 +567,10 @@ def run_pipeline(
         "bridges": l4_res.get("bridges", {}),
         "roads": l4_res.get("roads", {}),
         "outputs": {
-            "buildings_graded_geojson": str(processed_dir / "buildings_graded.geojson"),
-            "bridges_graded_geojson": str(processed_dir / "bridges_graded.geojson"),
-            "roads_graded_geojson": str(processed_dir / "roads_graded.geojson"),
-            "l4_quicklook": str(processed_dir / "quicklook_l4.png")
+            "buildings_graded_geojson": "processed/buildings_graded.geojson",
+            "bridges_graded_geojson": "processed/bridges_graded.geojson",
+            "roads_graded_geojson": "processed/roads_graded.geojson",
+            "l4_quicklook": "processed/quicklook_l4.png"
         }
     }
     with open(processed_dir / "l4_summary.json", "w") as f:
@@ -625,10 +625,10 @@ def run_pipeline(
         "duration_s": l5_duration_s,
         "cut_off_settlements": cut_off_veh,
         "outputs": {
-            "settlements_geojson": str(processed_dir / "routing" / "settlements.geojson"),
-            "repair_priority_json": str(processed_dir / "routing" / "repair_priority.json"),
-            "repair_packages_json": str(processed_dir / "routing" / "repair_packages.json"),
-            "l5_quicklook": str(processed_dir / "routing" / "quicklook_l5.png")
+            "settlements_geojson": "processed/routing/settlements.geojson",
+            "repair_priority_json": "processed/routing/repair_priority.json",
+            "repair_packages_json": "processed/routing/repair_packages.json",
+            "l5_quicklook": "processed/routing/quicklook_l5.png"
         }
     }
     with open(processed_dir / "routing" / "l5_summary.json", "w") as f:
