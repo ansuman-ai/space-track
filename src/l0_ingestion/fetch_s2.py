@@ -213,7 +213,7 @@ def select_s2_scenes(
         seas_post_end = (seas_dt + timedelta(days=s2_post_days)).strftime("%Y-%m-%dT23:59:59Z")
 
         seas_pre_feats = search_s2_stac(bbox, seas_pre_start, seas_pre_end, timeout_s=s2_search_timeout_s)
-        seas_pre_feats = _filter_cloud(seas_pre_feats)
+        seas_pre_feats = [f for f in _filter_cloud(seas_pre_feats) if float(f.get("properties", {}).get("eo:cloud_cover", 100.0)) <= 80.0]
         seas_pre_by_orb = {}
         for f in seas_pre_feats:
             orb = get_orbit_str(f)
@@ -225,7 +225,7 @@ def select_s2_scenes(
                 selected.append(("seas_pre", passes[sorted_dts[0]]["feat"]))
 
         seas_post_feats = search_s2_stac(bbox, seas_post_start, seas_post_end, timeout_s=s2_search_timeout_s)
-        seas_post_feats = _filter_cloud(seas_post_feats)
+        seas_post_feats = [f for f in _filter_cloud(seas_post_feats) if float(f.get("properties", {}).get("eo:cloud_cover", 100.0)) <= 80.0]
         seas_post_by_orb = {}
         for f in seas_post_feats:
             orb = get_orbit_str(f)
