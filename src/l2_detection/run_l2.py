@@ -451,6 +451,12 @@ def run_layer2(
     if min_builtup_cvm_floor is not None:
         t_builtup = max(float(t_builtup), float(min_builtup_cvm_floor))
 
+    # Guard against noisy / cloud-edge control percentiles causing excessive false negatives:
+    # Physical vegetation loss / scour signal ceilings
+    t_d_ndvi = max(float(t_d_ndvi), -0.30)
+    t_channel = min(float(t_channel), 0.35)
+    t_builtup = min(float(t_builtup), 0.24)
+
     print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR + GUARDS) ---")
     print(f"  Sentinel-2 ΔNDVI threshold:          {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")
     print(f"  Sentinel-2 ΔBSI threshold:           +{t_d_bsi:.4f} ({100.0 - false_alarm_rate_pct}th percentile)")
