@@ -29,8 +29,8 @@ detection:
   s2_post_max_days: 45
   s2_max_scenes: 15
   s2_search_timeout_s: 60.0
-  s2_scene_timeout_s: 40.0
-  s2_total_budget_s: 120.0
+  s2_scene_timeout_s: 60.0
+  s2_total_budget_s: null
   min_control_clear_pixels: 500
   cloud_dilation_buffer_m: 60.0
   reach_length_m: 250.0

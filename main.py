@@ -292,7 +292,7 @@ def run_pipeline(
             s2_max_scenes=det_cfg.get("s2_max_scenes", 15),
             s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
             s2_scene_timeout_s=det_cfg.get("s2_scene_timeout_s", 40.0),
-            s2_total_budget_s=det_cfg.get("s2_total_budget_s", 120.0),
+            s2_total_budget_s=det_cfg.get("s2_total_budget_s", None),
             force=no_cache
         )
         dur = round(time.time() - t0_src, 2)
@@ -643,9 +643,11 @@ def run_pipeline(
     sensors_used = ["Sentinel-1 RTC SAR", "Copernicus DEM-30", "OpenStreetMap"]
     if s2_cache_path.exists() and len(list(s2_cache_path.glob("*.npz"))) > 0:
         sensors_used.insert(0, "Sentinel-2 MSI Optical")
+    s2_scenes_skipped = l0_sources.get("s2", {}).get("scenes_skipped", [])
+    overall_status = "DEGRADED" if s2_scenes_skipped else "COMPLETED"
 
     summary_payload = {
-        "status": "COMPLETED",
+        "status": overall_status,
         "bbox": bbox,
         "event_date": event_date,
         "utm_crs": utm_crs,
@@ -655,7 +657,7 @@ def run_pipeline(
         "sensors_used": sensors_used,
         "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
         "s2_scenes_used": l0_sources.get("s2", {}).get("scenes_used", []),
-        "s2_scenes_skipped": l0_sources.get("s2", {}).get("scenes_skipped", []),
+        "s2_scenes_skipped": s2_scenes_skipped,
         "l0_sources": l0_sources,
         "metrics": {
             "affected_km2_observed": l2_res.get("areas_km2", {}).get("event_total_affected", 0.0),
@@ -695,8 +697,8 @@ def run_pipeline(
     with open(summary_file, "w") as f:
         json.dump(summary_payload, f, indent=2)
 
-    update_status_file(status_file, "COMPLETED", 1.0, total_duration_s, "Pipeline Completed", outputs=summary_payload["outputs"], metrics=summary_payload["metrics"])
-    logger.info(f"[PROGRESS] Pipeline COMPLETED in {total_duration_s}s")
+    update_status_file(status_file, overall_status, 1.0, total_duration_s, f"Pipeline {overall_status}", outputs=summary_payload["outputs"], metrics=summary_payload["metrics"])
+    logger.info(f"[PROGRESS] Pipeline {overall_status} in {total_duration_s}s")
 
     logger.info("\n==================================================================")
     logger.info("                  PIPELINE EXECUTION COMPLETED                     ")

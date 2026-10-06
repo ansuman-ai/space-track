@@ -451,10 +451,12 @@ def prepare_s2_event_and_control_composites(
             valid_seas = s_pre_comp['is_clear'] & s_post_comp['is_clear']
             d_ndvi_seas = s_post_comp['ndvi'] - s_pre_comp['ndvi']
             d_bsi_seas = s_post_comp['bsi'] - s_pre_comp['bsi']
+            cvm_seas = compute_in_channel_change_vector(s_pre_comp, s_post_comp)
         else:
             valid_seas = np.zeros_like(valid_ev, dtype=bool)
             d_ndvi_seas = np.zeros_like(d_ndvi_ev, dtype=np.float32)
             d_bsi_seas = np.zeros_like(d_bsi_ev, dtype=np.float32)
+            cvm_seas = np.zeros_like(cvm_ev, dtype=np.float32)
 
         orbit_diffs[orb] = {
             "pre_comp": pre_comp,
@@ -471,6 +473,7 @@ def prepare_s2_event_and_control_composites(
             "valid_seas": valid_seas,
             "d_ndvi_seas": d_ndvi_seas,
             "d_bsi_seas": d_bsi_seas,
+            "cvm_seas": cvm_seas,
             "delta_days": post_comp['delta_days']
         }
 
@@ -517,6 +520,7 @@ def prepare_s2_event_and_control_composites(
     final_valid_seas = np.zeros((h, w), dtype=bool)
     final_d_ndvi_seas = np.zeros((h, w), dtype=np.float32)
     final_d_bsi_seas = np.zeros((h, w), dtype=np.float32)
+    final_cvm_seas = np.zeros((h, w), dtype=np.float32)
 
     sorted_orbs = sorted(
         orbit_diffs.keys(),
@@ -555,6 +559,7 @@ def prepare_s2_event_and_control_composites(
             final_valid_seas[seas_fill] = True
             final_d_ndvi_seas[seas_fill] = od['d_ndvi_seas'][seas_fill]
             final_d_bsi_seas[seas_fill] = od['d_bsi_seas'][seas_fill]
+            final_cvm_seas[seas_fill] = od['cvm_seas'][seas_fill]
 
     # For unfilled pixels, fill background visual from first orbit
     unfilled = ~final_valid_ev
@@ -604,6 +609,7 @@ def prepare_s2_event_and_control_composites(
         "s2_seasonal_valid": final_valid_seas if np.any(final_valid_seas) else None,
         "in_channel_change_event": final_cvm_ev,
         "in_channel_change_ctrl": final_cvm_ctrl,
+        "in_channel_change_seasonal": final_cvm_seas if np.any(final_valid_seas) else None,
         "optical_evidence_note": optical_evidence_note
     }
 

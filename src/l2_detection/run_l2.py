@@ -423,6 +423,7 @@ def run_layer2(
     d_ndvi_seas = s2_data.get('d_ndvi_seasonal')
     d_bsi_seas = s2_data.get('d_bsi_seasonal')
     s2_seas_valid = s2_data.get('s2_seasonal_valid')
+    in_ch_seas = s2_data.get('in_channel_change_seasonal')
     seas_clear_count = int(np.sum(s2_seas_valid & hand_corridor)) if (s2_seas_valid is not None and np.any(s2_seas_valid)) else 0
     if d_ndvi_seas is not None and d_bsi_seas is not None and seas_clear_count >= min_control_clear_pixels:
         t_d_ndvi_seas, t_d_bsi_seas = compute_s2_control_thresholds(
@@ -435,6 +436,19 @@ def run_layer2(
         )
         t_d_ndvi = min(float(t_d_ndvi), float(t_d_ndvi_seas))
         t_d_bsi = max(float(t_d_bsi), float(t_d_bsi_seas))
+
+        if in_ch_seas is not None:
+            ch_seas_valid = (perm_water_raw == 1) & hand_corridor & s2_seas_valid & np.isfinite(in_ch_seas)
+            if int(np.sum(ch_seas_valid)) >= 50:
+                t_channel_seas = compute_in_channel_control_threshold(
+                    in_channel_change_ctrl=in_ch_seas,
+                    perm_water_mask=perm_water_raw,
+                    ctrl_valid=s2_seas_valid,
+                    hand=hand,
+                    max_hand_m=max_hand_corridor_m,
+                    false_alarm_rate_pct=false_alarm_rate_pct
+                )
+                t_channel = max(float(t_channel), float(t_channel_seas))
     elif d_ndvi_seas is not None or (s2_seas_valid is not None and np.any(s2_seas_valid)):
         logger.warning(
             f"[WARNING] Seasonal control has only {seas_clear_count} clear pixels in HAND corridor "
@@ -454,7 +468,6 @@ def run_layer2(
     # Guard against noisy / cloud-edge control percentiles causing excessive false negatives:
     # Physical vegetation loss / scour signal ceilings
     t_d_ndvi = max(float(t_d_ndvi), -0.30)
-    t_channel = min(float(t_channel), 0.35)
     t_builtup = min(float(t_builtup), 0.24)
 
     print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR + GUARDS) ---")

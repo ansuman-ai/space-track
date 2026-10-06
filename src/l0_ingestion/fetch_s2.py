@@ -252,7 +252,7 @@ def fetch_s2(
     s2_max_scenes: int = 10,
     s2_search_timeout_s: float = 60.0,
     s2_scene_timeout_s: float = 40.0,
-    s2_total_budget_s: float = 120.0,
+    s2_total_budget_s: Optional[float] = None,
     enable_seasonal_control: bool = True,
     force: bool = False
 ) -> Dict[str, Any]:
@@ -336,7 +336,7 @@ def fetch_s2(
             url = assets[b_src]['href']
             if token and "?" not in url:
                 url = f"{url}?{token}"
-            for attempt in range(2):
+            for attempt in range(4):
                 with env:
                     try:
                         with rasterio.open(url) as s:
@@ -348,8 +348,8 @@ def fetch_s2(
                                 arr = arr[0]
                             return b_name, arr
                     except Exception as e:
-                        if attempt == 0:
-                            time.sleep(1)
+                        if attempt < 3:
+                            time.sleep(1.5 * (attempt + 1))
                             continue
                         logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
                         return None, None
@@ -393,7 +393,7 @@ def fetch_s2(
         sc_futs = {}
         for item in selected_scenes_to_fetch:
             elapsed = time.time() - t0_download
-            if elapsed >= s2_total_budget_s:
+            if s2_total_budget_s is not None and elapsed >= s2_total_budget_s:
                 sc_id = item[1].get("id", "unknown")
                 logger.warning(
                     f"[S2_BUDGET] Planetary Computer S2 total budget ({s2_total_budget_s:.1f}s) exceeded (elapsed: {elapsed:.1f}s). "
@@ -407,8 +407,11 @@ def fetch_s2(
 
         for fut in list(sc_futs.keys()):
             elapsed = time.time() - t0_download
-            remaining_budget = max(0.1, s2_total_budget_s - elapsed)
-            wait_timeout = min(s2_scene_timeout_s, remaining_budget)
+            if s2_total_budget_s is not None:
+                remaining_budget = max(0.1, s2_total_budget_s - elapsed)
+                wait_timeout = remaining_budget
+            else:
+                wait_timeout = None
             sc_id = sc_futs[fut]
             try:
                 res_fn = fut.result(timeout=wait_timeout)
@@ -428,7 +431,7 @@ def fetch_s2(
     finally:
         sc_ex.shutdown(wait=False, cancel_futures=True)
 
-    budget_hit = (time.time() - t0_download >= s2_total_budget_s)
+    budget_hit = (s2_total_budget_s is not None) and (time.time() - t0_download >= s2_total_budget_s)
     if budget_hit:
         logger.warning(
             f"[S2_BUDGET] Planetary Computer S2 total budget ({s2_total_budget_s:.1f}s) triggered. "
