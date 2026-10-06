@@ -30,17 +30,30 @@ def db_to_linear(arr_db: np.ndarray, fill_nodata_db: float = -35.0) -> np.ndarra
     return np.power(10.0, arr / 10.0, dtype=np.float32)
 
 
+def compute_slope_riserun(dem: np.ndarray, cell_size: float = 30.0) -> np.ndarray:
+    """
+    Compute slope rise/run (dy/dx) from DEM, matching official KuroSiwo benchmark:
+    slope = sqrt((dz/dx)^2 + (dz/dy)^2)
+    """
+    dem_clean = np.nan_to_num(dem, nan=0.0)
+    dy, dx = np.gradient(dem_clean, cell_size)
+    slope = np.nan_to_num(np.sqrt(dx**2 + dy**2), nan=0.0)
+    return slope.astype(np.float32)
+
+
 def preprocess_branch(
     vv_db: np.ndarray,
     vh_db: np.ndarray,
-    slope_deg: Optional[np.ndarray] = None,
+    slope_or_dem: Optional[np.ndarray] = None,
+    is_dem: bool = False,
     use_slope: bool = True
 ) -> np.ndarray:
     """
     Convert S1 dB inputs to KuroSiwo 3-channel Siamese branch format:
-      Channel 0: Linear VV clamped to [0, 0.15] and normalized
-      Channel 1: Linear VH clamped to [0, 0.15] and normalized
-      Channel 2: Slope normalized (or zeros if use_slope=False)
+      Channel 0: Linear VV clamped to [0, 0.15] and normalized (DATA_MEAN[0], DATA_STD[0])
+      Channel 1: Linear VH clamped to [0, 0.15] and normalized (DATA_MEAN[1], DATA_STD[1])
+      Channel 2: Slope rise/run standardized with (SLOPE_MEAN=2.1277, SLOPE_STD=67.5048)
+                 (or zeros if use_slope=False)
     Returns:
       Array of shape (3, H, W)
     """
@@ -49,9 +62,16 @@ def preprocess_branch(
     s1 = np.stack([vv_lin, vh_lin], axis=0) # [2, H, W]
     s1_norm = (s1 - DATA_MEAN) / DATA_STD
 
-    if use_slope and slope_deg is not None:
-        slope_clean = np.nan_to_num(slope_deg, nan=SLOPE_MEAN)
-        ch3 = ((slope_clean - SLOPE_MEAN) / SLOPE_STD)[np.newaxis, :, :]
+    if use_slope and slope_or_dem is not None:
+        if is_dem:
+            slope = compute_slope_riserun(slope_or_dem)
+        else:
+            # If slope in degrees was passed (values in [0, 90]), convert to rise/run
+            if np.nanmax(slope_or_dem) <= 90.0:
+                slope = np.nan_to_num(np.tan(np.radians(slope_or_dem)), nan=0.0)
+            else:
+                slope = np.nan_to_num(slope_or_dem, nan=0.0)
+        ch3 = ((slope - SLOPE_MEAN) / SLOPE_STD)[np.newaxis, :, :]
     else:
         ch3 = np.zeros((1, vv_db.shape[0], vv_db.shape[1]), dtype=np.float32)
 
