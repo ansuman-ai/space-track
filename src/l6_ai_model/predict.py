@@ -30,14 +30,14 @@ def db_to_linear(arr_db: np.ndarray, fill_nodata_db: float = -35.0) -> np.ndarra
     return np.power(10.0, arr / 10.0, dtype=np.float32)
 
 
-def compute_slope_riserun(dem: np.ndarray, cell_size: float = 30.0) -> np.ndarray:
+def compute_slope_degrees(dem: np.ndarray, cell_size: float = 10.0) -> np.ndarray:
     """
-    Compute slope rise/run (dy/dx) from DEM, matching official KuroSiwo benchmark:
-    slope = sqrt((dz/dx)^2 + (dz/dy)^2)
+    Compute slope in degrees from DEM, matching official KuroSiwo benchmark:
+    slope = degrees(arctan(sqrt((dz/dx)^2 + (dz/dy)^2)))
     """
-    dem_clean = np.nan_to_num(dem, nan=0.0)
+    dem_clean = np.nan_to_num(dem, nan=93.43)
     dy, dx = np.gradient(dem_clean, cell_size)
-    slope = np.nan_to_num(np.sqrt(dx**2 + dy**2), nan=0.0)
+    slope = np.degrees(np.arctan(np.sqrt(dx**2 + dy**2)))
     return slope.astype(np.float32)
 
 
@@ -64,13 +64,9 @@ def preprocess_branch(
 
     if use_slope and slope_or_dem is not None:
         if is_dem:
-            slope = compute_slope_riserun(slope_or_dem)
+            slope = compute_slope_degrees(slope_or_dem)
         else:
-            # If slope in degrees was passed (values in [0, 90]), convert to rise/run
-            if np.nanmax(slope_or_dem) <= 90.0:
-                slope = np.nan_to_num(np.tan(np.radians(slope_or_dem)), nan=0.0)
-            else:
-                slope = np.nan_to_num(slope_or_dem, nan=0.0)
+            slope = np.nan_to_num(slope_or_dem, nan=0.0)
         ch3 = ((slope - SLOPE_MEAN) / SLOPE_STD)[np.newaxis, :, :]
     else:
         ch3 = np.zeros((1, vv_db.shape[0], vv_db.shape[1]), dtype=np.float32)
