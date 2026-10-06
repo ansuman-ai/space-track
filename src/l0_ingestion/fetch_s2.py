@@ -364,7 +364,7 @@ def fetch_s2(
             futs = [b_ex.submit(_read_band, b) for b in band_names]
             for fut in futs:
                 try:
-                    k, v = fut.result(timeout=s2_scene_timeout_s)
+                    k, v = fut.result(timeout=150.0)
                     if k is not None and v is not None:
                         bands[k] = v
                 except concurrent.futures.TimeoutError:
@@ -388,7 +388,7 @@ def fetch_s2(
     all_downloaded = []
     skipped_scenes = []
 
-    sc_ex = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+    sc_ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
         sc_futs = {}
         for item in selected_scenes_to_fetch:

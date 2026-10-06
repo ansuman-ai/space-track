@@ -235,6 +235,7 @@ def run_layer2(
     intact_min_post_ndvi: float = 0.40,
     intact_max_abs_d_ndvi: float = 0.20,
     min_control_clear_pixels: int = 500,
+    channel_cap: Optional[float] = 0.55,
     event_date: Optional[str] = None,
     enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
@@ -469,6 +470,8 @@ def run_layer2(
     # Physical vegetation loss / scour signal ceilings
     t_d_ndvi = max(float(t_d_ndvi), -0.30)
     t_builtup = min(float(t_builtup), 0.24)
+    if channel_cap is not None:
+        t_channel = min(float(t_channel), float(channel_cap))
 
     print("\n--- THRESHOLDS USED (FROM CONTROL IN HAND CORRIDOR + GUARDS) ---")
     print(f"  Sentinel-2 ΔNDVI threshold:          {t_d_ndvi:.4f} ({false_alarm_rate_pct}th percentile)")

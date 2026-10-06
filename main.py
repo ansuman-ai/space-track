@@ -448,6 +448,7 @@ def run_pipeline(
         intact_min_post_ndvi=det_cfg.get("intact_min_post_ndvi", 0.40),
         intact_max_abs_d_ndvi=det_cfg.get("intact_max_abs_d_ndvi", 0.20),
         min_control_clear_pixels=det_cfg.get("min_control_clear_pixels", 500),
+        channel_cap=det_cfg.get("channel_cap", 0.55),
         event_date=event_date,
         enable_quicklooks=enable_quicklooks
     )

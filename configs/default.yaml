@@ -43,6 +43,7 @@ detection:
   min_abs_d_ndvi_floor: -0.20      # Debris flows completely strip vegetative canopy; seasonal phenology maintains |ΔNDVI| < 0.15
   min_d_bsi_floor: 0.18           # Bare gravel/boulder deposition elevates BSI by >= +0.18 relative to pre-event surface
   min_channel_cvm_floor: 0.20     # Catastrophic river channel bed scour vector magnitude exceeds 0.20 across reflective bands
+  channel_cap: 0.55
   min_builtup_cvm_floor: 0.15     # Structural building collapse/rubble alters multi-spectral reflectance magnitude by >= 0.15
   seasonal_control_lookback_days: 365 # Evaluates control pair from identical calendar dates 1 year prior to capture seasonal phenology
   inferred_min_reach_fraction: 0.20 # Requires observed damage along at least 20% of reach length to prevent isolated false alarms from triggering HAND fill

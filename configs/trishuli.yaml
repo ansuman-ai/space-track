@@ -39,6 +39,7 @@ detection:
   building_damage_proximity_m: 50.0
   intact_min_post_ndvi: 0.40
   intact_max_abs_d_ndvi: 0.20
+  channel_cap: 0.55
 
 validation:
   copernicus_ems_activation: "EMSR927"

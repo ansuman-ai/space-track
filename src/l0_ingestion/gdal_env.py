@@ -20,7 +20,7 @@ SHARED_GDAL_CONFIG: Dict[str, str] = {
     "CURL_CA_BUNDLE": "/etc/ssl/certs/ca-certificates.crt",
     "GDAL_HTTP_CONNECTTIMEOUT": "15",
     "GDAL_HTTP_TIMEOUT": "30",
-    "GDAL_HTTP_MAX_RETRY": "3"
+    "GDAL_HTTP_MAX_RETRY": "1"
 }
 
 

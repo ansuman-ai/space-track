@@ -77,7 +77,13 @@ To guarantee zero benchmark leakage and ensure real-world generalization, guard 
 2. Among passing configurations, select the least restrictive one (maximizing detected affected area on disaster events A + B).
 3. EMSR927 validation metrics were evaluated strictly *after* parameter selection to ensure zero leakage.
 
-The selected default configuration (`min_d_bsi_floor: 0.18`, `inferred_min_reach_fraction: 0.20`, `inferred_min_observed_pixels: 50`) uniquely passed all no-event tests (all $< 0.024\text{ km²}$, 0 buildings, 0 cut-offs) while preserving $4.856\text{ km²}$ of true flood and debris detection across Events A and B.
+The selected default configuration (`min_d_bsi_floor: 0.18`, `inferred_min_reach_fraction: 0.20`, `inferred_min_observed_pixels: 50`) uniquely passed all no-event tests (all $< 0.024\text{ km²}$, 0 buildings, 0 cut-offs) while preserving flood and debris detection across Events A and B.
+
+### Channel Threshold Cap Verification (No-Event Tests)
+To prevent control noise overestimation in river channels while strictly guarding against false alarms, a channel threshold cap was evaluated across candidate caps `{0.55, 0.60, 0.65, none}` where `channel threshold = min(control/seasonal-derived value, cap)`.
+- All threshold caps were evaluated across the cross-season no-event tests C1–C4.
+- All candidate caps satisfied the no-event rejection rule ($< 0.07\text{ km²}$ affected area, 0 buildings, 0 bridges, 0 cut-offs across C1–C4).
+- Following the non-EMS selection rule, the lowest (most sensitive) passing cap was selected: `channel_cap: 0.55`.
 
 ---
 
