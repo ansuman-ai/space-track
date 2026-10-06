@@ -107,10 +107,11 @@ def select_s2_scenes(
        - Seasonal Post: ASCENDING by datetime.
     4. Orbit Matching & Scene Caps:
        - Relative orbit (RXXX) extracted from STAC properties.
-       - Post-event: up to 2 earliest clear scenes per relative orbit.
-       - Pre-event: 1 closest clear scene per relative orbit.
-       - Control: 1 closest clear scene per relative orbit.
-       - Seasonal: 1 scene per relative orbit for seasonal pre and post.
+       - Post-event: up to 2 distinct passes per relative orbit (earliest post observations prioritized).
+       - Pre-event: up to 2 distinct passes per relative orbit (closest to event date + clearest pre observation to fill clouds).
+       - Control: 1 closest pass per relative orbit.
+       - Seasonal: 1 pass per relative orbit for seasonal pre and post.
+       - Deduplication: STAC passes on same timestamp are deduplicated to single best tile (lowest cloud cover).
     5. Seasonal Control Guard:
        - Included only if enable_seasonal_control is True.
     """
@@ -130,6 +131,17 @@ def select_s2_scenes(
         if max_cloud_cover_pct is None:
             return feats
         return [f for f in feats if float(f.get("properties", {}).get("eo:cloud_cover", 100.0)) <= max_cloud_cover_pct]
+
+    def _dedup_passes(feats):
+        passes_by_dt = {}
+        for f in feats:
+            dt_key = f.get("properties", {}).get("datetime", "")[:16]
+            if not dt_key:
+                continue
+            cc = float(f.get("properties", {}).get("eo:cloud_cover", 100.0))
+            if dt_key not in passes_by_dt or cc < passes_by_dt[dt_key]["cc"]:
+                passes_by_dt[dt_key] = {"feat": f, "cc": cc}
+        return passes_by_dt
 
     t_search_0 = time.time()
     post_feats = search_s2_stac(bbox, post_start, post_end, timeout_s=s2_search_timeout_s)
@@ -158,30 +170,39 @@ def select_s2_scenes(
         orb = get_orbit_str(f)
         post_by_orb.setdefault(orb, []).append(f)
     for orb, f_list in post_by_orb.items():
-        seen_dts = set()
-        for f in f_list:
-            dt_key = f.get("properties", {}).get("datetime", "")[:16]
-            if dt_key not in seen_dts:
-                seen_dts.add(dt_key)
-                selected.append(("post", f))
-                if len(seen_dts) >= 2:
-                    break
+        passes = _dedup_passes(f_list)
+        sorted_dts = sorted(passes.keys())  # ASCENDING (earliest first)
+        for dt_key in sorted_dts[:2]:
+            selected.append(("post", passes[dt_key]["feat"]))
 
-    # 2. Pre: sort descending by datetime, pick 1 per orbit
+    # 2. Pre: pick up to 2 distinct passes per orbit: closest to event + clearest in pre window
     pre_by_orb = {}
     for f in pre_feats:
         orb = get_orbit_str(f)
-        if orb not in pre_by_orb:
-            pre_by_orb[orb] = f
-            selected.append(("pre", f))
+        pre_by_orb.setdefault(orb, []).append(f)
+    for orb, f_list in pre_by_orb.items():
+        passes = _dedup_passes(f_list)
+        if not passes:
+            continue
+        sorted_dts = sorted(passes.keys(), reverse=True)  # DESCENDING (closest to event first)
+        closest_dt = sorted_dts[0]
+        clearest_dt = min(passes.keys(), key=lambda k: passes[k]["cc"])
+        selected.append(("pre", passes[closest_dt]["feat"]))
+        if clearest_dt != closest_dt:
+            selected.append(("pre", passes[clearest_dt]["feat"]))
+        elif len(sorted_dts) > 1:
+            selected.append(("pre", passes[sorted_dts[1]]["feat"]))
 
     # 3. Ctrl: sort descending by datetime, pick 1 per orbit
     ctrl_by_orb = {}
     for f in ctrl_feats:
         orb = get_orbit_str(f)
-        if orb not in ctrl_by_orb:
-            ctrl_by_orb[orb] = f
-            selected.append(("ctrl", f))
+        ctrl_by_orb.setdefault(orb, []).append(f)
+    for orb, f_list in ctrl_by_orb.items():
+        passes = _dedup_passes(f_list)
+        if passes:
+            sorted_dts = sorted(passes.keys(), reverse=True)
+            selected.append(("ctrl", passes[sorted_dts[0]]["feat"]))
 
     # 4. Seasonal control (if enabled)
     if enable_seasonal_control:
@@ -193,25 +214,27 @@ def select_s2_scenes(
 
         seas_pre_feats = search_s2_stac(bbox, seas_pre_start, seas_pre_end, timeout_s=s2_search_timeout_s)
         seas_pre_feats = _filter_cloud(seas_pre_feats)
-        seas_pre_feats = sorted(seas_pre_feats, key=lambda x: x.get("properties", {}).get("datetime", ""), reverse=True)
-
-        seas_post_feats = search_s2_stac(bbox, seas_post_start, seas_post_end, timeout_s=s2_search_timeout_s)
-        seas_post_feats = _filter_cloud(seas_post_feats)
-        seas_post_feats = sorted(seas_post_feats, key=lambda x: x.get("properties", {}).get("datetime", ""))
-
         seas_pre_by_orb = {}
         for f in seas_pre_feats:
             orb = get_orbit_str(f)
-            if orb not in seas_pre_by_orb:
-                seas_pre_by_orb[orb] = f
-                selected.append(("seas_pre", f))
+            seas_pre_by_orb.setdefault(orb, []).append(f)
+        for orb, f_list in seas_pre_by_orb.items():
+            passes = _dedup_passes(f_list)
+            if passes:
+                sorted_dts = sorted(passes.keys(), reverse=True)
+                selected.append(("seas_pre", passes[sorted_dts[0]]["feat"]))
 
+        seas_post_feats = search_s2_stac(bbox, seas_post_start, seas_post_end, timeout_s=s2_search_timeout_s)
+        seas_post_feats = _filter_cloud(seas_post_feats)
         seas_post_by_orb = {}
         for f in seas_post_feats:
             orb = get_orbit_str(f)
-            if orb not in seas_post_by_orb:
-                seas_post_by_orb[orb] = f
-                selected.append(("seas_post", f))
+            seas_post_by_orb.setdefault(orb, []).append(f)
+        for orb, f_list in seas_post_by_orb.items():
+            passes = _dedup_passes(f_list)
+            if passes:
+                sorted_dts = sorted(passes.keys())  # ASCENDING (earliest first)
+                selected.append(("seas_post", passes[sorted_dts[0]]["feat"]))
 
     logger.info(f"S2 scene selection completed in {round(time.time() - t_search_0, 2)}s: "
                 f"{len(selected)} candidate scenes selected across categories.")

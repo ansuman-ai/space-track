@@ -234,6 +234,7 @@ def run_layer2(
     building_damage_proximity_m: float = 50.0,
     intact_min_post_ndvi: float = 0.40,
     intact_max_abs_d_ndvi: float = 0.20,
+    min_control_clear_pixels: int = 500,
     event_date: Optional[str] = None,
     enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
@@ -352,24 +353,37 @@ def run_layer2(
 
     # Compute adaptive thresholds from CONTROL pair inside active HAND corridor
     logger.info("Computing adaptive thresholds from CONTROL pair inside HAND corridor...")
-    t_d_ndvi, t_d_bsi = compute_s2_control_thresholds(
-        d_ndvi_ctrl=d_ndvi_ctrl,
-        d_bsi_ctrl=d_bsi_ctrl,
-        ctrl_valid=s2_ctrl_valid,
-        hand=hand,
-        max_hand_m=max_hand_corridor_m,
-        false_alarm_rate_pct=false_alarm_rate_pct
-    )
+    ctrl_clear_count = int(np.sum(s2_ctrl_valid & hand_corridor)) if (s2_ctrl_valid is not None and np.any(s2_ctrl_valid)) else 0
+    if ctrl_clear_count >= min_control_clear_pixels:
+        t_d_ndvi, t_d_bsi = compute_s2_control_thresholds(
+            d_ndvi_ctrl=d_ndvi_ctrl,
+            d_bsi_ctrl=d_bsi_ctrl,
+            ctrl_valid=s2_ctrl_valid,
+            hand=hand,
+            max_hand_m=max_hand_corridor_m,
+            false_alarm_rate_pct=false_alarm_rate_pct
+        )
+    else:
+        logger.warning(
+            f"[WARNING] Control S2 pair has only {ctrl_clear_count} clear pixels in HAND corridor "
+            f"(< min_control_clear_pixels={min_control_clear_pixels}). Skipping control pair threshold estimation."
+        )
+        t_d_ndvi = -0.30
+        t_d_bsi = 0.18
 
     in_ch_ctrl = s2_data['in_channel_change_ctrl'] if s2_data.get('in_channel_change_ctrl') is not None else np.zeros((h, w), dtype=np.float32)
-    t_channel = compute_in_channel_control_threshold(
-        in_channel_change_ctrl=in_ch_ctrl,
-        perm_water_mask=perm_water_raw,
-        ctrl_valid=s2_ctrl_valid,
-        hand=hand,
-        max_hand_m=max_hand_corridor_m,
-        false_alarm_rate_pct=false_alarm_rate_pct
-    )
+    ch_ctrl_valid = (perm_water_raw == 1) & hand_corridor & s2_ctrl_valid & np.isfinite(in_ch_ctrl) if s2_ctrl_valid is not None else np.zeros((h, w), dtype=bool)
+    if int(np.sum(ch_ctrl_valid)) >= 50:
+        t_channel = compute_in_channel_control_threshold(
+            in_channel_change_ctrl=in_ch_ctrl,
+            perm_water_mask=perm_water_raw,
+            ctrl_valid=s2_ctrl_valid,
+            hand=hand,
+            max_hand_m=max_hand_corridor_m,
+            false_alarm_rate_pct=false_alarm_rate_pct
+        )
+    else:
+        t_channel = 0.20
 
     # Rasterize pre-event OSM building footprints (+ buffer)
     builtup_mask = np.zeros((h, w), dtype=np.uint8)
@@ -382,14 +396,18 @@ def run_layer2(
             if b_geoms:
                 builtup_mask = rasterize(b_geoms, out_shape=(h, w), transform=transform_mat, fill=0, default_value=1, dtype=np.uint8)
 
-    t_builtup = compute_builtup_control_threshold(
-        cvm_ctrl=cvm_ctrl,
-        builtup_mask=builtup_mask,
-        ctrl_valid=s2_ctrl_valid,
-        hand=hand,
-        max_hand_m=max_hand_corridor_m,
-        false_alarm_rate_pct=false_alarm_rate_pct
-    )
+    bu_ctrl_valid = (builtup_mask == 1) & hand_corridor & s2_ctrl_valid & np.isfinite(cvm_ctrl) if s2_ctrl_valid is not None else np.zeros((h, w), dtype=bool)
+    if int(np.sum(bu_ctrl_valid)) >= 20:
+        t_builtup = compute_builtup_control_threshold(
+            cvm_ctrl=cvm_ctrl,
+            builtup_mask=builtup_mask,
+            ctrl_valid=s2_ctrl_valid,
+            hand=hand,
+            max_hand_m=max_hand_corridor_m,
+            false_alarm_rate_pct=false_alarm_rate_pct
+        )
+    else:
+        t_builtup = 0.25
 
     t_z_asc = compute_s1_zscore_control_threshold(
         z_vv_asc_ctrl=z_vv_asc_ctrl,
@@ -405,7 +423,8 @@ def run_layer2(
     d_ndvi_seas = s2_data.get('d_ndvi_seasonal')
     d_bsi_seas = s2_data.get('d_bsi_seasonal')
     s2_seas_valid = s2_data.get('s2_seasonal_valid')
-    if d_ndvi_seas is not None and d_bsi_seas is not None and s2_seas_valid is not None and np.any(s2_seas_valid):
+    seas_clear_count = int(np.sum(s2_seas_valid & hand_corridor)) if (s2_seas_valid is not None and np.any(s2_seas_valid)) else 0
+    if d_ndvi_seas is not None and d_bsi_seas is not None and seas_clear_count >= min_control_clear_pixels:
         t_d_ndvi_seas, t_d_bsi_seas = compute_s2_control_thresholds(
             d_ndvi_ctrl=d_ndvi_seas,
             d_bsi_ctrl=d_bsi_seas,
@@ -416,6 +435,11 @@ def run_layer2(
         )
         t_d_ndvi = min(float(t_d_ndvi), float(t_d_ndvi_seas))
         t_d_bsi = max(float(t_d_bsi), float(t_d_bsi_seas))
+    elif d_ndvi_seas is not None or (s2_seas_valid is not None and np.any(s2_seas_valid)):
+        logger.warning(
+            f"[WARNING] Seasonal control has only {seas_clear_count} clear pixels in HAND corridor "
+            f"(< min_control_clear_pixels={min_control_clear_pixels}). Skipping seasonal threshold tightening."
+        )
 
     # Principled false-alarm guard 2a: Physical floors (stricter of control percentile and minimum change floor)
     if min_abs_d_ndvi_floor is not None:

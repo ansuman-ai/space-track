@@ -415,7 +415,7 @@ def prepare_s2_event_and_control_composites(
         if not pre_list or not post_list:
             continue
 
-        pre_comp = composite_scenes(pre_list)
+        pre_comp = composite_scenes(sorted(pre_list, key=lambda s: s.get('date', ''), reverse=True))
         post_comp = composite_scenes(sorted(post_list, key=lambda s: s.get('date', '')))
 
         # Intra-orbit event difference

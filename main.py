@@ -289,7 +289,7 @@ def run_pipeline(
             s2_pre_days=det_cfg.get("s2_pre_days", 15),
             s2_post_days=det_cfg.get("s2_post_days", 15),
             s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
-            s2_max_scenes=det_cfg.get("s2_max_scenes", 10),
+            s2_max_scenes=det_cfg.get("s2_max_scenes", 15),
             s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
             s2_scene_timeout_s=det_cfg.get("s2_scene_timeout_s", 40.0),
             s2_total_budget_s=det_cfg.get("s2_total_budget_s", 120.0),
@@ -447,6 +447,7 @@ def run_pipeline(
         building_damage_proximity_m=det_cfg.get("building_damage_proximity_m", 50.0),
         intact_min_post_ndvi=det_cfg.get("intact_min_post_ndvi", 0.40),
         intact_max_abs_d_ndvi=det_cfg.get("intact_max_abs_d_ndvi", 0.20),
+        min_control_clear_pixels=det_cfg.get("min_control_clear_pixels", 500),
         event_date=event_date,
         enable_quicklooks=enable_quicklooks
     )
