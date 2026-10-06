@@ -372,8 +372,9 @@ def fetch_s2(
         finally:
             b_ex.shutdown(wait=False, cancel_futures=True)
 
-        if "B04" in bands and "B08" in bands:
-            if "visual" not in bands and "B03" in bands and "B02" in bands:
+        req_bands = ["B02", "B03", "B04", "B08", "B11", "SCL"]
+        if all(k in bands for k in req_bands):
+            if "visual" not in bands:
                 r, g, b = bands["B04"], bands["B03"], bands["B02"]
                 bands["visual"] = np.clip(np.stack([r, g, b], axis=0) / 3000.0 * 255.0, 0, 255).astype(np.uint8)
             tmp_fn = save_fn.parent / f".tmp_{save_fn.stem}.npz"

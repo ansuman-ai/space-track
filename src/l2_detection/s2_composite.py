@@ -362,6 +362,10 @@ def prepare_s2_event_and_control_composites(
 
         data = np.load(f)
         bands = {k: data[k] for k in data.files}
+        req_bands = ["B02", "B03", "B04", "B08", "B11", "SCL"]
+        if not all(k in bands for k in req_bands):
+            logger.warning(f"Scene {f.name} missing required bands: {[k for k in req_bands if k not in bands]}. Skipping.")
+            continue
         proc = process_s2_features(bands, dilation_buffer_m=dilation_buffer_m, pixel_size_m=pixel_size_m)
         proc['filename'] = f.stem
         proc['date'] = dt_str
