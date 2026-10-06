@@ -479,10 +479,11 @@ def render_settlement3_component(
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
 
-    # 1. Locate Settlement #3
-    s3_matches = settlements_gdf[settlements_gdf["settlement_id"] == "cluster_29"]
+    # 1. Locate Settlement #3 (near Bhrajam)
+    s3_matches = settlements_gdf[settlements_gdf["name"].str.contains("Bhrajam|भ्रजम", na=False)]
     if len(s3_matches) == 0:
-        s3_matches = settlements_gdf[settlements_gdf["name"].str.contains("Bhrajam|भ्रजम", na=False)]
+        logger.info("Settlement near Bhrajam not in current study area; skipping zoom plot.")
+        return ""
     s3_row = s3_matches.iloc[0]
     s3_pt = s3_row.geometry
 

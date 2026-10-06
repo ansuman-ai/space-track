@@ -27,14 +27,26 @@ detection:
   s2_pre_days: 15
   s2_post_days: 15
   s2_post_max_days: 45
+  s2_max_scenes: 15
+  s2_search_timeout_s: 60.0
+  s2_scene_timeout_s: 60.0
+  s2_total_budget_s: null
+  min_control_clear_pixels: 500
   cloud_dilation_buffer_m: 60.0
   reach_length_m: 250.0
   inferred_hand_percentile: 90.0
-  inferred_min_observed_pixels: 20
+  inferred_min_observed_pixels: 50
   building_buffer_m: 10.0
   building_damage_proximity_m: 50.0
   intact_min_post_ndvi: 0.40
   intact_max_abs_d_ndvi: 0.20
+  min_abs_d_ndvi_floor: -0.20      # Debris flows completely strip vegetative canopy; seasonal phenology maintains |ΔNDVI| < 0.15
+  min_d_bsi_floor: 0.18           # Bare gravel/boulder deposition elevates BSI by >= +0.18 relative to pre-event surface
+  min_channel_cvm_floor: 0.20     # Catastrophic river channel bed scour vector magnitude exceeds 0.20 across reflective bands
+  channel_cap: 0.55
+  min_builtup_cvm_floor: 0.15     # Structural building collapse/rubble alters multi-spectral reflectance magnitude by >= 0.15
+  seasonal_control_lookback_days: 365 # Evaluates control pair from identical calendar dates 1 year prior to capture seasonal phenology
+  inferred_min_reach_fraction: 0.20 # Requires observed damage along at least 20% of reach length to prevent isolated false alarms from triggering HAND fill
 
 damage_grading:
   building_overlap_pct: 50.0  # Footprint overlap with Class 2 for Destroyed (%)
@@ -74,3 +86,7 @@ routing:
     - steps
     - pedestrian
     - cycleway
+
+performance:
+  max_threads: 2
+  enable_quicklooks: true

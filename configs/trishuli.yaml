@@ -4,8 +4,6 @@
 case_study:
   name: "Trishuli - Syapru Besi Flood"
   country: "Nepal"
-  event_date: "2026-08-26"
-  bbox: [85.30, 28.10, 85.42, 28.25]  # [min_lon, min_lat, max_lon, max_lat]
   utm_crs: "EPSG:32645"
 
 orbit:
@@ -28,6 +26,11 @@ detection:
   simplify_tolerance_m: 8.0
   s2_pre_days: 15
   s2_post_days: 15
+  s2_max_scenes: 15
+  s2_search_timeout_s: 60.0
+  s2_scene_timeout_s: 60.0
+  s2_total_budget_s: null
+  min_control_clear_pixels: 500
   cloud_dilation_buffer_m: 60.0
   reach_length_m: 250.0
   inferred_hand_percentile: 90.0
@@ -36,6 +39,7 @@ detection:
   building_damage_proximity_m: 50.0
   intact_min_post_ndvi: 0.40
   intact_max_abs_d_ndvi: 0.20
+  channel_cap: 0.55
 
 validation:
   copernicus_ems_activation: "EMSR927"

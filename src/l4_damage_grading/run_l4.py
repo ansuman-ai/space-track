@@ -43,7 +43,10 @@ def run_layer4(
     distance_possibly_damaged_m: float = 30.0,
     road_segment_length_m: float = 100.0,
     bridge_distance_m: float = 30.0,
-    bridge_reach_radius_m: float = 100.0
+    bridge_reach_radius_m: float = 100.0,
+    s2_valid_mask: Optional[np.ndarray] = None,
+    s2_post_visual: Optional[np.ndarray] = None,
+    enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
 
     """
@@ -84,15 +87,25 @@ def run_layer4(
         dx = abs(trans.a)
 
     # Cloud mask from S2 composite
-    try:
-        from ..l2_detection.s2_composite import prepare_s2_event_and_control_composites
-        s2_data = prepare_s2_event_and_control_composites(s2_cache_dir, dilation_buffer_m=60.0, pixel_size_m=dx)
-        s2_valid = s2_data["s2_event_valid"]
-        s2_post_visual = s2_data["post_composite"]["vis"]
-    except Exception as e:
-        logger.warning(f"Could not load S2 composite cache: {e}. Falling back to default validity.")
-        s2_valid = np.ones((h, w), dtype=bool)
-        s2_post_visual = np.zeros((3, h, w), dtype=np.uint8)
+    cached_valid_f = Path(nodata_mask_path).parent / "s2_event_valid.npy"
+    cached_vis_f = Path(nodata_mask_path).parent / "s2_post_visual.npy"
+
+    if s2_valid_mask is not None:
+        s2_valid = s2_valid_mask
+        s2_post_visual = s2_post_visual if s2_post_visual is not None else np.zeros((3, h, w), dtype=np.uint8)
+    elif cached_valid_f.exists():
+        s2_valid = np.load(cached_valid_f)
+        s2_post_visual = np.load(cached_vis_f) if cached_vis_f.exists() else np.zeros((3, h, w), dtype=np.uint8)
+    else:
+        try:
+            from ..l2_detection.s2_composite import prepare_s2_event_and_control_composites
+            s2_data = prepare_s2_event_and_control_composites(s2_cache_dir, dilation_buffer_m=60.0, pixel_size_m=dx)
+            s2_valid = s2_data["s2_event_valid"]
+            s2_post_visual = s2_data["post_composite"]["vis"]
+        except Exception as e:
+            logger.warning(f"Could not load S2 composite cache: {e}. Falling back to default validity.")
+            s2_valid = np.ones((h, w), dtype=bool)
+            s2_post_visual = np.zeros((3, h, w), dtype=np.uint8)
 
     cloud_or_nodata = (~s2_valid) | (nodata == 1)
     inv_trans = ~trans
@@ -116,6 +129,8 @@ def run_layer4(
         b_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     b_out_file = str(out_path / "buildings_graded.geojson")
+    if "@osmId" in b_graded.columns:
+        b_graded = b_graded.sort_values("@osmId").reset_index(drop=True)
     b_graded.to_file(b_out_file, driver="GeoJSON")
     b_counts = b_graded["damage_grade"].value_counts().to_dict() if len(b_graded) > 0 else {}
     b_ev_counts = b_graded["evidence"].value_counts().to_dict() if len(b_graded) > 0 else {}
@@ -138,6 +153,10 @@ def run_layer4(
         r_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     r_out_file = str(out_path / "roads_graded.geojson")
+    if "segment_id" in r_graded.columns:
+        r_graded = r_graded.sort_values("segment_id").reset_index(drop=True)
+    elif "@osmId" in r_graded.columns:
+        r_graded = r_graded.sort_values("@osmId").reset_index(drop=True)
     r_graded.to_file(r_out_file, driver="GeoJSON")
 
     # Road km summary
@@ -183,26 +202,13 @@ def run_layer4(
         br_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
 
     br_out_file = str(out_path / "bridges_graded.geojson")
+    if "@osmId" in br_graded.columns:
+        br_graded = br_graded.sort_values("@osmId").reset_index(drop=True)
     br_graded.to_file(br_out_file, driver="GeoJSON")
     br_counts = br_graded["damage_grade"].value_counts().to_dict() if len(br_graded) > 0 else {}
 
-    # 7. Render Quicklook
+    # 7. Damage Summary JSON
     out_quicklook = str(out_path / "quicklook_l4.png")
-    logger.info(f"Rendering Layer 4 damage overview quicklook to {out_quicklook}...")
-    render_l4_quicklook(
-        s2_post_visual=s2_post_visual,
-        buildings_gdf=b_graded,
-        roads_gdf=r_graded,
-        bridges_gdf=br_graded,
-        hazard_gdf=hazard_gdf,
-        output_png_path=out_quicklook,
-        zoom_center_utm=None,
-        zoom_half_width_m=2000.0,
-        utm_crs=utm_crs,
-        transform_matrix=trans
-    )
-
-    # 8. Damage Summary JSON
     damage_summary = {
         "status": "COMPLETED",
         "osm_coverage": coverage,
@@ -236,10 +242,10 @@ def run_layer4(
             }
         },
         "outputs": {
-            "buildings_graded": b_out_file,
-            "roads_graded": r_out_file,
-            "bridges_graded": br_out_file,
-            "quicklook": out_quicklook
+            "buildings_graded": "processed/buildings_graded.geojson",
+            "roads_graded": "processed/roads_graded.geojson",
+            "bridges_graded": "processed/bridges_graded.geojson",
+            "quicklook": "processed/quicklook_l4.png"
         }
     }
 
@@ -248,6 +254,27 @@ def run_layer4(
         json.dump(damage_summary, f, indent=2)
 
     logger.info(f"Layer 4 damage summary saved to {out_json}")
+
+    # 8. Render Quicklook (guarded by enable_quicklooks)
+    if enable_quicklooks:
+        logger.info(f"Rendering Layer 4 damage overview quicklook to {out_quicklook}...")
+        render_l4_quicklook(
+            s2_post_visual=s2_post_visual,
+            buildings_gdf=b_graded,
+            roads_gdf=r_graded,
+            bridges_gdf=br_graded,
+            hazard_gdf=hazard_gdf,
+            output_png_path=out_quicklook,
+            zoom_center_utm=None,
+            zoom_half_width_m=2000.0,
+            utm_crs=utm_crs,
+            transform_matrix=trans
+        )
+
+    import gc
+    del hazard_gdf, b_graded, r_graded, br_graded
+    gc.collect()
+
     return damage_summary
 
 

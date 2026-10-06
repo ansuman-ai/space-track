@@ -15,6 +15,7 @@
    - Key computed numbers/metrics.
    - Exactly one verification plot or visualization.
    - Max 10 lines of concise explanatory text.
+7. **Official Pipeline Grounding**: Every reported number must be read from files produced by main.py (run_summary.json and outputs). Never report numbers from ad-hoc scratch scripts.
 
 ---
 

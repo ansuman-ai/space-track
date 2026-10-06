@@ -15,6 +15,7 @@ import rasterio
 from rasterio.windows import from_bounds
 from rasterio.enums import Resampling
 import numpy as np
+import concurrent.futures
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_s1")
@@ -75,11 +76,18 @@ def query_stac(
     if pc_key:
         headers["Ocp-Apim-Subscription-Key"] = pc_key
 
-    try:
-        resp = http_client.post(PC_STAC_URL, json=body, headers=headers, timeout=20)
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Network error querying Planetary Computer STAC: {e}")
-        sys.exit(f"FAILED: Network error querying STAC: {e}")
+    resp = None
+    for attempt in range(3):
+        try:
+            resp = http_client.post(PC_STAC_URL, json=body, headers=headers, timeout=20)
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt < 2:
+                logger.warning(f"Attempt {attempt+1}/3 failed querying Planetary Computer STAC ({e}); retrying in 2s...")
+                time.sleep(2)
+                continue
+            logger.error(f"Network error querying Planetary Computer STAC: {e}")
+            sys.exit(f"FAILED: Network error querying STAC: {e}")
 
     if resp.status_code == 403:
         logger.error("HTTP 403 Forbidden: Sandbox or network environment blocked access to Planetary Computer STAC.")
@@ -130,43 +138,60 @@ def download_and_clip_bands(
 
     min_lon, min_lat, max_lon, max_lat = bbox
 
+    from .gdal_env import get_shared_gdal_env
     try:
-        with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt'):
-            with rasterio.open(vv_url) as src_vv, rasterio.open(vh_url) as src_vh:
-                # Transform bbox from EPSG:4326 to source raster CRS
-                if src_vv.crs and src_vv.crs.to_string() != "EPSG:4326":
-                    proj_bounds = transform_bounds("EPSG:4326", src_vv.crs, min_lon, min_lat, max_lon, max_lat)
-                else:
-                    proj_bounds = (min_lon, min_lat, max_lon, max_lat)
+        env = get_shared_gdal_env()
 
-                window = from_bounds(*proj_bounds, transform=src_vv.transform)
-                vv_data = src_vv.read(1, window=window)
-                vh_data = src_vh.read(1, window=window)
-                out_transform = rasterio.windows.transform(window, src_vv.transform)
+        def _read_band(u):
+            last_err = None
+            for attempt in range(3):
+                try:
+                    with env:
+                        with rasterio.open(u) as src:
+                            if src.crs and src.crs.to_string() != "EPSG:4326":
+                                proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
+                            else:
+                                proj_bounds = (min_lon, min_lat, max_lon, max_lat)
+                            window = from_bounds(*proj_bounds, transform=src.transform)
+                            d = src.read(1, window=window)
+                            out_trans = rasterio.windows.transform(window, src.transform)
+                            meta = src.meta.copy()
+                            return d, out_trans, meta
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"Attempt {attempt+1}/3 failed reading S1 band from Planetary Computer ({e}); retrying in 2s...")
+                    time.sleep(2)
+            raise last_err
 
-                out_meta = src_vv.meta.copy()
-                out_meta.update({
-                    "driver": "GTiff",
-                    "height": vv_data.shape[0],
-                    "width": vv_data.shape[1],
-                    "transform": out_transform,
-                    "count": 2,
-                    "dtype": vv_data.dtype
-                })
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f_vv = ex.submit(_read_band, vv_url)
+            f_vh = ex.submit(_read_band, vh_url)
+            vv_data, out_transform, out_meta = f_vv.result()
+            vh_data, _, _ = f_vh.result()
 
-                with rasterio.open(out_path, "w", **out_meta) as dst:
-                    dst.write(vv_data, 1)
-                    dst.set_band_description(1, "VV")
-                    dst.write(vh_data, 2)
-                    dst.set_band_description(2, "VH")
-                    dst.update_tags(
-                        scene_id=item_meta["id"],
-                        datetime=item_meta["datetime"],
-                        relative_orbit=str(item_meta["relative_orbit"]),
-                        orbit_direction=str(item_meta["orbit_direction"])
-                    )
+        out_meta.update({
+            "driver": "GTiff",
+            "height": vv_data.shape[0],
+            "width": vv_data.shape[1],
+            "transform": out_transform,
+            "count": 2,
+            "dtype": vv_data.dtype
+        })
 
-            logger.info(f"Saved clipped RTC raster to {out_path} ({vv_data.shape[1]}x{vv_data.shape[0]})")
+        with rasterio.open(out_path, "w", **out_meta) as dst:
+            dst.write(vv_data, 1)
+            dst.set_band_description(1, "VV")
+            dst.write(vh_data, 2)
+            dst.set_band_description(2, "VH")
+            dst.update_tags(
+                scene_id=item_meta["id"],
+                datetime=item_meta["datetime"],
+                relative_orbit=str(item_meta["relative_orbit"]),
+                orbit_direction=str(item_meta["orbit_direction"])
+            )
+
+        logger.info(f"Saved clipped RTC raster to {out_path} ({vv_data.shape[1]}x{vv_data.shape[0]})")
     except Exception as e:
         logger.error(f"Failed to read/clip raster assets: {e}")
         sys.exit(f"FAILED: Could not download and clip raster: {e}")
@@ -290,12 +315,15 @@ def fetch_pair(
 
     token = get_sas_token("sentinel-1-rtc")
 
-    # Download EVENT pair
-    logger.info(f"Downloading & clipping pre-event scene to {pre_tif}...")
-    download_and_clip_bands(selected_pre, bbox, pre_tif, token=token)
-
-    logger.info(f"Downloading & clipping post-event scene to {post_tif}...")
-    download_and_clip_bands(selected_post, bbox, post_tif, token=token)
+    # Download EVENT and CONTROL scenes in parallel
+    logger.info("Downloading & clipping Sentinel-1 event (pre, post) and control scenes in parallel...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        f_pre = executor.submit(download_and_clip_bands, selected_pre, bbox, pre_tif, token)
+        f_post = executor.submit(download_and_clip_bands, selected_post, bbox, post_tif, token)
+        f_ctrl = executor.submit(download_and_clip_bands, selected_ctrl_pre, bbox, ctrl_pre_tif, token)
+        f_pre.result()
+        f_post.result()
+        f_ctrl.result()
 
     event_metadata_payload = {
         "event_date": event_date,
@@ -318,10 +346,6 @@ def fetch_pair(
     }
     with open(meta_json, "w") as f:
         json.dump(event_metadata_payload, f, indent=2)
-
-    # Download / save CONTROL pair (ctrl_post = selected_pre, ctrl_pre = selected_ctrl_pre)
-    logger.info(f"Downloading & clipping control pre scene to {ctrl_pre_tif}...")
-    download_and_clip_bands(selected_ctrl_pre, bbox, ctrl_pre_tif, token=token)
 
     import shutil
     shutil.copyfile(pre_tif, ctrl_post_tif)

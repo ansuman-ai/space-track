@@ -62,7 +62,9 @@ def run_layer1(
     drainage_threshold: int = 1000,
     look_angle_deg: float = 38.0,
     orbit_heading_deg: float = 350.0,
-    dem_buffer_km: float = 10.0
+    dem_buffer_km: float = 10.0,
+    enable_quicklooks: bool = True,
+    max_threads: int = 2
 ) -> Dict[str, Any]:
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -110,23 +112,36 @@ def run_layer1(
             nd_post = nd_pre
             reprojected = True
 
-    # 2. Radiometric check and unclipped conversion to dB
-    pre_vv_db, pre_vv_conv, stats_pre_vv = check_and_convert_to_db(pre_b1, nodata=nd_pre)
-    pre_vh_db, pre_vh_conv, stats_pre_vh = check_and_convert_to_db(pre_b2, nodata=nd_pre)
-    post_vv_db, post_vv_conv, stats_post_vv = check_and_convert_to_db(post_b1, nodata=nd_post)
-    post_vh_db, post_vh_conv, stats_post_vh = check_and_convert_to_db(post_b2, nodata=nd_post)
+    # 2. Radiometric check and unclipped conversion to dB in parallel
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        f_vv_pre = pool.submit(check_and_convert_to_db, pre_b1, nodata=nd_pre)
+        f_vh_pre = pool.submit(check_and_convert_to_db, pre_b2, nodata=nd_pre)
+        f_vv_post = pool.submit(check_and_convert_to_db, post_b1, nodata=nd_post)
+        f_vh_post = pool.submit(check_and_convert_to_db, post_b2, nodata=nd_post)
+
+        pre_vv_db, pre_vv_conv, stats_pre_vv = f_vv_pre.result()
+        pre_vh_db, pre_vh_conv, stats_pre_vh = f_vh_pre.result()
+        post_vv_db, post_vv_conv, stats_post_vv = f_vv_post.result()
+        post_vh_db, post_vh_conv, stats_post_vh = f_vh_post.result()
 
     logger.info(f"Pre VV dB:  min={stats_pre_vv['min']:.2f}, med={stats_pre_vv['median']:.2f}, max={stats_pre_vv['max']:.2f}")
     logger.info(f"Pre VH dB:  min={stats_pre_vh['min']:.2f}, med={stats_pre_vh['median']:.2f}, max={stats_pre_vh['max']:.2f}")
     logger.info(f"Post VV dB: min={stats_post_vv['min']:.2f}, med={stats_post_vv['median']:.2f}, max={stats_post_vv['max']:.2f}")
     logger.info(f"Post VH dB: min={stats_post_vh['min']:.2f}, med={stats_post_vh['median']:.2f}, max={stats_post_vh['max']:.2f}")
 
-    # 3. Speckle filter (Lee 5x5) - keeping raw copies
-    logger.info(f"Applying Lee speckle filter (window={window_size}x{window_size})...")
-    pre_vv_filt = apply_lee_filter(pre_vv_db, window_size=window_size)
-    pre_vh_filt = apply_lee_filter(pre_vh_db, window_size=window_size)
-    post_vv_filt = apply_lee_filter(post_vv_db, window_size=window_size)
-    post_vh_filt = apply_lee_filter(post_vh_db, window_size=window_size)
+    # 3. Speckle filter (Lee 5x5) in parallel - keeping raw copies
+    logger.info(f"Applying Lee speckle filter (window={window_size}x{window_size}) in parallel...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as pool:
+        f_filt_pre_vv = pool.submit(apply_lee_filter, pre_vv_db, window_size=window_size)
+        f_filt_pre_vh = pool.submit(apply_lee_filter, pre_vh_db, window_size=window_size)
+        f_filt_post_vv = pool.submit(apply_lee_filter, post_vv_db, window_size=window_size)
+        f_filt_post_vh = pool.submit(apply_lee_filter, post_vh_db, window_size=window_size)
+
+        pre_vv_filt = f_filt_pre_vv.result()
+        pre_vh_filt = f_filt_pre_vh.result()
+        post_vv_filt = f_filt_post_vv.result()
+        post_vh_filt = f_filt_post_vh.result()
 
     # 4. Log-ratio (post_dB - pre_dB)
     log_ratio_vv = compute_log_ratio(post_vv_filt, pre_vv_filt)
@@ -243,23 +258,29 @@ def run_layer1(
         ("nodata_mask", nodata_mask, "uint8", 255),
     ]
 
-    for name, arr, dtype, nd in save_specs:
+    def _save_task(spec):
+        name, arr, dtype, nd = spec
         out_f = str(out_path / f"{name}.tif")
         save_single_band_geotiff(out_f, arr, pre_profile, dtype=dtype, nodata=nd)
-        output_paths[name] = out_f
+        return name, out_f
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as pool:
+        for name, out_f in pool.map(_save_task, save_specs):
+            output_paths[name] = out_f
 
     # 11. Quick-look visualization
     quicklook_path = str(out_path / "quicklook_layer1.png")
-    logger.info(f"Rendering quicklook diagnostic to {quicklook_path}...")
-    render_quicklook(
-        pre_vv_db=pre_vv_filt,
-        post_vv_db=post_vv_filt,
-        log_ratio_vv=log_ratio_vv,
-        hand=hand,
-        shadow_layover_mask=shadow_layover_mask,
-        output_png_path=quicklook_path,
-        title_suffix="SatFlood L1"
-    )
+    if enable_quicklooks:
+        logger.info(f"Rendering quicklook diagnostic to {quicklook_path}...")
+        render_quicklook(
+            pre_vv_db=pre_vv_filt,
+            post_vv_db=post_vv_filt,
+            log_ratio_vv=log_ratio_vv,
+            hand=hand,
+            shadow_layover_mask=shadow_layover_mask,
+            output_png_path=quicklook_path,
+            title_suffix="SatFlood L1"
+        )
     output_paths["quicklook_png"] = quicklook_path
 
     # Clean up arrays

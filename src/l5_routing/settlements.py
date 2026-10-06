@@ -95,8 +95,16 @@ def extract_settlements(
     bbox_deg = box(*bbox)
     places_all = gpd.read_file(places_path)
     p_in = places_all[places_all.geometry.intersects(bbox_deg)].to_crs(utm_crs).copy()
+    if "@osmId" in p_in.columns:
+        p_in = p_in.sort_values(by=["@osmId"]).reset_index(drop=True)
+    elif "id" in p_in.columns:
+        p_in = p_in.sort_values(by=["id"]).reset_index(drop=True)
 
     b_gdf = gpd.read_file(buildings_path).to_crs(utm_crs)
+    if "@osmId" in b_gdf.columns:
+        b_gdf = b_gdf.sort_values(by=["@osmId"]).reset_index(drop=True)
+    elif "id" in b_gdf.columns:
+        b_gdf = b_gdf.sort_values(by=["id"]).reset_index(drop=True)
     b_pts = np.array([(p.x, p.y) for p in b_gdf.geometry.centroid])
 
     # Cluster buildings
@@ -145,11 +153,24 @@ def extract_settlements(
         })
 
     # 2. Unnamed DBSCAN clusters
+    cluster_candidates = []
     for c_id in range(n_clusters):
         if c_id in matched_clusters:
             continue
         c_pts = b_pts[labels == c_id]
         cx, cy = np.mean(c_pts, axis=0)
+        cluster_candidates.append({
+            "c_pts": c_pts,
+            "cx": float(cx),
+            "cy": float(cy),
+        })
+
+    # Canonical sorting: largest clusters first, break ties with coordinates
+    cluster_candidates.sort(key=lambda c: (-len(c["c_pts"]), round(c["cx"], 2), round(c["cy"], 2)))
+
+    for c_idx, c_info in enumerate(cluster_candidates):
+        c_pts = c_info["c_pts"]
+        cx, cy = c_info["cx"], c_info["cy"]
 
         # Coordinate in WGS84 (lat, lon)
         pt_wgs = gpd.GeoSeries([Point(cx, cy)], crs=utm_crs).to_crs("EPSG:4326").iloc[0]
@@ -166,12 +187,12 @@ def extract_settlements(
             d_km = 0.0
 
         if d_m <= named_place_max_distance_m:
-            c_name = f"Cluster near {near_name} (ID {c_id})"
+            c_name = f"Cluster near {near_name} (ID {c_idx})"
         else:
             c_name = f"Unnamed settlement at {lat:.4f}, {lon:.4f} (nearest named place: {near_name}, {d_km:.1f} km)"
 
         settlements_records.append({
-            "settlement_id": f"cluster_{c_id}",
+            "settlement_id": f"cluster_{c_idx}",
             "name": c_name,
             "type": "building_cluster",
             "building_count": int(len(c_pts)),

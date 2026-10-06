@@ -20,7 +20,7 @@ import geopandas as gpd
 from .fetch_data import fetch_buffered_osm
 from .settlements import extract_settlements
 from .destinations import extract_destinations
-from .network import build_routing_networks
+from .network import build_routing_networks, clear_networks_cache
 from .connectivity import evaluate_network_connectivity
 from .repair import compute_repair_priorities, compute_repair_packages
 from .quicklook import (
@@ -32,6 +32,107 @@ from .quicklook import (
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("layer5_routing")
+
+
+def _run_control_routing_check(
+    roads_buffered_path: str,
+    control_roads_path: str,
+    control_bridges_path: str,
+    bbox: List[float],
+    vehicle_hwys: Any,
+    walking_extra: Any,
+    rural_roads_drivable: bool,
+    construction_roads_passable: bool,
+    snap_dead_end_m: float,
+    utm_crs: str,
+    settlements_gdf: gpd.GeoDataFrame,
+    destinations_gdf: gpd.GeoDataFrame,
+    max_snap_m: float,
+    ctrl_out_path: Path
+) -> Dict[str, Any]:
+    logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK (PARALLEL) ===")
+    ctrl_net = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=control_roads_path,
+        hazard_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    ctrl_v_res = evaluate_network_connectivity(
+        G=ctrl_net["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="vehicle_control",
+        max_snap_distance_m=max_snap_m
+    )
+    ctrl_w_res = evaluate_network_connectivity(
+        G=ctrl_net["G_walking"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="walking_control",
+        max_snap_distance_m=max_snap_m
+    )
+
+    ctrl_v_cutoff = ctrl_v_res["optimistic"]["cut_off_count"]
+    ctrl_w_cutoff = ctrl_w_res["optimistic"]["cut_off_count"]
+    logger.info(f"CONTROL Check: Vehicle cut-off = {ctrl_v_cutoff}, Walking cut-off = {ctrl_w_cutoff}")
+
+    # Free ctrl_net before building construction scenario graph to avoid duplicate memory
+    del ctrl_net
+    import gc
+    gc.collect()
+
+    # Re-run control with construction_roads_passable=True to verify 0 cut-offs in that scenario as well
+    ctrl_net_c = build_routing_networks(
+        roads_path=roads_buffered_path,
+        hazard_roads_path=control_roads_path,
+        hazard_bridges_path=control_bridges_path,
+        bbox=bbox,
+        vehicle_highways=vehicle_hwys,
+        walking_highways_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=True,
+        snap_dead_end_nodes_m=snap_dead_end_m,
+        utm_crs=utm_crs
+    )
+    ctrl_vc_res = evaluate_network_connectivity(
+        G=ctrl_net_c["G_vehicle"],
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        network_name="control_vehicle_constr",
+        max_snap_distance_m=max_snap_m
+    )
+    ctrl_vc_cutoff = ctrl_vc_res["optimistic"]["cut_off_count"]
+    logger.info(f"CONTROL Check (construction_roads_passable=True): Vehicle cut-off = {ctrl_vc_cutoff}")
+
+    del ctrl_net_c
+    gc.collect()
+
+    ctrl_summary = {
+        "vehicle_cutoff_count": ctrl_v_cutoff,
+        "vehicle_constr_cutoff_count": ctrl_vc_cutoff,
+        "walking_cutoff_count": ctrl_w_cutoff,
+        "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
+        "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
+        "walking_connected_clear_count": ctrl_w_res["optimistic"]["connected_clear_count"],
+        "walking_connected_unverified_count": ctrl_w_res["optimistic"]["connected_unverified_count"]
+    }
+    with open(ctrl_out_path / "cutoff_summary_control.json", "w") as f:
+        json.dump(ctrl_summary, f, indent=2)
+
+    if ctrl_v_cutoff != 0:
+        logger.warning(f"CONTROL vehicle cut-offs: expected 0, got {ctrl_v_cutoff}")
+    if ctrl_vc_cutoff != 0:
+        logger.warning(f"CONTROL vehicle (construction passable) cut-offs: expected 0, got {ctrl_vc_cutoff}")
+    if ctrl_w_cutoff != 0:
+        logger.warning(f"CONTROL walking cut-offs: expected 0, got {ctrl_w_cutoff}")
+
+    return ctrl_summary
 
 
 def run_layer5(
@@ -46,7 +147,8 @@ def run_layer5(
     bbox_osm_dir: str = "data/raw/osm",
     out_dir: str = "data/processed/routing",
     control_out_dir: str = "data/control/processed/routing",
-    artifact_dir: str = "/home/zeus/.gemini/antigravity/brain/52dd5215-6165-4f39-8912-cfce41bfdff1"
+    artifact_dir: str = "/home/zeus/.gemini/antigravity/brain/52dd5215-6165-4f39-8912-cfce41bfdff1",
+    enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
     """
     Executes complete Layer 5 pipeline for EVENT and verifies CONTROL.
@@ -104,9 +206,10 @@ def run_layer5(
     )
     logger.info(f"Loaded {len(destinations_gdf)} destinations.")
 
+    roads_buffered_path = os.path.join(buffered_osm_dir, "osm_roads.geojson")
+
     # 3. Build EVENT Networks
     logger.info("Building topological routing networks for EVENT...")
-    roads_buffered_path = os.path.join(buffered_osm_dir, "osm_roads.geojson")
     event_net = build_routing_networks(
         roads_path=roads_buffered_path,
         hazard_roads_path=event_roads_path,
@@ -205,6 +308,13 @@ def run_layer5(
     if len(changed_cutoffs) == 0:
         logger.info("Construction scenario: 0 cut-off settlements change (none become connected).")
 
+    # Free construction networks and walking graph immediately to minimize RAM
+    del constr_net, G_constr_post
+    if "G_walking" in event_net:
+        del event_net["G_walking"]
+    import gc
+    gc.collect()
+
     # Map results to settlements GeoDataFrame
     v_dict = {r["settlement_id"]: r for r in v_res["settlement_details"]}
     w_dict = {r["settlement_id"]: r for r in w_res["settlement_details"]}
@@ -227,9 +337,10 @@ def run_layer5(
     settlements_out["depends_on_construction_road"] = [depends_on_constr[sid] for sid in settlements_out["settlement_id"]]
     settlements_out["construction_road_osm_ids"] = [", ".join(constr_ways_per_sid[sid]) for sid in settlements_out["settlement_id"]]
 
-    # Save settlements.geojson in EPSG:4326 for standard GIS interoperability
+    # Save settlements.geojson in EPSG:4326 for standard GIS interoperability (deterministic sort by settlement_id)
     settle_geojson_path = out_path / "settlements.geojson"
-    settlements_out.to_crs("EPSG:4326").to_file(settle_geojson_path, driver="GeoJSON")
+    settlements_out_sorted = settlements_out.sort_values("settlement_id").reset_index(drop=True)
+    settlements_out_sorted.to_crs("EPSG:4326").to_file(settle_geojson_path, driver="GeoJSON")
     logger.info(f"Saved settlements to {settle_geojson_path}")
 
     # Build cutoff_summary.json
@@ -325,186 +436,136 @@ def run_layer5(
         output_json_path=packages_json_path
     )
 
-    # 6. Visualizations
-    logger.info("Loading S2 optical composite for visualizations...")
-    ref_tif = Path(out_dir).parent / "hazard_classes.tif"
-    if not ref_tif.exists():
-        ref_tif = Path(event_roads_path).parent / "hazard_classes.tif"
-    if not ref_tif.exists():
-        ref_tif = Path("data/processed/hazard_classes.tif")
-
-    s2_vis = None
-    trans = None
-    if ref_tif.exists():
-        try:
-            with rasterio.open(ref_tif) as src:
-                trans = src.transform
-        except Exception as e:
-            logger.warning(f"Could not load transform from {ref_tif}: {e}")
-
-    s2_cache_dirs = [
-        Path(out_dir).parent.parent / "interim" / "s2_cache",
-        Path("data/interim/s2_cache")
-    ]
-    for scd in s2_cache_dirs:
-        if scd.exists():
-            cands = sorted(list(scd.glob("post_*.npz")))
-            if cands:
-                try:
-                    d = np.load(cands[0])
-                    if "visual" in d:
-                        s2_vis = d["visual"]
-                        break
-                except Exception:
-                    pass
-
-    # Overview Quicklook
-    overview_png = str(out_path / "quicklook_l5.png")
-    logger.info(f"Rendering Layer 5 overview quicklook to {overview_png}...")
-    render_l5_overview(
-        settlements_gdf=settlements_out,
-        destinations_gdf=destinations_gdf,
-        roads_graded_path=event_roads_path,
-        bridges_graded_path=event_bridges_path,
-        output_png_path=overview_png,
-        s2_post_visual=s2_vis,
-        transform_matrix=trans,
+    # 5. CONTROL RUN CHECK (runs sequentially in <1s using cached base graph, avoiding duplicate RAM)
+    logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")
+    ctrl_summary = _run_control_routing_check(
+        roads_buffered_path=roads_buffered_path,
+        control_roads_path=control_roads_path,
+        control_bridges_path=control_bridges_path,
         bbox=bbox,
-        utm_crs=utm_crs
+        vehicle_hwys=vehicle_hwys,
+        walking_extra=walking_extra,
+        rural_roads_drivable=rural_roads_drivable,
+        construction_roads_passable=construction_roads_passable,
+        snap_dead_end_m=snap_dead_end_m,
+        utm_crs=utm_crs,
+        settlements_gdf=settlements_gdf,
+        destinations_gdf=destinations_gdf,
+        max_snap_m=max_snap_m,
+        ctrl_out_path=ctrl_out_path
     )
 
-    # 3 Zoom Plots for largest cut-off settlements
-    top_3_cutoff = sorted(v_res["optimistic"]["cut_off_settlements"], key=lambda x: x["building_count"], reverse=True)[:3]
-    all_roads_gdf = gpd.read_file(roads_buffered_path).to_crs(utm_crs)
-
+    overview_png = str(out_path / "quicklook_l5.png")
+    s3_comp_png = str(out_path / "zoom_settlement3_component.png")
+    dead_end_png = str(out_path / "zoom_dead_end.png")
     zoom_png_paths = []
-    for rank_idx, s_cut in enumerate(top_3_cutoff, start=1):
-        zoom_png = str(out_path / f"zoom_cutoff_{rank_idx}.png")
-        logger.info(f"Rendering Zoom plot #{rank_idx} for {s_cut['name']} ({s_cut['building_count']} buildings)...")
+
+    # 6. Visualizations (guarded by enable_quicklooks)
+    if enable_quicklooks:
+        logger.info("Loading S2 optical composite for visualizations...")
+        ref_tif = Path(out_dir).parent / "hazard_classes.tif"
+        if not ref_tif.exists():
+            ref_tif = Path(event_roads_path).parent / "hazard_classes.tif"
+        if not ref_tif.exists():
+            ref_tif = Path("data/processed/hazard_classes.tif")
+
+        s2_vis = None
+        trans = None
+        if ref_tif.exists():
+            try:
+                with rasterio.open(ref_tif) as src:
+                    trans = src.transform
+            except Exception as e:
+                logger.warning(f"Could not load transform from {ref_tif}: {e}")
+
+        s2_cache_dirs = [
+            Path(out_dir).parent.parent / "interim" / "s2_cache",
+            Path("data/interim/s2_cache")
+        ]
+        for scd in s2_cache_dirs:
+            if scd.exists():
+                cands = sorted(list(scd.glob("post_*.npz")))
+                if cands:
+                    try:
+                        d = np.load(cands[0])
+                        if "visual" in d:
+                            s2_vis = d["visual"]
+                            break
+                    except Exception:
+                        pass
+
+        # Overview Quicklook
+        logger.info(f"Rendering Layer 5 overview quicklook to {overview_png}...")
+        render_l5_overview(
+            settlements_gdf=settlements_out,
+            destinations_gdf=destinations_gdf,
+            roads_graded_path=event_roads_path,
+            bridges_graded_path=event_bridges_path,
+            output_png_path=overview_png,
+            s2_post_visual=s2_vis,
+            transform_matrix=trans,
+            bbox=bbox,
+            utm_crs=utm_crs
+        )
+
+        # 3 Zoom Plots for largest cut-off settlements
+        top_3_cutoff = sorted(v_res["optimistic"]["cut_off_settlements"], key=lambda x: x["building_count"], reverse=True)[:3]
+        all_roads_gdf = gpd.read_file(roads_buffered_path).to_crs(utm_crs)
+
+        for rank_idx, s_cut in enumerate(top_3_cutoff, start=1):
+            zoom_png = str(out_path / f"zoom_cutoff_{rank_idx}.png")
+            logger.info(f"Rendering Zoom plot #{rank_idx} for {s_cut['name']} ({s_cut['building_count']} buildings)...")
+            try:
+                render_cutoff_zoom(
+                    settlement_dict=s_cut,
+                    rank=rank_idx,
+                    output_png_path=zoom_png,
+                    s2_post_visual=s2_vis,
+                    transform_matrix=trans,
+                    all_roads_gdf=all_roads_gdf,
+                    utm_crs=utm_crs
+                )
+                zoom_png_paths.append(zoom_png)
+            except Exception as e:
+                logger.warning(f"Could not render cutoff zoom #{rank_idx}: {e}")
+
+        # Diagnostic component and dead-end plots (if features present)
         try:
-            render_cutoff_zoom(
-                settlement_dict=s_cut,
-                rank=rank_idx,
-                output_png_path=zoom_png,
+            logger.info(f"Rendering Settlement #3 post-event connected component to {s3_comp_png}...")
+            render_settlement3_component(
+                settlements_gdf=settlements_out,
+                G_vehicle=event_net["G_vehicle"],
+                output_png_path=s3_comp_png,
                 s2_post_visual=s2_vis,
                 transform_matrix=trans,
                 all_roads_gdf=all_roads_gdf,
                 utm_crs=utm_crs
             )
-            zoom_png_paths.append(zoom_png)
         except Exception as e:
-            logger.warning(f"Could not render cutoff zoom #{rank_idx}: {e}")
+            logger.debug(f"Settlement #3 component plot skipped: {e}")
 
-    # Diagnostic component and dead-end plots (if features present)
-    try:
-        s3_comp_png = str(out_path / "zoom_settlement3_component.png")
-        logger.info(f"Rendering Settlement #3 post-event connected component to {s3_comp_png}...")
-        render_settlement3_component(
-            settlements_gdf=settlements_out,
-            G_vehicle=event_net["G_vehicle"],
-            output_png_path=s3_comp_png,
-            s2_post_visual=s2_vis,
-            transform_matrix=trans,
-            all_roads_gdf=all_roads_gdf,
-            utm_crs=utm_crs
-        )
-    except Exception as e:
-        logger.debug(f"Settlement #3 component plot skipped: {e}")
-
-    try:
-        dead_end_png = str(out_path / "zoom_dead_end.png")
-        logger.info(f"Rendering dead-end topology gap zoom to {dead_end_png}...")
-        render_dead_end_zoom(
-            output_png_path=dead_end_png,
-            s2_post_visual=s2_vis,
-            transform_matrix=trans,
-            roads_path=roads_buffered_path,
-            utm_crs=utm_crs
-        )
-    except Exception as e:
-        logger.debug(f"Dead end zoom plot skipped: {e}")
-
-    # 7. CONTROL RUN CHECK
-    logger.info("=== RUNNING CONTROL RUN VALIDATION CHECK ===")
-    ctrl_net = build_routing_networks(
-        roads_path=roads_buffered_path,
-        hazard_roads_path=control_roads_path,
-        hazard_bridges_path=control_bridges_path,
-        bbox=bbox,
-        vehicle_highways=vehicle_hwys,
-        walking_highways_extra=walking_extra,
-        rural_roads_drivable=rural_roads_drivable,
-        construction_roads_passable=construction_roads_passable,
-        snap_dead_end_nodes_m=snap_dead_end_m,
-        utm_crs=utm_crs
-    )
-    ctrl_v_res = evaluate_network_connectivity(
-        G=ctrl_net["G_vehicle"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="vehicle_control",
-        max_snap_distance_m=max_snap_m
-    )
-    ctrl_w_res = evaluate_network_connectivity(
-        G=ctrl_net["G_walking"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="walking_control",
-        max_snap_distance_m=max_snap_m
-    )
-
-    ctrl_v_cutoff = ctrl_v_res["optimistic"]["cut_off_count"]
-    ctrl_w_cutoff = ctrl_w_res["optimistic"]["cut_off_count"]
-    logger.info(f"CONTROL Check: Vehicle cut-off = {ctrl_v_cutoff}, Walking cut-off = {ctrl_w_cutoff}")
-
-    # Re-run control with construction_roads_passable=True to verify 0 cut-offs in that scenario as well
-    ctrl_net_c = build_routing_networks(
-        roads_path=roads_buffered_path,
-        hazard_roads_path=control_roads_path,
-        hazard_bridges_path=control_bridges_path,
-        bbox=bbox,
-        vehicle_highways=vehicle_hwys,
-        walking_highways_extra=walking_extra,
-        rural_roads_drivable=rural_roads_drivable,
-        construction_roads_passable=True,
-        snap_dead_end_nodes_m=snap_dead_end_m,
-        utm_crs=utm_crs
-    )
-    ctrl_vc_res = evaluate_network_connectivity(
-        G=ctrl_net_c["G_vehicle"],
-        settlements_gdf=settlements_gdf,
-        destinations_gdf=destinations_gdf,
-        network_name="control_vehicle_constr",
-        max_snap_distance_m=max_snap_m
-    )
-    ctrl_vc_cutoff = ctrl_vc_res["optimistic"]["cut_off_count"]
-    logger.info(f"CONTROL Check (construction_roads_passable=True): Vehicle cut-off = {ctrl_vc_cutoff}")
-
-    ctrl_summary = {
-        "vehicle_cutoff_count": ctrl_v_cutoff,
-        "vehicle_constr_cutoff_count": ctrl_vc_cutoff,
-        "walking_cutoff_count": ctrl_w_cutoff,
-        "vehicle_connected_clear_count": ctrl_v_res["optimistic"]["connected_clear_count"],
-        "vehicle_connected_unverified_count": ctrl_v_res["optimistic"]["connected_unverified_count"],
-        "walking_connected_clear_count": ctrl_w_res["optimistic"]["connected_clear_count"],
-        "walking_connected_unverified_count": ctrl_w_res["optimistic"]["connected_unverified_count"]
-    }
-    with open(ctrl_out_path / "cutoff_summary_control.json", "w") as f:
-        json.dump(ctrl_summary, f, indent=2)
-
-    # Check control cut-offs (log warning if non-zero false alarms)
-    if ctrl_v_cutoff != 0:
-        logger.warning(f"CONTROL vehicle cut-offs: expected 0, got {ctrl_v_cutoff}")
-    if ctrl_vc_cutoff != 0:
-        logger.warning(f"CONTROL vehicle (construction passable) cut-offs: expected 0, got {ctrl_vc_cutoff}")
-    if ctrl_w_cutoff != 0:
-        logger.warning(f"CONTROL walking cut-offs: expected 0, got {ctrl_w_cutoff}")
+        try:
+            logger.info(f"Rendering dead-end topology gap zoom to {dead_end_png}...")
+            render_dead_end_zoom(
+                output_png_path=dead_end_png,
+                s2_post_visual=s2_vis,
+                transform_matrix=trans,
+                roads_path=roads_buffered_path,
+                utm_crs=utm_crs
+            )
+        except Exception as e:
+            logger.debug(f"Dead end zoom plot skipped: {e}")
 
     # Copy artifacts to artifact dir
     if os.path.exists(artifact_dir):
         for p in [overview_png, s3_comp_png, dead_end_png, repair_json_path, packages_json_path, str(settle_geojson_path), str(summary_json_path)] + zoom_png_paths:
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(artifact_dir, os.path.basename(p)))
+
+    # Clear cached base networks and run GC to reclaim memory
+    clear_networks_cache()
+    import gc
+    gc.collect()
 
     return {
         "event_summary": cutoff_summary,

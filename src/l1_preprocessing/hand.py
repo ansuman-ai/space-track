@@ -9,6 +9,58 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 
+import ctypes
+import os
+import logging
+from pathlib import Path
+
+logger = logging.getLogger("l1_hand")
+_LIB_HAND = None
+_LOGGED_FALLBACK = False
+
+def _get_hand_lib():
+    global _LIB_HAND, _LOGGED_FALLBACK
+    if os.environ.get("HAND_DISABLE_C", "").lower() in ("1", "true", "yes"):
+        if not _LOGGED_FALLBACK:
+            logger.warning("HAND_DISABLE_C set: C-accelerated HAND module disabled; falling back to pure Python implementation.")
+            _LOGGED_FALLBACK = True
+        return None
+
+    if _LIB_HAND is not None:
+        return _LIB_HAND
+    so_path = Path(__file__).parent / "libhand_fast.so"
+    c_path = Path(__file__).parent / "hand_c.c"
+    if not so_path.exists() and c_path.exists():
+        import subprocess
+        try:
+            subprocess.run(["gcc", "-O3", "-shared", "-fPIC", str(c_path), "-o", str(so_path)], check=True, capture_output=True)
+        except Exception as e:
+            logger.debug(f"Automatic compilation of libhand_fast.so failed: {e}")
+    if so_path.exists():
+        try:
+            lib = ctypes.CDLL(str(so_path))
+            lib.d8_accum.argtypes = [
+                np.ctypeslib.ndpointer(dtype=np.int64, flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(dtype=np.int64, flags="C_CONTIGUOUS"),
+                ctypes.c_int64,
+                np.ctypeslib.ndpointer(dtype=np.int32, flags="C_CONTIGUOUS")
+            ]
+            lib.d8_propagate.argtypes = [
+                np.ctypeslib.ndpointer(dtype=np.int64, flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(dtype=np.int64, flags="C_CONTIGUOUS"),
+                ctypes.c_int64,
+                np.ctypeslib.ndpointer(dtype=np.float32, flags="C_CONTIGUOUS")
+            ]
+            _LIB_HAND = lib
+        except Exception as e:
+            logger.debug(f"Loading libhand_fast.so failed: {e}")
+            _LIB_HAND = None
+    if _LIB_HAND is None and not _LOGGED_FALLBACK:
+        logger.warning("C-accelerated HAND module unavailable; falling back to pure Python implementation.")
+        _LOGGED_FALLBACK = True
+    return _LIB_HAND
+
+
 def compute_hand_native(
     elevation: np.ndarray,
     dx: float = 10.0,
@@ -50,16 +102,20 @@ def compute_hand_native(
 
     # 2. Topological sort (high to low elevation)
     flat_dem = dem.ravel()
-    order = np.argsort(flat_dem)[::-1].astype(np.int32)
+    order = np.ascontiguousarray(np.argsort(flat_dem)[::-1], dtype=np.int64)
 
     # 3. Flow accumulation
-    flat_target = target_idx.ravel()
+    flat_target = np.ascontiguousarray(target_idx.ravel(), dtype=np.int64)
     accum = np.ones(total_cells, dtype=np.int32)
 
-    for i in order:
-        tgt = flat_target[i]
-        if 0 <= tgt < total_cells:
-            accum[tgt] += accum[i]
+    lib = _get_hand_lib()
+    if lib is not None:
+        lib.d8_accum(order, flat_target, total_cells, accum)
+    else:
+        for i in order:
+            tgt = flat_target[i]
+            if 0 <= tgt < total_cells:
+                accum[tgt] += accum[i]
 
     accum_2d = accum.reshape(h, w)
     stream_mask = (accum_2d >= int(drainage_threshold)).astype(np.uint8)
@@ -71,12 +127,15 @@ def compute_hand_native(
 
     # Downstream propagation along D8 paths (reverse order: low to high)
     flat_drainage = drainage_elev.ravel()
-    rev_order = order[::-1]
-    for i in rev_order:
-        if np.isnan(flat_drainage[i]):
-            tgt = flat_target[i]
-            if 0 <= tgt < total_cells and not np.isnan(flat_drainage[tgt]):
-                flat_drainage[i] = flat_drainage[tgt]
+    rev_order = np.ascontiguousarray(order[::-1], dtype=np.int64)
+    if lib is not None:
+        lib.d8_propagate(rev_order, flat_target, total_cells, flat_drainage)
+    else:
+        for i in rev_order:
+            if np.isnan(flat_drainage[i]):
+                tgt = flat_target[i]
+                if 0 <= tgt < total_cells and not np.isnan(flat_drainage[tgt]):
+                    flat_drainage[i] = flat_drainage[tgt]
 
     # Resolve any remaining cells (local depressions or disconnected edges) via EDT
     unresolved = np.isnan(flat_drainage)

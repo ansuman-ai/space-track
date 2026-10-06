@@ -144,75 +144,83 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
         except Exception as e:
             logger.warning(f"PC STAC query failed: {e}; using direct AWS Open Data Copernicus DEM")
 
-    opened_datasets = []
-    try:
-        with rasterio.Env(AWS_NO_SIGN_REQUEST='YES', GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', CURL_CA_BUNDLE='/etc/ssl/certs/ca-certificates.crt'):
-            for lat in range(lat_min_int, lat_max_int + 1):
-                for lon in range(lon_min_int, lon_max_int + 1):
-                    aws_url = get_aws_dem_tile_url(lat, lon)
-                    # Try PC URL if available, else AWS Open Data
-                    tile_src = None
-                    if tile_urls:
-                        for u in tile_urls:
-                            try:
-                                logger.info(f"Trying PC DEM URL: {u[:80]}...")
-                                tile_src = rasterio.open(u)
-                                break
-                            except Exception as e:
-                                logger.warning(f"Failed to open PC DEM raster ({e}); trying AWS Open Data...")
-                    if tile_src is None:
-                        logger.info(f"Opening DEM raster from AWS Open Data: {aws_url}...")
-                        tile_src = rasterio.open(aws_url)
-                    opened_datasets.append(tile_src)
+    from .gdal_env import get_shared_gdal_env
+    for fetch_attempt in range(3):
+        opened_datasets = []
+        try:
+            with get_shared_gdal_env(AWS_NO_SIGN_REQUEST='YES'):
+                for lat in range(lat_min_int, lat_max_int + 1):
+                    for lon in range(lon_min_int, lon_max_int + 1):
+                        aws_url = get_aws_dem_tile_url(lat, lon)
+                        tile_src = None
+                        # Use AWS Open Data Copernicus DEM directly
+                        try:
+                            logger.info(f"Opening DEM raster from AWS Open Data: {aws_url}...")
+                            tile_src = rasterio.open(aws_url)
+                        except Exception as e:
+                            logger.warning(f"Failed opening AWS DEM ({e}); trying PC URL if available...")
+                            if tile_urls:
+                                for u in tile_urls:
+                                    try:
+                                        tile_src = rasterio.open(u)
+                                        break
+                                    except Exception:
+                                        pass
+                        if tile_src is None:
+                            raise RuntimeError(f"Could not open DEM tile for lat={lat}, lon={lon}")
+                        opened_datasets.append(tile_src)
 
-        if len(opened_datasets) == 1:
-            src = opened_datasets[0]
-            if src.crs and src.crs.to_string() != "EPSG:4326":
-                proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
-            else:
-                proj_bounds = (c_min_lon, c_min_lat, c_max_lon, c_max_lat)
+                if len(opened_datasets) == 1:
+                    src = opened_datasets[0]
+                    if src.crs and src.crs.to_string() != "EPSG:4326":
+                        proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
+                    else:
+                        proj_bounds = (c_min_lon, c_min_lat, c_max_lon, c_max_lat)
 
-            window = from_bounds(*proj_bounds, transform=src.transform)
-            data = src.read(1, window=window)
-            out_transform = rasterio.windows.transform(window, src.transform)
-            out_meta = src.meta.copy()
-            out_meta.update({
-                "driver": "GTiff",
-                "height": data.shape[0],
-                "width": data.shape[1],
-                "transform": out_transform,
-                "count": 1,
-                "dtype": data.dtype
-            })
-            with rasterio.open(target_tif, "w", **out_meta) as dst:
-                dst.write(data, 1)
-                dst.set_band_description(1, "Elevation (m)")
-        else:
-            mosaic, out_trans = merge(opened_datasets, bounds=(c_min_lon, c_min_lat, c_max_lon, c_max_lat))
-            out_meta = opened_datasets[0].meta.copy()
-            out_meta.update({
-                "driver": "GTiff",
-                "height": mosaic.shape[1],
-                "width": mosaic.shape[2],
-                "transform": out_trans,
-                "count": 1,
-                "dtype": mosaic.dtype
-            })
-            with rasterio.open(target_tif, "w", **out_meta) as dst:
-                dst.write(mosaic[0], 1)
-                dst.set_band_description(1, "Elevation (m)")
+                    window = from_bounds(*proj_bounds, transform=src.transform)
+                    data = src.read(1, window=window)
+                    out_transform = rasterio.windows.transform(window, src.transform)
+                    out_meta = src.meta.copy()
+                    out_meta.update({
+                        "driver": "GTiff",
+                        "height": data.shape[0],
+                        "width": data.shape[1],
+                        "transform": out_transform,
+                        "count": 1,
+                        "dtype": data.dtype
+                    })
+                    with rasterio.open(target_tif, "w", **out_meta) as dst:
+                        dst.write(data, 1)
+                        dst.set_band_description(1, "Elevation (m)")
+                else:
+                    mosaic, out_trans = merge(opened_datasets, bounds=(c_min_lon, c_min_lat, c_max_lon, c_max_lat))
+                    out_meta = opened_datasets[0].meta.copy()
+                    out_meta.update({
+                        "driver": "GTiff",
+                        "height": mosaic.shape[1],
+                        "width": mosaic.shape[2],
+                        "transform": out_trans,
+                        "count": 1,
+                        "dtype": mosaic.dtype
+                    })
+                    with rasterio.open(target_tif, "w", **out_meta) as dst:
+                        dst.write(mosaic[0], 1)
+                        dst.set_band_description(1, "Elevation (m)")
 
-        logger.info(f"Successfully saved Copernicus DEM-30 to {target_tif}")
-        return target_tif
-    except Exception as e:
-        logger.error(f"Error fetching/clipping Copernicus DEM: {e}")
-        sys.exit(f"FAILED: Could not download and clip Copernicus DEM: {e}")
-    finally:
-        for ds in opened_datasets:
-            try:
-                ds.close()
-            except Exception:
-                pass
+            logger.info(f"Successfully saved Copernicus DEM-30 to {target_tif}")
+            return target_tif
+        except Exception as e:
+            logger.warning(f"Attempt {fetch_attempt + 1}/3 fetching Copernicus DEM failed: {e}")
+            if fetch_attempt == 2:
+                logger.error(f"Error fetching/clipping Copernicus DEM after 3 attempts: {e}")
+                sys.exit(f"FAILED: Could not download and clip Copernicus DEM: {e}")
+            time.sleep(2)
+        finally:
+            for ds in opened_datasets:
+                try:
+                    ds.close()
+                except Exception:
+                    pass
 
 
 if __name__ == "__main__":

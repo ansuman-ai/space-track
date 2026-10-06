@@ -316,29 +316,53 @@ def compute_repair_packages(
     dist_post = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
     cut_off_sids = [sid for sid, info in s_nodes.items() if info["node"] not in dist_post]
 
-    # Penalized graph: large penalty for destroyed elements
-    G_pen = G_vehicle.copy()
-    for u, v, d in G_pen.edges(data=True):
+    # Penalized graph: multi-source Dijkstra from __DEST__ via scipy.sparse.csgraph
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import dijkstra
+
+    node_to_idx = {n: i for i, n in enumerate(nodes_list)}
+    dest_idx = len(nodes_list)
+
+    rows, cols, weights = [], [], []
+    for u, v, d in G_vehicle.edges(data=True):
+        u_idx, v_idx = node_to_idx[u], node_to_idx[v]
         length = float(d.get("weight", 0.0))
         is_dest = (d.get("damage_grade") == "Destroyed")
-        G_pen[u][v]["penalized_weight"] = length + (penalty_per_element if is_dest else 0.0)
+        w = length + (penalty_per_element if is_dest else 0.0)
+        rows.extend([u_idx, v_idx])
+        cols.extend([v_idx, u_idx])
+        weights.extend([w, w])
 
     for dn in valid_d_nodes:
-        G_pen.add_edge("__DEST__", dn, penalized_weight=0.0)
+        d_idx = node_to_idx[dn]
+        rows.extend([dest_idx, d_idx])
+        cols.extend([d_idx, dest_idx])
+        weights.extend([0.0, 0.0])
+
+    n_total = len(nodes_list) + 1
+    csr_pen = csr_matrix((weights, (rows, cols)), shape=(n_total, n_total), dtype=np.float64)
+    _, pred_pen = dijkstra(csr_pen, directed=False, indices=dest_idx, return_predecessors=True)
 
     packages_by_sid = {}
     for sid in cut_off_sids:
         info = s_nodes[sid]
         sn = info["node"]
+        sn_idx = node_to_idx[sn]
+
+        path = []
+        curr = sn_idx
+        while curr != dest_idx and curr != -9999:
+            path.append(nodes_list[curr])
+            curr = pred_pen[curr]
+        if curr == dest_idx:
+            path.append("__DEST__")
+
         destroyed_oids = set()
-        try:
-            path = nx.shortest_path(G_pen, sn, "__DEST__", weight="penalized_weight")
-            for i in range(len(path) - 2):  # exclude __DEST__
-                ed = G_vehicle.get_edge_data(path[i], path[i+1])
-                if ed and ed.get("damage_grade") == "Destroyed":
-                    destroyed_oids.add(str(ed.get("osm_id")))
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            pass
+        for i in range(len(path) - 2):  # exclude __DEST__
+            ed = G_vehicle.get_edge_data(path[i], path[i + 1])
+            if ed and ed.get("damage_grade") == "Destroyed":
+                destroyed_oids.add(str(ed.get("osm_id")))
+
         pkg = tuple(sorted(list(destroyed_oids)))
         packages_by_sid[sid] = {
             "settlement_id": sid,

@@ -52,6 +52,62 @@ Following a 5-way ablation study (Variants A–E), Variant C was selected as the
 
 ---
 
+## False-Alarm Guards & Selection Methodology (No-Event Tests Only)
+
+To eliminate false-alarm settlement isolations and spurious detections during non-disaster periods, principled physical and topological guards were incorporated into Layer 2:
+1. **Physical Change Floors**:
+   - `min_abs_d_ndvi_floor: -0.20`: Debris flows strip vegetation completely, whereas seasonal phenology maintains $|\Delta\text{NDVI}| < 0.15$.
+   - `min_d_bsi_floor: 0.18`: Fresh mineral sediment deposition raises BSI by $\ge +0.18$.
+   - `min_channel_cvm_floor: 0.20`: Scour vector magnitude across multi-spectral bands exceeds $0.20$ inside riverbeds.
+   - `min_builtup_cvm_floor: 0.15`: Structural building collapse and rubble change multi-spectral reflectance by $\ge 0.15$.
+2. **Seasonal Control Pair**:
+   - Uses a control pair from the identical calendar dates 1 year earlier (`seasonal_control_lookback_days: 365`) to capture annual seasonal phenology. The stricter of normal and seasonal control thresholds is applied.
+3. **Inferred Reach Guard**:
+   - `inferred_min_reach_fraction: 0.20` & `inferred_min_observed_pixels: 50`: A stream reach is only hydraulically filled if observed damage touches at least 20% of the channel reach length and has $\ge 50$ pixels, preventing isolated hillside false alarms from triggering broad valley fills.
+
+### Selection Without EMSR927
+To guarantee zero benchmark leakage and ensure real-world generalization, guard parameters were evaluated over a 24-combination grid across **four cross-season no-event test datasets**:
+- **Test C1**: Trishuli Dry Season (`2026-03-15`)
+- **Test C2**: Trishuli Post-Monsoon (`2025-11-15`)
+- **Test C3**: Trishuli Pre-Monsoon (`2026-05-15`)
+- **Test C4**: Melamchi Dry Season (`2021-03-15`)
+
+**Selection Rule**:
+1. Strictly reject any parameter set where any no-event test has total affected area $\ge 0.07\text{ km²}$, $> 0$ affected buildings, or $> 0$ cut-off settlements.
+2. Among passing configurations, select the least restrictive one (maximizing detected affected area on disaster events A + B).
+3. EMSR927 validation metrics were evaluated strictly *after* parameter selection to ensure zero leakage.
+
+The selected default configuration (`min_d_bsi_floor: 0.18`, `inferred_min_reach_fraction: 0.20`, `inferred_min_observed_pixels: 50`) uniquely passed all no-event tests (all $< 0.024\text{ km²}$, 0 buildings, 0 cut-offs) while preserving flood and debris detection across Events A and B.
+
+### Channel Threshold Cap Verification (No-Event Tests)
+To prevent control noise overestimation in river channels while strictly guarding against false alarms, a channel threshold cap was evaluated across candidate caps `{0.55, 0.60, 0.65, none}` where `channel threshold = min(control/seasonal-derived value, cap)`.
+- All threshold caps were evaluated across the cross-season no-event tests C1–C4.
+- All candidate caps satisfied the no-event rejection rule ($< 0.07\text{ km²}$ affected area, 0 buildings, 0 bridges, 0 cut-offs across C1–C4).
+- Following the non-EMS selection rule, the lowest (most sensitive) passing cap was selected: `channel_cap: 0.55`.
+
+---
+
+## Installation & Build
+
+### 1. Requirements
+Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. C Extension Compilation (HAND Acceleration)
+To accelerate D8 flow accumulation and downstream drainage elevation propagation in Layer 1, compile the shared C library:
+```bash
+gcc -O3 -shared -fPIC src/l1_preprocessing/hand_c.c -o src/l1_preprocessing/libhand_fast.so
+```
+
+### 3. Portability & Automatic Python Fallback
+- If `gcc` is not available or `libhand_fast.so` cannot be loaded, the pipeline automatically detects the missing module, logs a warning, and falls back seamlessly to the vectorized pure-Python implementation.
+- To explicitly force the pure-Python implementation (e.g. for testing or non-C environments), set `HAND_DISABLE_C=1` in your environment.
+- **Byte-Identity Guarantee**: The C extension and the Python fallback produce bit-for-bit identical results (`Max diff HAND: 0.0`, byte-identical `hand.tif`).
+
+---
+
 ## Required Data Attribution
 
 - *"Contains modified Copernicus Sentinel data 2026."*
