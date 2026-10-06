@@ -280,7 +280,7 @@ def prepare_s2_event_and_control_composites(
     from collections import Counter
 
     c_path = Path(cache_dir)
-    npz_files = sorted(list(c_path.glob("*.npz")))
+    npz_files = sorted([f for f in c_path.glob("*.npz") if not f.name.startswith(".") and "tmp" not in f.name])
     if not c_path.exists() or len(npz_files) == 0:
         logger.warning("[WARNING] Missing input: Clear Sentinel-2 optical scenes unavailable in cache. Falling back to Sentinel-1 SAR.")
         return {
