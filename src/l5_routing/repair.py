@@ -69,7 +69,7 @@ def compute_repair_priorities(
 
     dist_post = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
     init_connected_sids = set(sid for sid, info in s_nodes.items() if info["node"] in dist_post)
-    cutoff_sids = set(sid for sid, info in s_nodes.items() if info["node"] not in dist_post)
+    cutoff_sids = set(sid for sid, info in s_nodes.items() if info["node"] in dist_pre and info["node"] not in dist_post)
     logger.info(f"Initial post-event connected settlements: {len(init_connected_sids)}, cut-off: {len(cutoff_sids)}")
 
     # Group destroyed edges by OSM ID
@@ -304,17 +304,22 @@ def compute_repair_packages(
                 "building_count": int(s_row.get("building_count", 0))
             }
 
-    # Post-event baseline to identify cut-off settlements
-    G_post = G_vehicle.copy()
+    # Pre-event and post-event baselines to identify cut-off settlements
+    G_pre = G_vehicle.copy()
+    if "__DEST__" in G_pre:
+        G_pre.remove_node("__DEST__")
+    for dn in valid_d_nodes:
+        if dn in G_pre:
+            G_pre.add_edge("__DEST__", dn, weight=0.0)
+    dist_pre = nx.single_source_dijkstra_path_length(G_pre, "__DEST__")
+
+    G_post = G_pre.copy()
     for u, v, d in list(G_post.edges(data=True)):
         if d.get("damage_grade") == "Destroyed":
             G_post.remove_edge(u, v)
-    for dn in valid_d_nodes:
-        if dn in G_post:
-            G_post.add_edge("__DEST__", dn, weight=0.0)
 
     dist_post = nx.single_source_dijkstra_path_length(G_post, "__DEST__")
-    cut_off_sids = [sid for sid, info in s_nodes.items() if info["node"] not in dist_post]
+    cut_off_sids = [sid for sid, info in s_nodes.items() if info["node"] in dist_pre and info["node"] not in dist_post]
 
     # Penalized graph: multi-source Dijkstra from __DEST__ via scipy.sparse.csgraph
     from scipy.sparse import csr_matrix
@@ -364,6 +369,8 @@ def compute_repair_packages(
                 destroyed_oids.add(str(ed.get("osm_id")))
 
         pkg = tuple(sorted(list(destroyed_oids)))
+        if not pkg:
+            continue
         packages_by_sid[sid] = {
             "settlement_id": sid,
             "name": info["name"],
@@ -381,6 +388,8 @@ def compute_repair_packages(
 
     ranked_packages = []
     for pkg, g_info in grouped.items():
+        if len(pkg) == 0:
+            continue
         ranked_packages.append({
             "elements": list(pkg),
             "element_count": len(pkg),
