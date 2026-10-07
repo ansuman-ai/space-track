@@ -3,7 +3,6 @@
 
 case_study:
   name: "Disaster Impact Assessment"
-  country: "Nepal"
   utm_crs: "auto"
 
 orbit:
