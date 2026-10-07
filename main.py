@@ -131,7 +131,8 @@ def run_pipeline(
     out_dir: str,
     config_path: str = "configs/default.yaml",
     no_cache: bool = False,
-    no_quicklooks: bool = False
+    no_quicklooks: bool = False,
+    event_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Executes full end-to-end disaster impact assessment pipeline (L0 -> L5).
@@ -653,6 +654,7 @@ def run_pipeline(
 
     summary_payload = {
         "status": overall_status,
+        "event_name": event_name,
         "bbox": bbox,
         "event_date": event_date,
         "utm_crs": utm_crs,
@@ -730,6 +732,7 @@ def main():
     parser.add_argument("--bbox", type=float, nargs=4, required=True, help="W S E N (bounding box in WGS84)")
     parser.add_argument("--event-date", type=str, required=True, help="YYYY-MM-DD (event date)")
     parser.add_argument("--out-dir", type=str, required=True, help="Output directory path")
+    parser.add_argument("--event-name", type=str, default=None, help="Optional disaster event name")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to default config yaml")
     parser.add_argument("--no-cache", action="store_true", help="Disable copying pre-existing cache from data/")
     parser.add_argument("--no-quicklooks", action="store_true", help="Disable rendering quicklook visualization plots")
@@ -741,7 +744,8 @@ def main():
         out_dir=args.out_dir,
         config_path=args.config,
         no_cache=args.no_cache,
-        no_quicklooks=args.no_quicklooks
+        no_quicklooks=args.no_quicklooks,
+        event_name=args.event_name
     )
 
 
