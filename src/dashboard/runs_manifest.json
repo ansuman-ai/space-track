@@ -1,0 +1,36 @@
+{
+  "pipeline_tag": "e2e-final4",
+  "commit": "2523c9c",
+  "verified_runs": {
+    "test_A_cold_verify": {
+      "status": "COMPLETED",
+      "pipeline_tag": "e2e-final4",
+      "commit": "2523c9c"
+    },
+    "test_B_cold_verify": {
+      "status": "COMPLETED",
+      "pipeline_tag": "e2e-final4",
+      "commit": "2523c9c"
+    },
+    "practice_assam_event": {
+      "status": "COMPLETED",
+      "pipeline_tag": "e2e-final3",
+      "commit": "26f85f7"
+    },
+    "practice_assam_noevent": {
+      "status": "DEGRADED",
+      "pipeline_tag": "e2e-final3",
+      "commit": "26f85f7"
+    },
+    "practice_sikkim_event": {
+      "status": "COMPLETED",
+      "pipeline_tag": "e2e-final3",
+      "commit": "26f85f7"
+    },
+    "practice_sikkim_noevent": {
+      "status": "COMPLETED",
+      "pipeline_tag": "e2e-final3",
+      "commit": "26f85f7"
+    }
+  }
+}

@@ -98,6 +98,26 @@ To prevent control noise overestimation in river channels while strictly guardin
 - All candidate caps satisfied the no-event rejection rule ($< 0.07\text{ km²}$ affected area, 0 buildings, 0 bridges, 0 cut-offs across C1–C4).
 - Following the non-EMS selection rule, the lowest (most sensitive) passing cap was selected: `channel_cap: 0.55`.
 
+## Dashboard & Visualizer (Layer 7)
+
+Launch the interactive emergency dashboard with a single command:
+```bash
+python3 -m src.dashboard.app
+```
+or via uvicorn directly:
+```bash
+uvicorn src.dashboard.app:app --host 0.0.0.0 --port 8000
+```
+Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+Features:
+- Dynamic discovery of historical runs (`runs/` directory)
+- Map-first interface with toggleable vector and raster hazard/infrastructure layers
+- Pre-event OSM damage grading & flood classification
+- Severed transportation network routing & cut-off settlement analysis
+- Bilingual English / Nepali UI toggle
+- Zero hardcoded place names or statistics; all data parsed dynamically from pipeline JSONs.
+
 ---
 
 ## Installation & Build

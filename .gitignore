@@ -1,4 +1,5 @@
 # Data directory
+data
 data/
 
 # Python cache & build
@@ -18,6 +19,7 @@ __pycache__/
 .idea/
 .DS_Store
 *.swp
+runs
 runs/
 scratch/
 validation/emsr659/
