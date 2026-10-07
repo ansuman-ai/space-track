@@ -20,3 +20,5 @@ __pycache__/
 *.swp
 runs/
 scratch/
+validation/emsr659/
+validation/emsr692/

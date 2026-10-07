@@ -4,7 +4,7 @@
 case_study:
   name: "Trishuli - Syapru Besi Flood"
   country: "Nepal"
-  utm_crs: "EPSG:32645"
+  utm_crs: "auto"
 
 orbit:
   max_lookback_days: 36
@@ -34,7 +34,10 @@ detection:
   cloud_dilation_buffer_m: 60.0
   reach_length_m: 250.0
   inferred_hand_percentile: 90.0
-  inferred_min_observed_pixels: 20
+  inferred_min_observed_pixels: 50
+  inferred_min_reach_fraction: 0.20
+  min_abs_d_ndvi_floor: -0.20
+  min_d_bsi_floor: 0.18
   building_buffer_m: 10.0
   building_damage_proximity_m: 50.0
   intact_min_post_ndvi: 0.40

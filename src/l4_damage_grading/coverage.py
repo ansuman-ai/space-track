@@ -14,12 +14,16 @@ import numpy as np
 def compute_osm_coverage(
     osm_dir: str = "data/raw/osm",
     bbox: Optional[List[float]] = None,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Computes pre-event infrastructure exposure within the bounding box.
     Returns feature counts and road network length in km by type.
     """
+    if (utm_crs is None or utm_crs == "auto") and bbox:
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
+
     osm_path = Path(osm_dir)
     bbox_poly = box(*bbox) if bbox is not None else None
 

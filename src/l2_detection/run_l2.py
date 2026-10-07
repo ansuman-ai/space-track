@@ -152,14 +152,18 @@ def load_s1_features(
         if pre_f:
             with rasterio.open(pre_f) as s:
                 pre_vv = s.read(1)
+            pre_vv_out = pre_vv
             pre_db = pre_vv if np.nanmin(pre_vv) < 0.0 else 10.0 * np.log10(np.maximum(pre_vv, 1e-5))
             z_vv_asc_event = (post_vv_db - pre_db) / 2.0
         else:
+            pre_vv_out = None
             z_vv_asc_event = np.zeros_like(post_vv_db)
 
         # Control pair
         ctrl_post_f = None
         ctrl_pre_f = None
+        ctrl_post_out = None
+        ctrl_pre_out = None
         if ctrl_interim_dir and ctrl_interim_dir.exists():
             cp_cand = ctrl_interim_dir / "post_vv.tif"
             pr_cand = ctrl_interim_dir / "pre_vv.tif"
@@ -175,6 +179,8 @@ def load_s1_features(
             with rasterio.open(ctrl_post_f) as s_post, rasterio.open(ctrl_pre_f) as s_pre:
                 c_post = s_post.read(1)
                 c_pre = s_pre.read(1)
+            ctrl_post_out = c_post
+            ctrl_pre_out = c_pre
             c_post_db = c_post if np.nanmin(c_post) < 0.0 else 10.0 * np.log10(np.maximum(c_post, 1e-5))
             c_pre_db = c_pre if np.nanmin(c_pre) < 0.0 else 10.0 * np.log10(np.maximum(c_pre, 1e-5))
             z_vv_asc_ctrl = (c_post_db - c_pre_db) / 2.0
@@ -197,12 +203,30 @@ def load_s1_features(
     else:
         desc_lr_event = np.zeros_like(post_vv_db)
 
+    # Seasonal control S1 (if available for paddy / permanent water suppression)
+    seas_cands = [
+        post_vv_path.parent / "seasonal_post_vv.tif",
+        post_vv_path.parent.parent / "seasonal_control_2023" / "s1_seasonal_post.tif",
+        post_vv_path.parent.parent / "seasonal" / "raw" / "s1" / "post.tif",
+        post_vv_path.parent.parent / "seasonal" / "interim" / "post_vv.tif"
+    ]
+    seas_post_f = next((p for p in seas_cands if p and p.exists()), None)
+    if seas_post_f:
+        with rasterio.open(seas_post_f) as s_seas:
+            seas_post_out = s_seas.read(1)
+    else:
+        seas_post_out = None
+
     return {
         "z_vv_asc_event": z_vv_asc_event,
         "z_vv_asc_ctrl": z_vv_asc_ctrl,
         "desc_lr_event": desc_lr_event,
         "o19_lr_event": desc_lr_event,
-        "post_vv": post_vv
+        "post_vv": post_vv,
+        "pre_vv": pre_vv_out if 'pre_vv_out' in locals() else None,
+        "ctrl_post_vv": ctrl_post_out if 'ctrl_post_out' in locals() else None,
+        "ctrl_pre_vv": ctrl_pre_out if 'ctrl_pre_out' in locals() else None,
+        "seasonal_post_vv": seas_post_out
     }
 
 
@@ -237,7 +261,8 @@ def run_layer2(
     min_control_clear_pixels: int = 500,
     channel_cap: Optional[float] = 0.55,
     event_date: Optional[str] = None,
-    enable_quicklooks: bool = True
+    enable_quicklooks: bool = True,
+    detector: str = "combined"
 ) -> Dict[str, Any]:
 
     in_path = Path(interim_dir)
@@ -481,140 +506,238 @@ def run_layer2(
     print(f"  Sentinel-1 Ascending z-score threshold: {t_z_asc:.4f}")
     print(f"  Sentinel-1 Descending O19 log-ratio threshold: {t_lr_o19:.4f} dB")
 
-    # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour + Built-up)
-    logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel + Built-up)...")
-    s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
-    ch_change_ev = s2_data.get('in_channel_change_event')
-    if ch_change_ev is not None:
-        ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ev > t_channel)
+    # 4b. Terrain Regime Classification
+    slope_file = in_path / "slope.tif"
+    if slope_file.exists():
+        with rasterio.open(slope_file) as f_sl:
+            slope_arr = f_sl.read(1)
     else:
-        ch_ev_cand = np.zeros((h, w), dtype=bool)
-    s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
+        slope_arr = np.zeros_like(hand)
 
-    ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
+    from .flat_floodplain import classify_terrain_regime, detect_flat_floodplain_hazard
+    terrain_regime, terrain_stats = classify_terrain_regime(slope=slope_arr, hand=hand)
+    logger.info(f"Terrain Regime Classified: {terrain_regime.upper()} (Median slope: {terrain_stats.get('median_slope')}°, % slope<5°: {terrain_stats.get('pct_slope_lt_5')}%, % HAND<=15m: {terrain_stats.get('pct_hand_le_15')}%)")
 
-    aff_ev_clean, n_blobs_ev = filter_stream_connected_blobs(
-        candidate_mask=ev_cand_total,
-        stream_mask=stream_mask,
-        pixel_size_m=dx,
-        proximity_m=stream_proximity_m,
-        min_pixels=min_area_pixels
-    )
+    if terrain_regime == "flat_floodplain":
+        pre_vv_in = s1_data.get('pre_vv') if s1_data.get('pre_vv') is not None else post_vv
+        if detector == "kurosiwo":
+            logger.info("Detecting Flat-Floodplain Flood using Kuro Siwo SNUNet (optional detector)...")
+            sys.path.insert(0, '/home/zeus/Downloads/project1-l6')
+            from src.l6_ai_model.predict import predict as ks_predict
+            weights_path = "/home/zeus/Downloads/project1-l6/weights/best_segmentation.pt"
+            ks_out_dir = out_path / "snunet_output"
+            ks_mask_path = ks_out_dir / "flood_mask.tif"
+            if not ks_mask_path.exists():
+                ks_predict(
+                    pre_vv_path=str(in_path / "pre_vv.tif"),
+                    pre_vh_path=str(in_path / "pre_vh.tif"),
+                    post_vv_path=str(in_path / "post_vv.tif"),
+                    post_vh_path=str(in_path / "post_vh.tif"),
+                    slope_path=str(in_path / "slope.tif"),
+                    weights_path=weights_path,
+                    output_dir=str(ks_out_dir),
+                    device="cpu"
+                )
+            with rasterio.open(ks_mask_path) as src_ks:
+                ks_arr = src_ks.read(1)
+            aff_ev_clean = ((ks_arr == 2) & (hand <= 15.0) & (nodata_mask == 0)).astype(np.uint8)
+            source_mask_ev = np.where(aff_ev_clean == 1, 2, 0).astype(np.uint8)
+            fp_thresh = {"model": "kurosiwo_snunet"}
+        else:
+            logger.info("Detecting Class 2: Flat-Floodplain Open-Water Flood on EVENT (Combined S1+S2)...")
+            aff_ev_clean, source_mask_ev, fp_thresh = detect_flat_floodplain_hazard(
+                post_vv=post_vv,
+                pre_vv=pre_vv_in,
+                hand=hand,
+                perm_water_mask=perm_water_raw,
+                ctrl_post_vv=s1_data.get('ctrl_post_vv'),
+                ctrl_pre_vv=s1_data.get('ctrl_pre_vv'),
+                seasonal_post_vv=s1_data.get('seasonal_post_vv'),
+                s2_event_valid=s2_event_valid,
+                s2_data=s2_data,
+                nodata_mask=nodata_mask,
+                max_hand_m=15.0,
+                min_blob_pixels=100
+            )
+        ch_ev_affected = np.zeros((h, w), dtype=bool)
+        b_ev_affected = np.zeros((h, w), dtype=bool)
+        perm_water_unchanged = (perm_water_raw == 1) & (aff_ev_clean != 1)
+        perm_count = int(np.sum(perm_water_unchanged == 1))
+        perm_km2 = round(perm_count * pixel_area_km2, 4)
 
-    # Built-up CVA: applied to OSM building footprints within D metres of observed class-2 damage, REGARDLESS of HAND
-    # Iteratively propagates through adjacent damaged building footprints
-    c2_ev_total = (aff_ev_clean == 1)
-    while True:
-        dist_to_c2 = distance_transform_edt(~c2_ev_total) * dx
-        new_b_cand = s2_event_valid & (builtup_mask == 1) & (dist_to_c2 <= building_damage_proximity_m) & (cvm_ev > t_builtup) & (~c2_ev_total)
-        if np.sum(new_b_cand) == 0:
-            break
-        c2_ev_total |= new_b_cand
+        ev_s2_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 1)))
+        ev_s1_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 2)))
+        ev_aff_count = int(np.sum(aff_ev_clean == 1))
 
-    aff_ev_clean = c2_ev_total.astype(np.uint8)
+        ev_s2_km2 = round(ev_s2_count * pixel_area_km2, 4)
+        ev_s1_km2 = round(ev_s1_count * pixel_area_km2, 4)
+        ev_aff_km2 = round(ev_aff_count * pixel_area_km2, 4)
 
-    # In-channel changed pixels become Class 2 (sub-label "channel")
-    # Built-up affected pixels (sub-label "built-up")
-    # Unchanged baseline water remains Class 1
-    ch_ev_affected = (perm_water_raw == 1) & (aff_ev_clean == 1)
-    b_ev_affected = (builtup_mask == 1) & (aff_ev_clean == 1)
-    perm_water_unchanged = (perm_water_raw == 1) & (aff_ev_clean != 1)
+        inferred_ev_clean = np.zeros((h, w), dtype=np.uint8)
+        ev_inf_km2 = 0.0
+        ev_inf_count = 0
 
-    perm_count = int(np.sum(perm_water_unchanged == 1))
-    perm_km2 = round(perm_count * pixel_area_km2, 4)
+        logger.info("Evaluating CONTROL pair with flat-floodplain detector...")
+        if s1_data.get('ctrl_post_vv') is not None and s1_data.get('ctrl_pre_vv') is not None:
+            aff_ctrl_clean, _, _ = detect_flat_floodplain_hazard(
+                post_vv=s1_data['ctrl_post_vv'],
+                pre_vv=s1_data['ctrl_pre_vv'],
+                hand=hand,
+                perm_water_mask=perm_water_raw,
+                s2_event_valid=s2_ctrl_valid,
+                s2_data=s2_data,
+                nodata_mask=nodata_mask,
+                max_hand_m=15.0,
+                min_blob_pixels=100
+            )
+        else:
+            aff_ctrl_clean = np.zeros((h, w), dtype=np.uint8)
 
-    # Source attribution: S2 vs S1
-    source_mask_ev = np.zeros((h, w), dtype=np.uint8)
-    source_mask_ev[s2_event_valid] = 1  # 1: S2
-    source_mask_ev[~s2_event_valid] = 2  # 2: S1
+        ctrl_s2_count = int(np.sum((aff_ctrl_clean == 1) & s2_ctrl_valid))
+        ctrl_s1_count = int(np.sum((aff_ctrl_clean == 1) & (~s2_ctrl_valid)))
+        ctrl_aff_count = int(np.sum(aff_ctrl_clean == 1))
+        ctrl_s2_km2 = round(ctrl_s2_count * pixel_area_km2, 4)
+        ctrl_s1_km2 = round(ctrl_s1_count * pixel_area_km2, 4)
+        ctrl_aff_km2 = round(ctrl_aff_count * pixel_area_km2, 4)
 
-    ev_s2_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 1)))
-    ev_s1_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 2)))
-    ev_aff_count = int(np.sum(aff_ev_clean == 1))
-
-    ev_s2_km2 = round(ev_s2_count * pixel_area_km2, 4)
-    ev_s1_km2 = round(ev_s1_count * pixel_area_km2, 4)
-    ev_aff_km2 = round(ev_aff_count * pixel_area_km2, 4)
-
-    # 5b. Class 3: Inferred Flooded Corridor (HAND-based hydraulic fill along stream reaches)
-    logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (EVENT)...")
-    post_ndvi_arr = post_comp['ndvi'] if post_comp is not None else None
-    inferred_ev_clean, inferred_ev_stats = compute_inferred_flood_corridor(
-        hand=hand,
-        stream_mask=stream_mask,
-        observed_class2_mask=(aff_ev_clean == 1),
-        pixel_size_m=dx,
-        reach_length_m=reach_length_m,
-        hand_percentile=inferred_hand_percentile,
-        min_observed_pixels=inferred_min_observed_pixels,
-        min_reach_fraction=inferred_min_reach_fraction,
-        touch_distance_m=stream_proximity_m,
-        max_hand_corridor_m=max_hand_corridor_m,
-        post_ndvi=post_ndvi_arr,
-        d_ndvi=d_ndvi_event if post_comp is not None else None,
-        intact_min_post_ndvi=intact_min_post_ndvi,
-        intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
-    )
-    ev_inf_km2 = inferred_ev_stats["inferred_km2"]
-    ev_inf_count = inferred_ev_stats["inferred_pixels"]
-
-    # 6. Evaluate CONTROL pair with the exact same detector
-    logger.info("Evaluating CONTROL pair with the exact same multi-sensor detector...")
-    s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
-    ch_change_ctrl = s2_data.get('in_channel_change_ctrl')
-    if ch_change_ctrl is not None:
-        ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ctrl > t_channel)
+        inferred_ctrl_clean = np.zeros((h, w), dtype=np.uint8)
+        ctrl_inf_km2 = 0.0
+        ctrl_inf_count = 0
     else:
-        ch_ctrl_cand = np.zeros((h, w), dtype=bool)
-    s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
+        # 5. Class 2: Flood / Debris Affected (EVENT: Valley + In-Channel Scour + Built-up)
+        logger.info("Detecting Class 2: Flood / Debris Affected on EVENT (Valley + In-Channel + Built-up)...")
+        s2_ev_cand = s2_event_valid & ((d_ndvi_event < t_d_ndvi) | (d_bsi_event > t_d_bsi)) & hand_corridor
+        ch_change_ev = s2_data.get('in_channel_change_event')
+        if ch_change_ev is not None:
+            ch_ev_cand = s2_event_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ev > t_channel)
+        else:
+            ch_ev_cand = np.zeros((h, w), dtype=bool)
+        s1_ev_cand = (~s2_event_valid) & ((z_vv_asc_event < t_z_asc) | (o19_lr_event < t_lr_o19)) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
 
-    ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
+        ev_cand_total = (s2_ev_cand | ch_ev_cand | s1_ev_cand).astype(np.uint8)
 
-    aff_ctrl_clean, n_blobs_ctrl = filter_stream_connected_blobs(
-        candidate_mask=ctrl_cand_total,
-        stream_mask=stream_mask,
-        pixel_size_m=dx,
-        proximity_m=stream_proximity_m,
-        min_pixels=min_area_pixels
-    )
+        aff_ev_clean, n_blobs_ev = filter_stream_connected_blobs(
+            candidate_mask=ev_cand_total,
+            stream_mask=stream_mask,
+            pixel_size_m=dx,
+            proximity_m=stream_proximity_m,
+            min_pixels=min_area_pixels
+        )
 
-    c2_ctrl_total = (aff_ctrl_clean == 1)
-    while True:
-        dist_to_c2_ctrl = distance_transform_edt(~c2_ctrl_total) * dx
-        new_b_ctrl = s2_ctrl_valid & (builtup_mask == 1) & (dist_to_c2_ctrl <= building_damage_proximity_m) & (cvm_ctrl > t_builtup) & (~c2_ctrl_total)
-        if np.sum(new_b_ctrl) == 0:
-            break
-        c2_ctrl_total |= new_b_ctrl
+        # Built-up CVA: applied to OSM building footprints within D metres of observed class-2 damage, REGARDLESS of HAND
+        # Iteratively propagates through adjacent damaged building footprints
+        c2_ev_total = (aff_ev_clean == 1)
+        while True:
+            dist_to_c2 = distance_transform_edt(~c2_ev_total) * dx
+            new_b_cand = s2_event_valid & (builtup_mask == 1) & (dist_to_c2 <= building_damage_proximity_m) & (cvm_ev > t_builtup) & (~c2_ev_total)
+            if np.sum(new_b_cand) == 0:
+                break
+            c2_ev_total |= new_b_cand
 
-    aff_ctrl_clean = c2_ctrl_total.astype(np.uint8)
+        aff_ev_clean = c2_ev_total.astype(np.uint8)
 
-    ctrl_s2_count = int(np.sum((aff_ctrl_clean == 1) & s2_ctrl_valid))
-    ctrl_s1_count = int(np.sum((aff_ctrl_clean == 1) & (~s2_ctrl_valid)))
-    ctrl_aff_count = int(np.sum(aff_ctrl_clean == 1))
+        # In-channel changed pixels become Class 2 (sub-label "channel")
+        # Built-up affected pixels (sub-label "built-up")
+        # Unchanged baseline water remains Class 1
+        ch_ev_affected = (perm_water_raw == 1) & (aff_ev_clean == 1)
+        b_ev_affected = (builtup_mask == 1) & (aff_ev_clean == 1)
+        perm_water_unchanged = (perm_water_raw == 1) & (aff_ev_clean != 1)
 
-    ctrl_s2_km2 = round(ctrl_s2_count * pixel_area_km2, 4)
-    ctrl_s1_km2 = round(ctrl_s1_count * pixel_area_km2, 4)
-    ctrl_aff_km2 = round(ctrl_aff_count * pixel_area_km2, 4)
+        perm_count = int(np.sum(perm_water_unchanged == 1))
+        perm_km2 = round(perm_count * pixel_area_km2, 4)
 
-    logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (CONTROL)...")
-    ctrl_post_ndvi = s2_data['ctrl_post_composite']['ndvi'] if s2_data.get('ctrl_post_composite') is not None else None
-    inferred_ctrl_clean, inferred_ctrl_stats = compute_inferred_flood_corridor(
-        hand=hand,
-        stream_mask=stream_mask,
-        observed_class2_mask=(aff_ctrl_clean == 1),
-        pixel_size_m=dx,
-        reach_length_m=reach_length_m,
-        hand_percentile=inferred_hand_percentile,
-        min_observed_pixels=inferred_min_observed_pixels,
-        min_reach_fraction=inferred_min_reach_fraction,
-        touch_distance_m=stream_proximity_m,
-        max_hand_corridor_m=max_hand_corridor_m,
-        post_ndvi=ctrl_post_ndvi,
-        d_ndvi=d_ndvi_ctrl if ctrl_post_ndvi is not None else None,
-        intact_min_post_ndvi=intact_min_post_ndvi,
-    )
-    ctrl_inf_km2 = inferred_ctrl_stats["inferred_km2"]
-    ctrl_inf_count = inferred_ctrl_stats["inferred_pixels"]
+        # Source attribution: S2 vs S1
+        source_mask_ev = np.zeros((h, w), dtype=np.uint8)
+        source_mask_ev[s2_event_valid] = 1  # 1: S2
+        source_mask_ev[~s2_event_valid] = 2  # 2: S1
+
+        ev_s2_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 1)))
+        ev_s1_count = int(np.sum((aff_ev_clean == 1) & (source_mask_ev == 2)))
+        ev_aff_count = int(np.sum(aff_ev_clean == 1))
+
+        ev_s2_km2 = round(ev_s2_count * pixel_area_km2, 4)
+        ev_s1_km2 = round(ev_s1_count * pixel_area_km2, 4)
+        ev_aff_km2 = round(ev_aff_count * pixel_area_km2, 4)
+
+        # 5b. Class 3: Inferred Flooded Corridor (HAND-based hydraulic fill along stream reaches)
+        logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (EVENT)...")
+        post_ndvi_arr = post_comp['ndvi'] if post_comp is not None else None
+        inferred_ev_clean, inferred_ev_stats = compute_inferred_flood_corridor(
+            hand=hand,
+            stream_mask=stream_mask,
+            observed_class2_mask=(aff_ev_clean == 1),
+            pixel_size_m=dx,
+            reach_length_m=reach_length_m,
+            hand_percentile=inferred_hand_percentile,
+            min_observed_pixels=inferred_min_observed_pixels,
+            min_reach_fraction=inferred_min_reach_fraction,
+            touch_distance_m=stream_proximity_m,
+            max_hand_corridor_m=max_hand_corridor_m,
+            post_ndvi=post_ndvi_arr,
+            d_ndvi=d_ndvi_event if post_comp is not None else None,
+            intact_min_post_ndvi=intact_min_post_ndvi,
+            intact_max_abs_d_ndvi=intact_max_abs_d_ndvi
+        )
+        ev_inf_km2 = inferred_ev_stats["inferred_km2"]
+        ev_inf_count = inferred_ev_stats["inferred_pixels"]
+
+        # 6. Evaluate CONTROL pair with the exact same detector
+        logger.info("Evaluating CONTROL pair with the exact same multi-sensor detector...")
+        s2_ctrl_cand = s2_ctrl_valid & ((d_ndvi_ctrl < t_d_ndvi) | (d_bsi_ctrl > t_d_bsi)) & hand_corridor
+        ch_change_ctrl = s2_data.get('in_channel_change_ctrl')
+        if ch_change_ctrl is not None:
+            ch_ctrl_cand = s2_ctrl_valid & (perm_water_raw == 1) & hand_corridor & (ch_change_ctrl > t_channel)
+        else:
+            ch_ctrl_cand = np.zeros((h, w), dtype=bool)
+        s1_ctrl_cand = (~s2_ctrl_valid) & (z_vv_asc_ctrl < t_z_asc) & hand_corridor & (shadow_mask == 0) & (nodata_mask == 0)
+
+        ctrl_cand_total = (s2_ctrl_cand | ch_ctrl_cand | s1_ctrl_cand).astype(np.uint8)
+
+        aff_ctrl_clean, n_blobs_ctrl = filter_stream_connected_blobs(
+            candidate_mask=ctrl_cand_total,
+            stream_mask=stream_mask,
+            pixel_size_m=dx,
+            proximity_m=stream_proximity_m,
+            min_pixels=min_area_pixels
+        )
+
+        c2_ctrl_total = (aff_ctrl_clean == 1)
+        while True:
+            dist_to_c2_ctrl = distance_transform_edt(~c2_ctrl_total) * dx
+            new_b_ctrl = s2_ctrl_valid & (builtup_mask == 1) & (dist_to_c2_ctrl <= building_damage_proximity_m) & (cvm_ctrl > t_builtup) & (~c2_ctrl_total)
+            if np.sum(new_b_ctrl) == 0:
+                break
+            c2_ctrl_total |= new_b_ctrl
+
+        aff_ctrl_clean = c2_ctrl_total.astype(np.uint8)
+
+        ctrl_s2_count = int(np.sum((aff_ctrl_clean == 1) & s2_ctrl_valid))
+        ctrl_s1_count = int(np.sum((aff_ctrl_clean == 1) & (~s2_ctrl_valid)))
+        ctrl_aff_count = int(np.sum(aff_ctrl_clean == 1))
+
+        ctrl_s2_km2 = round(ctrl_s2_count * pixel_area_km2, 4)
+        ctrl_s1_km2 = round(ctrl_s1_count * pixel_area_km2, 4)
+        ctrl_aff_km2 = round(ctrl_aff_count * pixel_area_km2, 4)
+
+        logger.info("Computing Class 3: Inferred Flood Corridor via reach-based hydraulic fill (CONTROL)...")
+        ctrl_post_ndvi = s2_data['ctrl_post_composite']['ndvi'] if s2_data.get('ctrl_post_composite') is not None else None
+        inferred_ctrl_clean, inferred_ctrl_stats = compute_inferred_flood_corridor(
+            hand=hand,
+            stream_mask=stream_mask,
+            observed_class2_mask=(aff_ctrl_clean == 1),
+            pixel_size_m=dx,
+            reach_length_m=reach_length_m,
+            hand_percentile=inferred_hand_percentile,
+            min_observed_pixels=inferred_min_observed_pixels,
+            min_reach_fraction=inferred_min_reach_fraction,
+            touch_distance_m=stream_proximity_m,
+            max_hand_corridor_m=max_hand_corridor_m,
+            post_ndvi=ctrl_post_ndvi,
+            d_ndvi=d_ndvi_ctrl if ctrl_post_ndvi is not None else None,
+            intact_min_post_ndvi=intact_min_post_ndvi,
+        )
+        ctrl_inf_km2 = inferred_ctrl_stats["inferred_km2"]
+        ctrl_inf_count = inferred_ctrl_stats["inferred_pixels"]
 
     logger.info(f"EVENT Affected:   {ev_aff_km2} km² (S2: {ev_s2_km2} km², S1: {ev_s1_km2} km²), Inferred: {ev_inf_km2} km²")
     logger.info(f"CONTROL Affected: {ctrl_aff_km2} km² (S2: {ctrl_s2_km2} km², S1: {ctrl_s1_km2} km²), Inferred: {ctrl_inf_km2} km²")
@@ -642,7 +765,8 @@ def run_layer2(
         simplify_tolerance_m=simplify_tol_m,
         min_area_m2=pixel_area_m2 * min_area_pixels,
         channel_affected_mask=ch_ev_affected,
-        builtup_affected_mask=b_ev_affected
+        builtup_affected_mask=b_ev_affected,
+        default_c2_sublabel="flood water" if terrain_regime == "flat_floodplain" else "valley"
     )
 
     # Control Outputs
@@ -756,6 +880,12 @@ def run_layer2(
             "control_quicklook": "control/processed/quicklook_layer2.png"
         }
     }
+
+    if terrain_regime == "flat_floodplain":
+        if detector == "kurosiwo":
+            l2_summary["validation_status"] = "experimental, not validated"
+        else:
+            l2_summary["validation_status"] = "validated on 1 event (EMSR692 Greece, F1 0.59); weak on EMSR659 Italy (F1 0.35, flood receded before clear optical)"
 
     out_json = str(out_path / "l2_stats.json")
     with open(out_json, "w") as f:

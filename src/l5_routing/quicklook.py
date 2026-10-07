@@ -81,13 +81,17 @@ def render_l5_overview(
     s2_post_visual: np.ndarray,
     transform_matrix: Any,
     bbox: List[float],
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> str:
     """
     Renders full study bbox overview of settlement isolation and road network status
     with 3-value status classification.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
 
     r_graded = gpd.read_file(roads_graded_path).to_crs(utm_crs)
     br_graded = gpd.read_file(bridges_graded_path).to_crs(utm_crs)
@@ -277,13 +281,24 @@ def render_cutoff_zoom(
     s2_post_visual: np.ndarray,
     transform_matrix: Any,
     all_roads_gdf: Optional[gpd.GeoDataFrame] = None,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> str:
     """
     Renders high-resolution zoom plot for a cut-off settlement showing pre-event route
     and all broken infrastructure elements.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if all_roads_gdf is not None and len(all_roads_gdf) > 0 and all_roads_gdf.crs:
+            utm_crs = auto_utm_crs(all_roads_gdf.to_crs("EPSG:4326").total_bounds)
+        else:
+            path_coords = settlement_dict.get("pre_path", [])
+            if path_coords and len(path_coords) >= 2:
+                utm_crs = auto_utm_crs(LineString(path_coords).bounds)
+            else:
+                raise ValueError("utm_crs must be provided when no roads or route available.")
 
     name = clean_label(settlement_dict["name"])
     bldgs = settlement_dict["building_count"]
@@ -471,13 +486,20 @@ def render_settlement3_component(
     s2_post_visual: np.ndarray,
     transform_matrix: Any,
     all_roads_gdf: Optional[gpd.GeoDataFrame] = None,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> str:
     """
     Renders the POST-event connected road component for Settlement #3 (near Bhrajam / cluster_29).
     Illustrates why the extensive western road network cannot reach any hospital or town destination.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if settlements_gdf is not None and len(settlements_gdf) > 0 and settlements_gdf.crs:
+            utm_crs = auto_utm_crs(settlements_gdf.to_crs("EPSG:4326").total_bounds)
+        else:
+            raise ValueError("utm_crs must be provided when settlements_gdf is empty.")
 
     # 1. Locate Settlement #3 (near Bhrajam)
     s3_matches = settlements_gdf[settlements_gdf["name"].str.contains("Bhrajam|भ्रजम", na=False)]
@@ -650,7 +672,7 @@ def render_dead_end_zoom(
     cx: float = 332650.0,
     cy: float = 3113950.0,
     pad: float = 350.0,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> str:
     """
     Renders high-resolution zoom of the dead end near (332700, 3113900)
@@ -658,10 +680,16 @@ def render_dead_end_zoom(
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
 
-    xmin, xmax = cx - pad, cx + pad
-    ymin, ymax = cy - pad, cy + pad
+    roads = gpd.read_file(roads_path)
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if len(roads) > 0 and roads.crs:
+            utm_crs = auto_utm_crs(roads.to_crs("EPSG:4326").total_bounds)
+        else:
+            raise ValueError("utm_crs must be provided when roads are empty.")
 
-    roads = gpd.read_file(roads_path).to_crs(utm_crs)
+    xmin, xmax = cx - pad, cx + pad
+    roads = roads.to_crs(utm_crs)
     r_crop = roads.cx[xmin:xmax, ymin:ymax].copy()
 
     fig, ax = plt.subplots(figsize=(10, 10), dpi=200)

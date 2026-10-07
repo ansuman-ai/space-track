@@ -31,9 +31,12 @@ OSM_BUFFER_QUERIES = {
 def compute_buffered_bbox(
     bbox: List[float],
     buffer_km: float = 30.0,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> List[float]:
     """Expands WGS84 bbox [min_lon, min_lat, max_lon, max_lat] by buffer_km in UTM."""
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
     to_utm = Transformer.from_crs("EPSG:4326", utm_crs, always_xy=True)
     to_wgs = Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
 
@@ -131,7 +134,7 @@ def fetch_buffered_osm(
     buffer_km: float = 30.0,
     event_date: Optional[str] = None,
     out_dir: str = "data/raw/osm_buffered",
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     days_before: int = 1,
     force: bool = False
 ) -> Dict[str, Any]:
@@ -140,6 +143,9 @@ def fetch_buffered_osm(
     roads, paths/footways/tracks, bridges, hospitals, places.
     Uses a single combined ohsome query and splits features locally by tags.
     """
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     summary_file = out_path / "osm_buffered_summary.json"
@@ -217,7 +223,7 @@ if __name__ == "__main__":
     parser.add_argument("--bbox", type=float, nargs=4, required=True, help="W S E N")
     parser.add_argument("--event-date", type=str, required=True, help="YYYY-MM-DD")
     parser.add_argument("--buffer-km", type=float, default=30.0)
-    parser.add_argument("--utm-crs", type=str, default="EPSG:32645")
+    parser.add_argument("--utm-crs", type=str, default="auto")
     args = parser.parse_args()
     fetch_buffered_osm(
         bbox=args.bbox,

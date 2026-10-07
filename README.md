@@ -52,6 +52,19 @@ Following a 5-way ablation study (Variants A–E), Variant C was selected as the
 
 ---
 
+## Terrain-Adaptive Inundation Path & Flat-Floodplain Validation Caveat
+
+The pipeline adaptively partitions terrain into `steep_valley` vs `flat_floodplain` regimes via DEM slope and Height Above Nearest Drainage (HAND) distributions:
+- **Steep-Valley Regime**: Retains the frozen mountain debris-flow/flood path without modification (guaranteeing bit-for-bit identity for Himalayan benchmark events A and B). Outputs carry `"validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)"`.
+- **Flat-Floodplain Regime**: Bypasses stream-proximity pruning and incorporates multi-sensor Sentinel-1 SAR change log-ratio (VV/VH) and Sentinel-2 optical water indices ($\Delta\text{MNDWI}$, $\Delta\text{NDWI}$, turbid water NIR absorption) with seasonal paddy and permanent baseline water subtraction.
+- **Detector Selection**: Selected between candidates based on official Copernicus EMS validation:
+  - Greece Storm Daniel (EMSR692 AOI02, Thessaly Plain): Combined S1+S2 achieved **F1 0.59** (IoU 0.42, precision 0.60, recall 0.58) with **0.0000 km²** false alarms on the no-event test.
+  - Italy Emilia-Romagna (EMSR659 AOI01, Conselice / Ravenna): S1-threshold captured 10.65 km² (F1 0.35; surface floodwaters largely receded before the first clear post-event Sentinel-2 optical scene on May 23).
+  - Kuro Siwo deep learning SNUNet was rejected for flat default due to a 235 km² false alarm on Mediterranean dry terrain (see `docs/kurosiwo_results.md`).
+- **Scientific Integrity Caveat**: *The flat-floodplain detector choice (Combined S1+S2) was selected using EMS validation on Greece and Italy. Although thresholds were derived from control distributions and verified on no-event tests rather than manually tuned to EMS boundaries, this detector selection must be confirmed on additional flat-floodplain flood events as more official vector packages become available.* Outputs carry `"validation_status": "validated on 1 event (EMSR692 Greece, F1 0.59); weak on EMSR659 Italy (F1 0.35, flood receded before clear optical)"`.
+
+---
+
 ## False-Alarm Guards & Selection Methodology (No-Event Tests Only)
 
 To eliminate false-alarm settlement isolations and spurious detections during non-disaster periods, principled physical and topological guards were incorporated into Layer 2:

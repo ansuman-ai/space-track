@@ -34,10 +34,11 @@ def grade_buildings(
     hazard_gdf: gpd.GeoDataFrame,
     cloud_nodata_mask: Optional[np.ndarray] = None,
     inv_transform: Any = None,
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     building_overlap_pct: float = 50.0,
     distance_damaged_m: float = 10.0,
-    distance_possibly_damaged_m: float = 30.0
+    distance_possibly_damaged_m: float = 30.0,
+    is_flat_floodplain: bool = False
 ) -> gpd.GeoDataFrame:
     """
     Grades building damage using EMS-style taxonomy:
@@ -45,11 +46,22 @@ def grade_buildings(
     - Damaged: overlaps Class 2 <= X%, or centroid within D1 m of Class 2
     - Possibly damaged: overlaps Class 3, or within D2 m of Class 2 (D2 > D1)
     - Not affected: otherwise
-    - Cloud/no data around building: marked 'Unknown (cloud)', never 'Not affected'
-    Each feature gets field 'evidence': 'observed' | 'inferred' | 'cloud-unknown'.
+    - Cloud/no data around building: marked 'Unknown (cloud)' for steep valleys, or graded from S1 on flat floodplains.
+    Each feature gets field 'evidence': 'observed' | 'inferred' | 'cloud-unknown' | 'observed-s1'.
     """
     if len(buildings_gdf) == 0:
         return buildings_gdf.copy()
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if len(buildings_gdf) > 0 and buildings_gdf.crs:
+            b_wgs = buildings_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(b_wgs.total_bounds)
+        elif len(hazard_gdf) > 0 and hazard_gdf.crs:
+            h_wgs = hazard_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(h_wgs.total_bounds)
+        else:
+            raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     b_utm = buildings_gdf.to_crs(utm_crs).copy()
     haz_utm = hazard_gdf.to_crs(utm_crs)
@@ -79,7 +91,7 @@ def grade_buildings(
         c3_intersects = pd.Series(False, index=b_utm.index)
 
     # Cloud mask lookup
-    if cloud_nodata_mask is not None and inv_transform is not None:
+    if cloud_nodata_mask is not None and inv_transform is not None and not is_flat_floodplain:
         coords = [(pt.x, pt.y) for pt in centroids]
         is_cloud = check_raster_mask_at_points(coords, cloud_nodata_mask, inv_transform)
     else:
@@ -94,21 +106,32 @@ def grade_buildings(
         int_c3 = bool(c3_intersects.iloc[i])
         cloud = bool(is_cloud[i])
 
-        if pct > building_overlap_pct:
-            grades.append("Destroyed")
-            evidence.append("observed")
-        elif pct > 0.0 or d <= distance_damaged_m:
-            grades.append("Damaged")
-            evidence.append("observed")
-        elif int_c3 or d <= distance_possibly_damaged_m:
-            grades.append("Possibly damaged")
-            evidence.append("inferred" if int_c3 else "observed")
-        elif cloud:
-            grades.append("Unknown (cloud)")
-            evidence.append("cloud-unknown")
+        if is_flat_floodplain:
+            if pct > 0.0 or d <= distance_damaged_m:
+                grades.append("Flooded")
+                evidence.append("observed-s1")
+            elif int_c3 or d <= distance_possibly_damaged_m:
+                grades.append("Possibly flooded")
+                evidence.append("observed-s1")
+            else:
+                grades.append("Not affected")
+                evidence.append("observed-s1")
         else:
-            grades.append("Not affected")
-            evidence.append("observed")
+            if pct > building_overlap_pct:
+                grades.append("Destroyed")
+                evidence.append("observed")
+            elif pct > 0.0 or d <= distance_damaged_m:
+                grades.append("Damaged")
+                evidence.append("observed")
+            elif int_c3 or d <= distance_possibly_damaged_m:
+                grades.append("Possibly damaged")
+                evidence.append("inferred" if int_c3 else "observed")
+            elif cloud:
+                grades.append("Unknown (cloud)")
+                evidence.append("cloud-unknown")
+            else:
+                grades.append("Not affected")
+                evidence.append("observed")
 
     b_utm["damage_grade"] = grades
     b_utm["evidence"] = evidence
@@ -124,18 +147,30 @@ def grade_roads(
     hazard_gdf: gpd.GeoDataFrame,
     cloud_nodata_mask: Optional[np.ndarray] = None,
     inv_transform: Any = None,
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     segment_length_m: float = 100.0,
-    distance_damaged_m: float = 10.0
+    distance_damaged_m: float = 10.0,
+    is_flat_floodplain: bool = False
 ) -> gpd.GeoDataFrame:
     """
     Segments road networks into segments <= segment_length_m and grades damage:
     - Intersects Class 2 = Destroyed (evidence: observed)
     - Intersects Class 3 or within D1 m of Class 2 = Possibly damaged (evidence: inferred/observed)
-    - Otherwise: Not affected (or Unknown (cloud) if cloud-covered).
+    - Otherwise: Not affected (or Unknown (cloud) if cloud-covered in steep valleys; graded from S1 in flat floodplains).
     """
     if len(roads_gdf) == 0:
         return roads_gdf.copy()
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if len(roads_gdf) > 0 and roads_gdf.crs:
+            r_wgs = roads_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(r_wgs.total_bounds)
+        elif len(hazard_gdf) > 0 and hazard_gdf.crs:
+            h_wgs = hazard_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(h_wgs.total_bounds)
+        else:
+            raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     r_utm = roads_gdf.to_crs(utm_crs).copy()
     haz_utm = hazard_gdf.to_crs(utm_crs)
@@ -183,7 +218,7 @@ def grade_roads(
                 continue
 
             mid = s.interpolate(0.5, normalized=True)
-            if cloud_nodata_mask is not None and inv_transform is not None:
+            if cloud_nodata_mask is not None and inv_transform is not None and not is_flat_floodplain:
                 cloud = bool(check_raster_mask_at_points([(mid.x, mid.y)], cloud_nodata_mask, inv_transform)[0])
             else:
                 cloud = False
@@ -194,16 +229,16 @@ def grade_roads(
 
             if int_c2:
                 grade = "Destroyed"
-                ev = "observed"
+                ev = "observed-s1" if is_flat_floodplain else "observed"
             elif int_c3 or dist_c2:
                 grade = "Possibly damaged"
-                ev = "inferred" if int_c3 else "observed"
+                ev = "observed-s1" if is_flat_floodplain else ("inferred" if int_c3 else "observed")
             elif cloud:
                 grade = "Unknown (cloud)"
                 ev = "cloud-unknown"
             else:
                 grade = "Not affected"
-                ev = "observed"
+                ev = "observed-s1" if is_flat_floodplain else "observed"
 
             rec = row.to_dict()
             rec["segment_id"] = f"{row.get('@osmId', 'way')}_{s_idx}"
@@ -226,10 +261,11 @@ def grade_bridges(
     transform_matrix: Any = None,
     cloud_nodata_mask: Optional[np.ndarray] = None,
     inv_transform: Any = None,
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     bridge_distance_m: float = 30.0,
     bridge_reach_radius_m: float = 100.0,
-    distance_damaged_m: Optional[float] = None
+    distance_damaged_m: Optional[float] = None,
+    is_flat_floodplain: bool = False
 ) -> gpd.GeoDataFrame:
     """
     Grades bridge damage using principled spatial proximity and river reach rules:
@@ -247,6 +283,17 @@ def grade_bridges(
     """
     if len(bridges_gdf) == 0:
         return bridges_gdf.copy()
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if len(bridges_gdf) > 0 and bridges_gdf.crs:
+            br_wgs = bridges_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(br_wgs.total_bounds)
+        elif len(hazard_gdf) > 0 and hazard_gdf.crs:
+            h_wgs = hazard_gdf.to_crs("EPSG:4326")
+            utm_crs = auto_utm_crs(h_wgs.total_bounds)
+        else:
+            raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     if distance_damaged_m is not None:
         # backward compatibility if explicitly provided
@@ -385,7 +432,7 @@ def grade_bridges(
             rules.append("distance")
             evidence.append("inferred")
             applied_dists.append(round(d_c3, 1))
-        elif cloud:
+        elif cloud and not is_flat_floodplain:
             grades.append("Unknown (cloud)")
             rules.append("none")
             evidence.append("cloud-unknown")
@@ -393,7 +440,7 @@ def grade_bridges(
         else:
             grades.append("Not affected")
             rules.append("none")
-            evidence.append("observed")
+            evidence.append("observed-s1" if is_flat_floodplain else "observed")
             applied_dists.append(round(min(d_c2, d_c3), 1))
 
     br_utm["damage_grade"] = grades

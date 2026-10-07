@@ -140,11 +140,19 @@ def download_and_clip_bands(
 
     from .gdal_env import get_shared_gdal_env
     try:
-        env = get_shared_gdal_env()
+        env = get_shared_gdal_env(
+            GDAL_HTTP_VERSION="1.1",
+            GDAL_HTTP_MULTIPLEX="NO",
+            GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="NO",
+            CPL_VSIL_CURL_CHUNK_SIZE="1048576",
+            GDAL_HTTP_TIMEOUT="120",
+            GDAL_HTTP_CONNECTTIMEOUT="30",
+            GDAL_HTTP_MAX_RETRY="5"
+        )
 
         def _read_band(u):
             last_err = None
-            for attempt in range(3):
+            for attempt in range(5):
                 try:
                     with env:
                         with rasterio.open(u) as src:
@@ -159,16 +167,14 @@ def download_and_clip_bands(
                             return d, out_trans, meta
                 except Exception as e:
                     last_err = e
-                    logger.warning(f"Attempt {attempt+1}/3 failed reading S1 band from Planetary Computer ({e}); retrying in 2s...")
-                    time.sleep(2)
+                    sleep_s = 2 ** attempt
+                    logger.warning(f"Attempt {attempt+1}/5 failed reading S1 band from Planetary Computer ({e}); retrying in {sleep_s}s...")
+                    time.sleep(sleep_s)
             raise last_err
 
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-            f_vv = ex.submit(_read_band, vv_url)
-            f_vh = ex.submit(_read_band, vh_url)
-            vv_data, out_transform, out_meta = f_vv.result()
-            vh_data, _, _ = f_vh.result()
+        # Fetch VV and VH sequentially to prevent Azure Blob rate-limiting / connection reset
+        vv_data, out_transform, out_meta = _read_band(vv_url)
+        vh_data, _, _ = _read_band(vh_url)
 
         out_meta.update({
             "driver": "GTiff",
@@ -197,6 +203,42 @@ def download_and_clip_bands(
         sys.exit(f"FAILED: Could not download and clip raster: {e}")
 
 
+def check_bbox_overlap(item: Dict[str, Any], bbox: List[float], min_overlap: float = 0.90) -> Tuple[bool, float]:
+    """Check if item footprint covers >= min_overlap of target bbox."""
+    from shapely.geometry import shape, box
+    if not item.get("geometry"):
+        return False, 0.0
+    try:
+        item_geom = shape(item["geometry"])
+        target_box = box(*bbox)
+        if target_box.area <= 0:
+            return True, 1.0
+        overlap = float(item_geom.intersection(target_box).area / target_box.area)
+        return overlap >= min_overlap, overlap
+    except Exception as e:
+        logger.warning(f"Error checking bbox overlap: {e}")
+        return False, 0.0
+
+
+def check_pair_bbox_overlap(item1: Dict[str, Any], item2: Dict[str, Any], bbox: List[float], min_overlap: float = 0.90) -> Tuple[bool, float]:
+    """Check if the intersection of both items covers >= min_overlap of target bbox."""
+    from shapely.geometry import shape, box
+    if not item1.get("geometry") or not item2.get("geometry"):
+        return False, 0.0
+    try:
+        g1 = shape(item1["geometry"])
+        g2 = shape(item2["geometry"])
+        target_box = box(*bbox)
+        if target_box.area <= 0:
+            return True, 1.0
+        inter = g1.intersection(g2).intersection(target_box)
+        overlap = float(inter.area / target_box.area)
+        return overlap >= min_overlap, overlap
+    except Exception as e:
+        logger.warning(f"Error checking pair bbox overlap: {e}")
+        return False, 0.0
+
+
 def fetch_pair(
     bbox: List[float],
     event_date: str,
@@ -206,10 +248,10 @@ def fetch_pair(
 ) -> Tuple[Path, Path, Path]:
     """
     Fetch Sentinel-1 RTC pre/post pair and automatically fetch matched control pair.
-    - post: first scene after event_date
-    - pre: same relative orbit and direction, 12 days earlier (fallback 24, 36)
-    - control pair: same orbit, 12 days before pre scene.
-      If missing: exit FAILED with a clear message.
+    - post: first scene after event_date with >90% bbox overlap
+    - pre: same relative orbit, direction, and overlapping frame (>90% overlap), 12 days earlier (fallback 24, 36)
+    - control pair: same orbit and frame, 12 days before pre scene (>90% overlap).
+      If missing or overlap < 90%: exit FAILED with an assertion/clear message.
     """
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -253,7 +295,9 @@ def fetch_pair(
     post_candidates.sort(key=lambda x: x.get("properties", {}).get("datetime", ""))
     
     selected_post = None
+    selected_post_item = None
     selected_pre = None
+    selected_pre_item = None
     delta_used = None
 
     for candidate in post_candidates:
@@ -261,11 +305,16 @@ def fetch_pair(
         if not cand_meta["relative_orbit"] or not cand_meta["orbit_direction"]:
             continue
         
+        ok_post, post_ov = check_bbox_overlap(candidate, bbox, min_overlap=0.90)
+        if not ok_post:
+            logger.info(f"Skipping post candidate {cand_meta['id']}: bbox overlap {post_ov*100:.1f}% < 90%")
+            continue
+
         post_dt = datetime.fromisoformat(cand_meta["datetime"].replace("Z", "+00:00"))
         rel_orbit = cand_meta["relative_orbit"]
         direction = cand_meta["orbit_direction"]
 
-        logger.info(f"Checking post candidate: {cand_meta['id']} ({cand_meta['datetime']}, orbit={rel_orbit}, dir={direction})")
+        logger.info(f"Checking post candidate: {cand_meta['id']} ({cand_meta['datetime']}, orbit={rel_orbit}, dir={direction}, overlap={post_ov*100:.1f}%)")
 
         for lookback in [12, 24, 36]:
             target_pre_dt = post_dt - timedelta(days=lookback)
@@ -277,8 +326,15 @@ def fetch_pair(
                 pre_meta = extract_metadata(pre_cand)
                 if (pre_meta["relative_orbit"] == rel_orbit and 
                     pre_meta["orbit_direction"] == direction):
+                    ok_pre, pre_ov = check_bbox_overlap(pre_cand, bbox, min_overlap=0.90)
+                    ok_pair, pair_ov = check_pair_bbox_overlap(candidate, pre_cand, bbox, min_overlap=0.90)
+                    if not (ok_pre and ok_pair):
+                        logger.info(f"Skipping pre candidate {pre_meta['id']}: mutual overlap {pair_ov*100:.1f}% < 90%")
+                        continue
                     selected_post = cand_meta
+                    selected_post_item = candidate
                     selected_pre = pre_meta
+                    selected_pre_item = pre_cand
                     delta_used = lookback
                     break
             if selected_pre:
@@ -286,8 +342,9 @@ def fetch_pair(
         if selected_pre:
             break
 
-    if not selected_post or not selected_pre:
-        sys.exit(f"FAILED: Could not find matching same-orbit pre/post Sentinel-1 pair for event date {event_date}")
+    assert selected_post is not None and selected_pre is not None, (
+        f"FAILED: Could not find matching same-orbit pre/post Sentinel-1 pair with >90% bbox overlap for event date {event_date} bbox {bbox}"
+    )
 
     logger.info(f"Found matched event pair: Post={selected_post['id']} ({selected_post['datetime']}), Pre={selected_pre['id']} ({selected_pre['datetime']}), Orbit={selected_post['relative_orbit']}")
 
@@ -305,25 +362,26 @@ def fetch_pair(
         c_meta = extract_metadata(cand)
         if (c_meta["relative_orbit"] == selected_pre["relative_orbit"] and 
             c_meta["orbit_direction"] == selected_pre["orbit_direction"]):
+            ok_c, c_ov = check_bbox_overlap(cand, bbox, min_overlap=0.90)
+            ok_cp, cp_ov = check_pair_bbox_overlap(selected_pre_item, cand, bbox, min_overlap=0.90)
+            if not (ok_c and ok_cp):
+                continue
             selected_ctrl_pre = c_meta
             break
 
-    if not selected_ctrl_pre:
-        sys.exit(f"FAILED: Missing Sentinel-1 control scene (same relative orbit {selected_pre['relative_orbit']} 12 days prior to pre-event scene)")
+    assert selected_ctrl_pre is not None, (
+        f"FAILED: Missing Sentinel-1 control scene with >90% bbox overlap (same relative orbit {selected_pre['relative_orbit']} 12 days prior to pre-event scene)"
+    )
 
     logger.info(f"Found matched control pre scene: {selected_ctrl_pre['id']} ({selected_ctrl_pre['datetime']})")
 
     token = get_sas_token("sentinel-1-rtc")
 
-    # Download EVENT and CONTROL scenes in parallel
-    logger.info("Downloading & clipping Sentinel-1 event (pre, post) and control scenes in parallel...")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        f_pre = executor.submit(download_and_clip_bands, selected_pre, bbox, pre_tif, token)
-        f_post = executor.submit(download_and_clip_bands, selected_post, bbox, post_tif, token)
-        f_ctrl = executor.submit(download_and_clip_bands, selected_ctrl_pre, bbox, ctrl_pre_tif, token)
-        f_pre.result()
-        f_post.result()
-        f_ctrl.result()
+    # Download EVENT and CONTROL scenes sequentially to prevent Azure Blob rate-limiting
+    logger.info("Downloading & clipping Sentinel-1 event (pre, post) and control scenes...")
+    download_and_clip_bands(selected_pre, bbox, pre_tif, token)
+    download_and_clip_bands(selected_post, bbox, post_tif, token)
+    download_and_clip_bands(selected_ctrl_pre, bbox, ctrl_pre_tif, token)
 
     event_metadata_payload = {
         "event_date": event_date,

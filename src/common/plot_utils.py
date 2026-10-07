@@ -20,19 +20,15 @@ from shapely.geometry import LineString, MultiLineString
 from shapely.ops import linemerge, unary_union
 
 
-DEFAULT_CRS = "EPSG:32645"
-DEFAULT_RIVER_PATH = "data/raw/osm/osm_river_centerline.geojson"
-
-
 def reproject_vector(
     gdf_or_geom: Any,
-    target_crs: Any = DEFAULT_CRS
+    target_crs: Any = None
 ) -> Any:
     """
     Safely reprojects a GeoDataFrame or geometry to target_crs.
     """
-    if gdf_or_geom is None:
-        return None
+    if gdf_or_geom is None or target_crs is None:
+        return gdf_or_geom
     if isinstance(gdf_or_geom, gpd.GeoDataFrame):
         if len(gdf_or_geom) == 0:
             return gdf_or_geom.copy()
@@ -46,11 +42,14 @@ def reproject_vector(
     return gdf_or_geom
 
 
+DEFAULT_RIVER_PATH = "data/raw/osm/osm_river_centerline.geojson"
+
+
 def ensure_river_centerline_exists(
     river_geojson_path: str = DEFAULT_RIVER_PATH,
     stream_mask_path: str = "data/interim/stream_mask.tif",
     osm_waterways_path: str = "data/raw/osm/osm_waterways.geojson",
-    target_crs: str = DEFAULT_CRS
+    target_crs: Optional[str] = None
 ) -> Path:
     """
     Ensures that a pre-event river centreline GeoDataFrame exists on disk.
@@ -94,7 +93,7 @@ DEFAULT_WATERWAYS_PATH = "data/raw/osm/osm_waterways.geojson"
 
 def draw_osm_river_centreline(
     ax: plt.Axes,
-    target_crs: Any = DEFAULT_CRS,
+    target_crs: Any = None,
     river_path: str = DEFAULT_WATERWAYS_PATH,
     color: str = "#00e5ff",
     lw: float = 1.2,

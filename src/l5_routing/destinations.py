@@ -15,7 +15,8 @@ logger = logging.getLogger("l5_destinations")
 def extract_destinations(
     hospitals_path: str = "data/raw/osm_buffered/osm_hospitals.geojson",
     places_path: str = "data/raw/osm_buffered/osm_places.geojson",
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None,
+    bbox: Optional[List[float]] = None
 ) -> gpd.GeoDataFrame:
     """
     Extracts target destinations in the buffered area.
@@ -23,6 +24,19 @@ def extract_destinations(
     """
     h_gdf = gpd.read_file(hospitals_path)
     records = []
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        if bbox is not None:
+            utm_crs = auto_utm_crs(bbox)
+        elif len(h_gdf) > 0 and h_gdf.crs:
+            utm_crs = auto_utm_crs(h_gdf.to_crs("EPSG:4326").total_bounds)
+        else:
+            p_tmp = gpd.read_file(places_path)
+            if len(p_tmp) > 0 and p_tmp.crs:
+                utm_crs = auto_utm_crs(p_tmp.to_crs("EPSG:4326").total_bounds)
+            else:
+                raise ValueError("utm_crs must be provided when no features or bbox exist.")
 
     if len(h_gdf) > 0:
         h_utm = h_gdf.to_crs(utm_crs)

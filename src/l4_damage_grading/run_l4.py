@@ -37,7 +37,7 @@ def run_layer4(
     s2_cache_dir: str = "data/interim/s2_cache",
     out_dir: str = "data/processed",
     bbox: Optional[List[float]] = None,
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     building_overlap_pct: float = 50.0,
     distance_damaged_m: float = 10.0,
     distance_possibly_damaged_m: float = 30.0,
@@ -52,6 +52,10 @@ def run_layer4(
     """
     Executes complete Layer 4 critical infrastructure damage grading workflow.
     """
+    if (utm_crs is None or utm_crs == "auto") and bbox:
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
+
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     osm_path = Path(osm_dir)
@@ -107,6 +111,23 @@ def run_layer4(
             s2_valid = np.ones((h, w), dtype=bool)
             s2_post_visual = np.zeros((3, h, w), dtype=np.uint8)
 
+    interim_dir = Path(nodata_mask_path).parent
+    slope_f = interim_dir / "slope.tif"
+    hand_f = interim_dir / "hand.tif"
+    is_flat_floodplain = False
+    if slope_f.exists() and hand_f.exists():
+        try:
+            with rasterio.open(slope_f) as f_sl, rasterio.open(hand_f) as f_hd:
+                sl_arr = f_sl.read(1)
+                hd_arr = f_hd.read(1)
+            from ..l2_detection.flat_floodplain import classify_terrain_regime
+            regime, _ = classify_terrain_regime(sl_arr, hd_arr)
+            is_flat_floodplain = (regime == "flat_floodplain")
+        except Exception:
+            pass
+    if not is_flat_floodplain and "sub_label" in hazard_gdf.columns and (hazard_gdf["sub_label"] == "flood water").any():
+        is_flat_floodplain = True
+
     cloud_or_nodata = (~s2_valid) | (nodata == 1)
     inv_trans = ~trans
 
@@ -123,7 +144,8 @@ def run_layer4(
             utm_crs=utm_crs,
             building_overlap_pct=building_overlap_pct,
             distance_damaged_m=distance_damaged_m,
-            distance_possibly_damaged_m=distance_possibly_damaged_m
+            distance_possibly_damaged_m=distance_possibly_damaged_m,
+            is_flat_floodplain=is_flat_floodplain
         )
     else:
         b_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
@@ -147,7 +169,8 @@ def run_layer4(
             inv_transform=inv_trans,
             utm_crs=utm_crs,
             segment_length_m=road_segment_length_m,
-            distance_damaged_m=distance_damaged_m
+            distance_damaged_m=distance_damaged_m,
+            is_flat_floodplain=is_flat_floodplain
         )
     else:
         r_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
@@ -196,7 +219,8 @@ def run_layer4(
             inv_transform=inv_trans,
             utm_crs=utm_crs,
             bridge_distance_m=bridge_distance_m,
-            bridge_reach_radius_m=bridge_reach_radius_m
+            bridge_reach_radius_m=bridge_reach_radius_m,
+            is_flat_floodplain=is_flat_floodplain
         )
     else:
         br_graded = gpd.GeoDataFrame([], crs="EPSG:4326")
@@ -216,7 +240,7 @@ def run_layer4(
             "total_count": len(b_graded),
             "damage_grade_counts": b_counts,
             "evidence_counts": b_ev_counts,
-            "affected_count": int(b_counts.get("Destroyed", 0) + b_counts.get("Damaged", 0) + b_counts.get("Possibly damaged", 0)),
+            "affected_count": int(b_counts.get("Destroyed", 0) + b_counts.get("Damaged", 0) + b_counts.get("Possibly damaged", 0) + b_counts.get("Flooded", 0) + b_counts.get("Possibly flooded", 0)),
             "parameters": {
                 "overlap_destroyed_pct": building_overlap_pct,
                 "distance_damaged_m": distance_damaged_m,
@@ -248,6 +272,9 @@ def run_layer4(
             "quicklook": "processed/quicklook_l4.png"
         }
     }
+
+    if is_flat_floodplain:
+        damage_summary["validation_status"] = "experimental, not validated"
 
     out_json = str(out_path / "damage_summary.json")
     with open(out_json, "w") as f:

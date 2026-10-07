@@ -83,7 +83,7 @@ def extract_settlements(
     eps_m: float = 65.0,
     min_samples: int = 5,
     named_place_max_distance_m: float = 500.0,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> gpd.GeoDataFrame:
     """
     Extracts settlements in the study area:
@@ -92,6 +92,10 @@ def extract_settlements(
       - Within named_place_max_distance_m: named after nearest place node
       - Beyond threshold: "Unnamed settlement at lat, lon (nearest named place: NAME, D km)"
     """
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
+
     bbox_deg = box(*bbox)
     places_all = gpd.read_file(places_path)
     p_in = places_all[places_all.geometry.intersects(bbox_deg)].to_crs(utm_crs).copy()

@@ -27,7 +27,8 @@ def vectorize_hazard_classes(
     simplify_tolerance_m: float = 8.0,
     min_area_m2: float = 500.0,
     channel_affected_mask: Any = None,
-    builtup_affected_mask: Any = None
+    builtup_affected_mask: Any = None,
+    default_c2_sublabel: str = "valley"
 ) -> Dict[str, Any]:
     """
     Vectorize 2D hazard classification raster into simplified GeoJSON polygons.
@@ -65,8 +66,8 @@ def vectorize_hazard_classes(
 
             class_areas_m2[class_id] += area_m2
 
-            # Determine sub-label (channel vs built-up vs valley)
-            sub_label = "valley" if class_id == 2 else ("river" if class_id == 1 else "inferred")
+            # Determine sub-label (channel vs built-up vs valley vs flood water)
+            sub_label = default_c2_sublabel if class_id == 2 else ("river" if class_id == 1 else "inferred")
             if class_id == 2:
                 minx, miny, maxx, maxy = poly.bounds
                 inv_trans = ~transform_matrix

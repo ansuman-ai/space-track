@@ -35,9 +35,12 @@ def get_base_network(
     rural_roads_drivable: bool = False,
     construction_roads_passable: bool = False,
     snap_dead_end_nodes_m: float = 0.0,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> Tuple[nx.Graph, nx.Graph, List[Any], List[Any]]:
     """Constructs and caches the base topological graphs without damage overlays."""
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
     cache_key = (
         roads_path,
         tuple(bbox) if bbox else None,
@@ -167,12 +170,16 @@ def build_routing_networks(
     rural_roads_drivable: bool = False,
     construction_roads_passable: bool = False,
     snap_dead_end_nodes_m: float = 0.0,
-    utm_crs: str = "EPSG:32645"
+    utm_crs: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Constructs VEHICLE and WALKING NetworkX graphs with Layer 4 damage overlays.
     Reuses cached base graph topology across scenarios.
     """
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
+
     # 1. Base network
     G_v_base, G_w_base, bbox_edges_v, bbox_edges_w = get_base_network(
         roads_path=roads_path,

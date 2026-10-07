@@ -36,13 +36,22 @@ def render_l4_quicklook(
     output_png_path: str,
     zoom_center_utm: Optional[Tuple[float, float]] = None,
     zoom_half_width_m: float = 2000.0,
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     transform_matrix: Any = None
 ) -> str:
     """
     Renders 4x4 km damage grading overview map with unified alignment.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
+
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        for gdf in [buildings_gdf, roads_gdf, bridges_gdf, hazard_gdf]:
+            if len(gdf) > 0 and gdf.crs:
+                utm_crs = auto_utm_crs(gdf.to_crs("EPSG:4326").total_bounds)
+                break
+        if utm_crs is None or utm_crs == "auto":
+            raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     if transform_matrix is None:
         ref_path = "data/processed/hazard_classes.tif"

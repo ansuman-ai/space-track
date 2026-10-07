@@ -158,11 +158,16 @@ def run_layer5(
 
     cs = cfg.get("case_study", cfg.get("spatial", {}))
     if bbox is None:
-        bbox = cs["bbox"]
-    if utm_crs is None:
-        utm_crs = cs.get("utm_crs", "EPSG:32645")
-    if utm_crs == "auto":
-        utm_crs = "EPSG:32645"
+        bbox = cs.get("bbox")
+    if bbox is None:
+        raise ValueError("Bounding box must be provided in function arguments or config case_study.bbox")
+    if utm_crs is None or utm_crs == "auto":
+        cfg_crs = cs.get("utm_crs", "auto")
+        if cfg_crs != "auto" and cfg_crs:
+            utm_crs = cfg_crs
+        else:
+            from src.common.crs_utils import auto_utm_crs
+            utm_crs = auto_utm_crs(bbox)
     r_cfg = cfg.get("routing", {})
     max_snap_m = r_cfg.get("max_snap_distance_m", 500.0)
     dbscan_eps = r_cfg.get("dbscan_eps_m", 65.0)

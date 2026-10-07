@@ -245,7 +245,7 @@ def fetch_s2(
     bbox: List[float],
     event_date: str,
     out_dir: str = "data/interim/s2_cache",
-    utm_crs: str = "EPSG:32645",
+    utm_crs: Optional[str] = None,
     s2_pre_days: int = 15,
     s2_post_days: int = 15,
     s2_post_max_days: int = 45,
@@ -261,6 +261,10 @@ def fetch_s2(
     Enforces s2_max_scenes, s2_search_timeout_s, hard per-scene timeout (s2_scene_timeout_s),
     and total S2 download time budget (s2_total_budget_s).
     """
+    if utm_crs is None or utm_crs == "auto":
+        from src.common.crs_utils import auto_utm_crs
+        utm_crs = auto_utm_crs(bbox)
+
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -274,9 +278,20 @@ def fetch_s2(
             "scenes": [f.name for f in existing]
         }
 
-    # Also check project data/interim/s2_cache
+    # Also check project data/interim/s2_cache (only if bbox and event_date match)
     proj_cache = Path("data/interim/s2_cache")
-    if not force and proj_cache.exists():
+    meta_file = Path("data/raw/s1/meta.json")
+    bbox_matches = False
+    if meta_file.exists():
+        try:
+            with open(meta_file) as f:
+                m = json.load(f)
+            if m.get("bbox") == bbox and m.get("event_date") == event_date:
+                bbox_matches = True
+        except Exception:
+            pass
+
+    if not force and bbox_matches and proj_cache.exists():
         proj_files = sorted(list(proj_cache.glob("*.npz")))
         if len(proj_files) > 0:
             import shutil
