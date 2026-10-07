@@ -24,3 +24,7 @@ runs/
 scratch/
 validation/emsr659/
 validation/emsr692/
+weights
+weights/
+kurosiwo_repo/
+outputs/
