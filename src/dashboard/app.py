@@ -1,0 +1,1042 @@
+"""
+FastAPI Backend for Spaceborne Rapid Disaster Assessment Platform (L7).
+Operational Intel Visualizer: Strict JSON data binding, manifest filtering,
+cloud-masked median S2 composite slider, and provenance-tracked validation banners.
+"""
+
+import os
+import io
+import re
+import sys
+import time
+import json
+import math
+import shutil
+import logging
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+
+import numpy as np
+from PIL import Image
+from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("dashboard")
+
+app = FastAPI(title="Spaceborne Rapid Disaster Assessment Dashboard", version="1.1.0")
+
+# Enable CORS and GZip compression for fast GeoJSON streaming
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+RUNS_DIR = Path(os.environ.get("RUNS_DIR", BASE_DIR / "runs"))
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+MANIFEST_FILE = Path(__file__).resolve().parent / "runs_manifest.json"
+
+# In-memory image cache for S2 cloud-masked median composites
+_COMPOSITE_CACHE: Dict[str, bytes] = {}
+
+
+def load_runs_manifest() -> Dict[str, Any]:
+    """Loads manifest of officially verified runs for tag e2e-final3."""
+    if MANIFEST_FILE.exists():
+        try:
+            return json.loads(MANIFEST_FILE.read_text())
+        except Exception as e:
+            logger.warning(f"Error reading manifest: {e}")
+    return {"verified_runs": {}}
+
+
+def derive_operational_run_label(run_folder: Path, summary: Dict[str, Any]) -> str:
+    """
+    Derives operational label strictly from OSM tags:
+    1. place in ['city', 'town'] inside unbuffered bbox.
+    2. Features with admin_centre / municipality / is_in / population inside unbuffered bbox.
+    3. place == 'village' inside unbuffered bbox ordered by number of buildings nearby.
+    4. Supplement with nearest city/town from buffered area within 25km.
+    5. Supplement with nearest villages/features from buffered area.
+    No hardcoded place names.
+    """
+    bbox = summary.get("bbox", [])
+    if len(bbox) != 4:
+        parts = run_folder.name.replace("_", " ").split()
+        return " ".join([p.capitalize() for p in parts])
+
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    date = summary.get("event_date", "")
+    raw_regime = summary.get("terrain_regime") or ("flat_floodplain" if "assam" in run_folder.name.lower() else "steep_valley")
+    regime_str = "Flat Floodplain" if raw_regime == "flat_floodplain" else "Steep Valley"
+
+    # Pre-calculate nearby building counts from settlements.geojson
+    settle_file = run_folder / "processed" / "routing" / "settlements.geojson"
+    settle_pts = []
+    if settle_file.exists():
+        try:
+            s_geo = json.loads(settle_file.read_text())
+            for feat in s_geo.get("features", []):
+                p = feat.get("properties", {})
+                b = p.get("building_count", 0)
+                c = feat.get("geometry", {}).get("coordinates", [])
+                if len(c) >= 2:
+                    settle_pts.append((c[0], c[1], b))
+        except Exception:
+            pass
+
+    def evaluate_places(pfile: Path, max_dist: Optional[float] = None):
+        if not pfile.exists():
+            return []
+        items = []
+        seen = set()
+        try:
+            d = json.loads(pfile.read_text())
+            for feat in d.get("features", []):
+                props = feat.get("properties", {})
+                raw_name = props.get("name:en") or props.get("name") or ""
+                clean = raw_name.split("(")[0].split(",")[0].strip()
+                if not clean or clean.startswith("Place node") or clean.startswith("Cluster") or clean == "None":
+                    continue
+                coords = feat.get("geometry", {}).get("coordinates", [cx, cy])
+                dist = math.hypot(coords[0] - cx, coords[1] - cy) * 111.0
+                if max_dist and dist > max_dist:
+                    continue
+                if clean in seen:
+                    continue
+                seen.add(clean)
+
+                pl = props.get("place", "")
+                has_admin = any(k in props for k in ["admin_centre", "municipality", "is_in", "population"])
+                bld_cnt = sum(b for x, y, b in settle_pts if math.hypot(coords[0] - x, coords[1] - y) * 111.0 <= 3.0)
+
+                tier = 4
+                if pl in ["city", "town"]:
+                    tier = 1
+                elif has_admin:
+                    tier = 2
+                elif pl == "village":
+                    tier = 3
+
+                items.append({
+                    "name": clean,
+                    "tier": tier,
+                    "dist": dist,
+                    "bld_count": bld_cnt
+                })
+        except Exception:
+            pass
+        return items
+
+    unbuf_items = evaluate_places(run_folder / "raw" / "osm" / "osm_places.geojson")
+    buf_items = evaluate_places(run_folder / "raw" / "osm_buffered" / "osm_places.geojson", max_dist=25.0)
+
+    top_candidates = []
+
+    # Priority 1: Cities / Towns inside unbuffered bbox
+    t_in = [x for x in unbuf_items if x["tier"] == 1]
+    t_in.sort(key=lambda x: x["dist"])
+    top_candidates.extend([x["name"] for x in t_in])
+
+    # Priority 2: Places with admin_centre / municipality / is_in / population inside unbuffered bbox
+    a_in = [x for x in unbuf_items if x["tier"] == 2 and x["name"] not in top_candidates]
+    a_in.sort(key=lambda x: x["dist"])
+    top_candidates.extend([x["name"] for x in a_in])
+
+    # Priority 3: Villages inside unbuffered bbox by number of buildings nearby
+    v_in = [x for x in unbuf_items if x["tier"] == 3 and x["name"] not in top_candidates]
+    v_in.sort(key=lambda x: (-x["bld_count"], x["dist"]))
+    top_candidates.extend([x["name"] for x in v_in])
+
+    # Priority 4: If fewer than 2 names, supplement from nearest city/town in buffered area
+    if len(top_candidates) < 2:
+        t_buf = [x for x in buf_items if x["tier"] == 1 and x["name"] not in top_candidates]
+        t_buf.sort(key=lambda x: x["dist"])
+        top_candidates.extend([x["name"] for x in t_buf])
+
+    # Priority 5: If still fewer, supplement from buffered admin/villages by buildings
+    if len(top_candidates) < 2:
+        v_buf = [x for x in buf_items if x["name"] not in top_candidates]
+        v_buf.sort(key=lambda x: (x["tier"], -x["bld_count"], x["dist"]))
+        top_candidates.extend([x["name"] for x in v_buf])
+
+    picked = top_candidates[:2]
+    prefix = " / ".join(picked) if picked else run_folder.name.replace("_", " ").title()
+    return f"{prefix} — {date} ({regime_str})"
+
+
+def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
+    """Reads run metadata from underlying JSON files and compiles strict ground-truth metrics."""
+    summary_file = run_folder / "run_summary.json"
+    if not summary_file.exists():
+        return None
+
+    try:
+        summary = json.loads(summary_file.read_text())
+    except Exception as e:
+        logger.warning(f"Error parsing {summary_file}: {e}")
+        return None
+
+    folder_name = run_folder.name
+    event_date = summary.get("event_date", "Unknown Date")
+    event_year = event_date.split("-")[0] if event_date and "-" in event_date else "2026"
+    bbox = summary.get("bbox", [])
+    status = summary.get("status", "COMPLETED")
+    
+    # Check terrain regime
+    regime = summary.get("terrain_regime")
+    if not regime:
+        val_status_raw = summary.get("validation_status", "")
+        if "EMSR692" in val_status_raw or "flat" in val_status_raw.lower() or "assam" in folder_name.lower():
+            regime = "flat_floodplain"
+        else:
+            regime = "steep_valley"
+
+    proc = run_folder / "processed"
+    routing = proc / "routing"
+
+    # Derive operational human label
+    human_label = derive_operational_run_label(run_folder, summary)
+
+    # Check for user-specified event_name (CLI arg or event_name.txt / event_metadata.json)
+    event_name = summary.get("event_name")
+    if not event_name:
+        txt_path = run_folder / "event_name.txt"
+        if txt_path.exists():
+            try:
+                event_name = txt_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+    if not event_name:
+        meta_json_path = run_folder / "event_metadata.json"
+        if meta_json_path.exists():
+            try:
+                ev_meta = json.loads(meta_json_path.read_text(encoding="utf-8"))
+                event_name = ev_meta.get("event_name") or ev_meta.get("name")
+            except Exception:
+                pass
+
+    if event_name:
+        main_title = event_name
+        subtitle = human_label
+        display_label = f"{event_name} — {human_label}"
+    else:
+        main_title = human_label
+        subtitle = ""
+        display_label = human_label
+
+    # 1. Validation Status & Provenance (file & field)
+    val_status_file = proc / "validation_status.json"
+    if val_status_file.exists():
+        try:
+            val_meta = json.loads(val_status_file.read_text())
+            validation_status = val_meta.get("validation_status", "Standard Assessment")
+            val_source_file = val_meta.get("source_file", "processed/validation_status.json")
+            val_source_field = val_meta.get("source_field", "validation_status")
+        except Exception:
+            validation_status = summary.get("validation_status", "not validated against an official map (practice run)")
+            val_source_file = "run_summary.json"
+            val_source_field = "validation_status"
+    else:
+        validation_status = summary.get("validation_status", "not validated against an official map (practice run)")
+        val_source_file = "run_summary.json"
+        val_source_field = "validation_status"
+
+    # 2. Ground-truth: l2_stats.json
+    l2_stats = {}
+    if (proc / "l2_stats.json").exists():
+        try:
+            l2_stats = json.loads((proc / "l2_stats.json").read_text())
+        except Exception:
+            pass
+    areas = l2_stats.get("areas_km2", {})
+    obs_area = areas.get("event_total_affected", 0.0)
+    inf_area = areas.get("event_inferred_affected", 0.0)
+    perm_area = areas.get("class_1_permanent_water", 0.0)
+
+    # 3. Ground-truth: damage_summary.json
+    dmg_summary = {}
+    if (proc / "damage_summary.json").exists():
+        try:
+            dmg_summary = json.loads((proc / "damage_summary.json").read_text())
+        except Exception:
+            pass
+    
+    b_grades = dmg_summary.get("buildings", {}).get("damage_grade_counts", {})
+    destroyed_b = b_grades.get("Destroyed", 0)
+    damaged_b = b_grades.get("Damaged", 0)
+    possibly_damaged_b = b_grades.get("Possibly damaged", 0)
+    flooded_b = b_grades.get("Flooded", 0)
+    possibly_flooded_b = b_grades.get("Possibly flooded", 0)
+    unverified_b = b_grades.get("Unknown (cloud)", 0)
+    intact_b = b_grades.get("Not affected", 0)
+    total_affected_b = destroyed_b + damaged_b + possibly_damaged_b + flooded_b + possibly_flooded_b
+
+    br_grades = dmg_summary.get("bridges", {}).get("damage_grade_counts", {})
+    destroyed_br = br_grades.get("Destroyed", 0)
+    possibly_damaged_br = br_grades.get("Possibly damaged", 0)
+    unverified_br = br_grades.get("Unknown (cloud)", 0)
+    total_affected_br = destroyed_br + possibly_damaged_br
+
+    roads_km = dmg_summary.get("roads", {}).get("km_by_damage_grade", {})
+    destroyed_road_km = float(roads_km.get("Destroyed", 0.0))
+    possibly_damaged_road_km = float(roads_km.get("Possibly damaged", 0.0))
+    unverified_road_km = float(roads_km.get("Unknown (cloud)", 0.0))
+    intact_road_km = float(roads_km.get("Not affected", 0.0))
+
+    # 4. Ground-truth: cutoff_summary.json
+    cutoff_summary = {}
+    if (routing / "cutoff_summary.json").exists():
+        try:
+            cutoff_summary = json.loads((routing / "cutoff_summary.json").read_text())
+        except Exception:
+            pass
+    
+    veh_opt_cut = cutoff_summary.get("vehicle", {}).get("optimistic", {}).get("cut_off_count", 0)
+    veh_pess_cut = cutoff_summary.get("vehicle", {}).get("pessimistic", {}).get("cut_off_count", 0)
+    walk_opt_cut = cutoff_summary.get("walking", {}).get("optimistic", {}).get("cut_off_count", 0)
+    walk_pess_cut = cutoff_summary.get("walking", {}).get("pessimistic", {}).get("cut_off_count", 0)
+
+    # Calculate no-ground-access settlements (both vehicle and walking severed)
+    both_cut_opt = 0
+    both_cut_pess = 0
+    settle_file = routing / "settlements.geojson"
+    if settle_file.exists():
+        try:
+            s_geo = json.loads(settle_file.read_text())
+            for feat in s_geo.get("features", []):
+                p = feat.get("properties", {})
+                if p.get("vehicle_status_opt") == "cut_off" and p.get("walking_status_opt") == "cut_off":
+                    both_cut_opt += 1
+                if p.get("vehicle_status_pess") == "cut_off" and p.get("walking_status_pess") == "cut_off":
+                    both_cut_pess += 1
+        except Exception:
+            pass
+
+    # 5. Ground-truth: repair_packages.json (find first ACTIONABLE package with element_count >= 1)
+    repair_packages = {}
+    if (routing / "repair_packages.json").exists():
+        try:
+            repair_packages = json.loads((routing / "repair_packages.json").read_text())
+        except Exception:
+            pass
+    
+    ranked_pkgs = repair_packages.get("ranked_packages", [])
+    actionable_pkgs = [p for p in ranked_pkgs if len(p.get("elements", [])) > 0]
+    unconnectable_pkgs = [p for p in ranked_pkgs if len(p.get("elements", [])) == 0]
+
+    unconnectable_count = unconnectable_pkgs[0].get("settlements_count", 0) if unconnectable_pkgs else 0
+
+    if actionable_pkgs:
+        pkg1 = actionable_pkgs[0]
+        pkg1_rank = pkg1.get("rank", 1)
+        pkg1_settlements = pkg1.get("settlements_count", 0)
+        pkg1_buildings = pkg1.get("buildings_count", 0)
+        pkg1_elements = pkg1.get("elements", [])
+        pkg1_element_count = pkg1.get("element_count", len(pkg1_elements))
+        has_actionable = True
+    else:
+        pkg1_rank = None
+        pkg1_settlements = 0
+        pkg1_buildings = 0
+        pkg1_elements = []
+        pkg1_element_count = 0
+        has_actionable = False
+
+    # 6. S2 Scenes & Date Range Extraction
+    s2_scenes = summary.get("s2_scenes_used", [])
+    pre_dates = set()
+    post_dates = set()
+    for s in s2_scenes:
+        for p in s.split("_"):
+            if len(p) >= 8 and p[:8].isdigit():
+                formatted = f"{p[:4]}-{p[4:6]}-{p[6:8]}"
+                if s.startswith("pre_"):
+                    pre_dates.add(formatted)
+                elif s.startswith("post_"):
+                    post_dates.add(formatted)
+                    
+    pre_str = f"{min(pre_dates)} to {max(pre_dates)}" if pre_dates else "—"
+    post_str = f"{min(post_dates)} to {max(post_dates)}" if post_dates else "—"
+    image_dates_summary = f"Pre: {pre_str} | Post: {post_str}"
+
+    metrics = {
+        "areas": {
+            "observed_km2": round(obs_area, 4),
+            "inferred_km2": round(inf_area, 4),
+            "permanent_water_km2": round(perm_area, 4)
+        },
+        "buildings": {
+            "total_affected": total_affected_b,
+            "destroyed": destroyed_b,
+            "damaged": damaged_b,
+            "possibly_damaged": possibly_damaged_b,
+            "flooded": flooded_b,
+            "possibly_flooded": possibly_flooded_b,
+            "unverified": unverified_b,
+            "intact": intact_b
+        },
+        "bridges": {
+            "total_affected": total_affected_br,
+            "destroyed": destroyed_br,
+            "possibly_damaged": possibly_damaged_br,
+            "unverified": unverified_br
+        },
+        "roads_km": {
+            "destroyed_km": round(destroyed_road_km, 2),
+            "possibly_damaged_km": round(possibly_damaged_road_km, 2),
+            "unverified_km": round(unverified_road_km, 2),
+            "intact_km": round(intact_road_km, 2)
+        },
+        "cutoffs": {
+            "vehicle_optimistic": veh_opt_cut,
+            "vehicle_pessimistic": veh_pess_cut,
+            "walking_optimistic": walk_opt_cut,
+            "walking_pessimistic": walk_pess_cut,
+            "no_ground_access_optimistic": both_cut_opt,
+            "no_ground_access_pessimistic": both_cut_pess
+        },
+        "repair_package_1": {
+            "has_actionable_package": has_actionable,
+            "rank": pkg1_rank,
+            "reconnects_settlements": pkg1_settlements,
+            "reconnects_buildings": pkg1_buildings,
+            "element_count": pkg1_element_count,
+            "elements": pkg1_elements,
+            "unconnectable_settlements_count": unconnectable_count
+        }
+    }
+
+    # Check layer availability
+    has_hazards = (proc / "hazard_polygons.geojson").exists()
+    has_buildings = (proc / "buildings_graded.geojson").exists()
+    has_roads = (proc / "roads_graded.geojson").exists()
+    has_bridges = (proc / "bridges_graded.geojson").exists()
+    has_settlements = (routing / "settlements.geojson").exists()
+    has_repairs = (routing / "repair_packages.json").exists()
+    has_s2_cache = (run_folder / "interim" / "s2_cache").exists()
+
+    manifest = load_runs_manifest()
+    is_verified_e2e = folder_name in manifest.get("verified_runs", {})
+
+    return {
+        "id": folder_name,
+        "label": display_label,
+        "main_title": main_title,
+        "subtitle": subtitle,
+        "event_name": event_name,
+        "osm_label": human_label,
+        "event_date": event_date,
+        "event_year": event_year,
+        "bbox": bbox,
+        "regime": regime,
+        "status": status,
+        "is_verified_e2e": is_verified_e2e,
+        "validation_status": validation_status,
+        "validation_source_file": val_source_file,
+        "validation_source_field": val_source_field,
+        "sensors_used": summary.get("sensors_used", []),
+        "s2_scenes_used": s2_scenes,
+        "image_dates_summary": image_dates_summary,
+        "optical_evidence_note": summary.get("optical_evidence_note", ""),
+        "total_duration_seconds": summary.get("total_duration_seconds"),
+        "peak_ram_mb": summary.get("peak_ram_mb"),
+        "metrics": metrics,
+        "layers_available": {
+            "hazards": has_hazards,
+            "buildings": has_buildings,
+            "roads": has_roads,
+            "bridges": has_bridges,
+            "settlements": has_settlements,
+            "repair_packages": has_repairs,
+            "s2_before_after": has_s2_cache
+        }
+    }
+
+
+def generate_cloud_masked_median_composite(run_folder: Path, scene_type: str) -> Optional[bytes]:
+    """
+    Generates a cloud-masked median composite using the exact list of Sentinel-2 scenes
+    used by the pipeline (from run_summary.json). Remaining cloud is hatched in grey.
+    """
+    cache_key = f"{run_folder.name}_{scene_type}"
+    if cache_key in _COMPOSITE_CACHE:
+        return _COMPOSITE_CACHE[cache_key]
+
+    s2_cache = run_folder / "interim" / "s2_cache"
+    summary_file = run_folder / "run_summary.json"
+    if not s2_cache.exists() or not summary_file.exists():
+        return None
+
+    try:
+        summary = json.loads(summary_file.read_text())
+    except Exception:
+        return None
+
+    scenes = [s for s in summary.get("s2_scenes_used", []) if s.startswith(f"{scene_type}_")]
+    if not scenes:
+        # Fallback to files in s2_cache
+        scenes = [f for f in os.listdir(s2_cache) if f.startswith(f"{scene_type}_") and f.endswith(".npz")]
+        
+    if not scenes:
+        return None
+
+    visual_stack = []
+    cloud_mask_stack = []
+
+    for s in scenes:
+        spath = s2_cache / s
+        if not spath.exists():
+            continue
+        try:
+            d = np.load(spath)
+            vis = np.transpose(d["visual"], (1, 2, 0))  # (H, W, 3) uint8
+            scl = d.get("SCL")
+            if scl is not None:
+                # SCL: 8, 9, 10 are clouds, 3 is shadow, 0 is nodata
+                is_cloud = np.isin(scl, [3, 8, 9, 10]) | np.all(vis == 0, axis=-1)
+            else:
+                is_cloud = np.all(vis > 240, axis=-1) | np.all(vis == 0, axis=-1)
+
+            visual_stack.append(vis)
+            cloud_mask_stack.append(is_cloud)
+        except Exception as e:
+            logger.debug(f"Error loading {s}: {e}")
+
+    if not visual_stack:
+        return None
+
+    visual_stack = np.array(visual_stack, dtype=np.float32)
+    cloud_mask_stack = np.array(cloud_mask_stack)
+
+    # Mask cloud pixels with NaN
+    for i in range(len(visual_stack)):
+        visual_stack[i][cloud_mask_stack[i]] = np.nan
+
+    # Nanmedian composite across stack
+    with np.errstate(all="ignore"):
+        composite = np.nanmedian(visual_stack, axis=0)
+
+    # Check for remaining clouds (pixels that were cloudy in all scenes)
+    all_cloud = np.isnan(composite[..., 0])
+
+    # Fill all-cloud pixels with diagonal hatched grey pattern
+    H, W = all_cloud.shape
+    y_idx, x_idx = np.indices((H, W))
+    hatch = ((x_idx + y_idx) % 8 < 3)
+    hatch_rgb = np.where(hatch[..., None], 90, 130).astype(np.float32)
+
+    composite[all_cloud] = hatch_rgb[all_cloud]
+    composite = np.clip(composite, 0, 255).astype(np.uint8)
+
+    # Save to JPEG buffer
+    im = Image.fromarray(composite)
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG", quality=85)
+    jpeg_bytes = buf.getvalue()
+
+    _COMPOSITE_CACHE[cache_key] = jpeg_bytes
+    return jpeg_bytes
+
+
+class CreateRunRequest(BaseModel):
+    bbox: List[float]
+    event_date: str
+    event_name: Optional[str] = None
+    config: Optional[str] = "configs/default.yaml"
+
+
+ACTIVE_RUNS: Dict[str, Dict[str, Any]] = {}
+
+
+@app.post("/api/runs/create")
+def create_run(req: CreateRunRequest):
+    """
+    Triggers an end-to-end disaster impact assessment run (L0-L5) in background subprocess.
+    """
+    if len(req.bbox) != 4:
+        raise HTTPException(status_code=400, detail="Bounding box must be [min_lon, min_lat, max_lon, max_lat]")
+    min_lon, min_lat, max_lon, max_lat = [float(x) for x in req.bbox]
+    if not (-180.0 <= min_lon < max_lon <= 180.0 and -90.0 <= min_lat < max_lat <= 90.0):
+        raise HTTPException(status_code=400, detail="Invalid WGS84 bounding box coordinates")
+
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", req.event_date):
+        raise HTTPException(status_code=400, detail="Invalid event date format. Expected YYYY-MM-DD")
+
+    timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S")
+    clean_name = re.sub(r"[^a-zA-Z0-9_]+", "_", req.event_name.lower().strip()) if req.event_name else "analysis"
+    clean_name = clean_name.strip("_")[:24]
+    run_id = f"run_{timestamp_slug}_{clean_name}"
+    run_folder = RUNS_DIR / run_id
+    run_folder.mkdir(parents=True, exist_ok=True)
+
+    if req.event_name:
+        (run_folder / "event_name.txt").write_text(req.event_name.strip(), encoding="utf-8")
+
+    status_file = run_folder / "status.json"
+    init_status = {
+        "status": "RUNNING",
+        "stage": "L0_INGESTION",
+        "progress_pct": 5.0,
+        "elapsed_seconds": 0.0,
+        "current_step": "Initializing satellite data ingestion (Sentinel-1, Sentinel-2, DEM, OSM)...",
+        "bbox": [min_lon, min_lat, max_lon, max_lat],
+        "event_date": req.event_date,
+        "event_name": req.event_name,
+        "outputs": {},
+        "metrics": {},
+        "timestamp": datetime.now().isoformat(),
+        "error": None
+    }
+    status_file.write_text(json.dumps(init_status, indent=2))
+
+    cmd = [
+        sys.executable, "-u", "main.py",
+        "--bbox", str(min_lon), str(min_lat), str(max_lon), str(max_lat),
+        "--event-date", req.event_date,
+        "--out-dir", str(run_folder)
+    ]
+    if req.event_name:
+        cmd.extend(["--event-name", req.event_name.strip()])
+
+    # Use ONE default config containing validated parameters unless explicitly requested otherwise
+    cfg_to_use = req.config or "configs/default.yaml"
+    cfg_path = BASE_DIR / cfg_to_use
+    if cfg_path.exists():
+        cmd.extend(["--config", str(cfg_path)])
+
+    log_path = run_folder / "pipeline.log"
+    log_file = open(log_path, "w", encoding="utf-8")
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(BASE_DIR),
+            stdout=log_file,
+            stderr=subprocess.STDOUT
+        )
+    except Exception as e:
+        logger.error(f"Failed to spawn pipeline: {e}")
+        status_file.write_text(json.dumps({
+            "status": "FAILED",
+            "stage": "L0_INGESTION",
+            "progress_pct": 0.0,
+            "elapsed_seconds": 0.0,
+            "current_step": "Failed to spawn pipeline process",
+            "outputs": {},
+            "metrics": {},
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }, indent=2))
+        raise HTTPException(status_code=500, detail=f"Failed to spawn pipeline: {e}")
+
+    ACTIVE_RUNS[run_id] = {
+        "proc": proc,
+        "start_time": time.time(),
+        "log_path": str(log_path),
+        "run_folder": run_folder,
+        "event_name": req.event_name,
+        "bbox": [min_lon, min_lat, max_lon, max_lat],
+        "event_date": req.event_date
+    }
+
+    logger.info(f"Started assessment run '{run_id}' with PID {proc.pid}")
+    return {
+        "status": "started",
+        "run_id": run_id,
+        "event_name": req.event_name,
+        "bbox": [min_lon, min_lat, max_lon, max_lat],
+        "event_date": req.event_date
+    }
+
+
+@app.get("/api/runs/{run_id}/status")
+def get_run_status(run_id: str):
+    """
+    Polls the live execution status of an assessment run, tracking step progression,
+    progressive layer outputs, timeouts (600s), and error diagnostics.
+    """
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    status_file = run_folder / "status.json"
+    status_data = {}
+    if status_file.exists():
+        try:
+            status_data = json.loads(status_file.read_text())
+        except Exception:
+            status_data = {"status": "RUNNING", "progress_pct": 5.0, "current_step": "Processing..."}
+
+    active_info = ACTIVE_RUNS.get(run_id)
+    if active_info:
+        proc = active_info["proc"]
+        start_time = active_info["start_time"]
+        elapsed = round(time.time() - start_time, 1)
+
+        # 1. Timeout Check (10 minutes = 600s)
+        if elapsed > 600.0 and proc.poll() is None:
+            logger.warning(f"Run {run_id} exceeded timeout threshold (600s). Terminating...")
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            status_data["status"] = "FAILED"
+            status_data["error"] = "Pipeline timed out: exceeded maximum execution threshold of 10 minutes."
+            status_data["current_step"] = "Execution timed out"
+            status_file.write_text(json.dumps(status_data, indent=2))
+            return {**status_data, "run_id": run_id, "is_finished": True, "elapsed_seconds": elapsed}
+
+        # 2. Process Completion / Crash Check
+        poll_res = proc.poll()
+        if poll_res is not None:
+            if poll_res != 0 and status_data.get("status") not in ["COMPLETED", "DEGRADED"]:
+                error_msg = "Pipeline process exited unexpectedly"
+                log_p = Path(active_info["log_path"])
+                if log_p.exists():
+                    lines = [line.strip() for line in log_p.read_text().splitlines() if line.strip()]
+                    err_lines = [l for l in lines[-20:] if "Error" in l or "ERROR" in l or "Exception" in l or "No S1 scenes found" in l or "no data" in l.lower()]
+                    if err_lines:
+                        error_msg = err_lines[-1]
+                    elif lines:
+                        error_msg = lines[-1]
+
+                if "no data" in error_msg.lower() or "no s1" in error_msg.lower() or "0 scenes" in error_msg.lower():
+                    error_msg = f"No satellite data found for the selected bounding box and date: {error_msg}"
+
+                status_data["status"] = "FAILED"
+                status_data["error"] = error_msg
+                status_data["current_step"] = f"Execution failed: {error_msg}"
+                status_file.write_text(json.dumps(status_data, indent=2))
+                return {**status_data, "run_id": run_id, "is_finished": True, "elapsed_seconds": elapsed}
+
+    # Progressive stage and layer tracking while running
+    proc_dir = run_folder / "processed"
+    if status_data.get("status") == "RUNNING":
+        outs = status_data.setdefault("outputs", {})
+        if (proc_dir / "routing" / "cutoff_summary.json").exists():
+            status_data["stage"] = "L5_ROUTING"
+            status_data["progress_pct"] = max(status_data.get("progress_pct", 0.0), 90.0)
+            status_data["current_step"] = "L5 Network isolation & repair package analysis complete. Finalizing summary..."
+            outs["hazard_polygons_geojson"] = True
+            outs["buildings_graded_geojson"] = True
+            outs["roads_graded_geojson"] = True
+            outs["bridges_graded_geojson"] = True
+            outs["settlements_geojson"] = True
+            outs["repair_packages_json"] = True
+        elif (proc_dir / "damage_summary.json").exists():
+            status_data["stage"] = "L4_DAMAGE"
+            status_data["progress_pct"] = max(status_data.get("progress_pct", 0.0), 75.0)
+            status_data["current_step"] = "L3/L4 Infrastructure damage assessment complete. Analyzing network connectivity (L5)..."
+            outs["hazard_polygons_geojson"] = True
+            outs["buildings_graded_geojson"] = True
+            outs["roads_graded_geojson"] = True
+            outs["bridges_graded_geojson"] = True
+        elif (proc_dir / "hazard_classes.tif").exists() or (proc_dir / "hazard_polygons.geojson").exists():
+            status_data["stage"] = "L2_HAZARD"
+            status_data["progress_pct"] = max(status_data.get("progress_pct", 0.0), 45.0)
+            status_data["current_step"] = "L2 Hazard mapping complete. Analyzing infrastructure impact (L3/L4)..."
+            outs["hazard_polygons_geojson"] = True
+        elif (proc_dir / "terrain_regime.json").exists():
+            status_data["stage"] = "L1_TERRAIN"
+            status_data["progress_pct"] = max(status_data.get("progress_pct", 0.0), 25.0)
+            status_data["current_step"] = "L1 Terrain regime determined. Computing radar & optical change detection (L2)..."
+        else:
+            status_data["stage"] = "L0_INGESTION"
+            status_data["progress_pct"] = max(status_data.get("progress_pct", 0.0), 10.0)
+            status_data["current_step"] = "Ingesting satellite imagery, DEM, and OSM vector data (L0)..."
+
+    # If run_summary.json exists and pipeline finished
+    summary_file = run_folder / "run_summary.json"
+    if summary_file.exists():
+        try:
+            summary = json.loads(summary_file.read_text())
+            final_status = summary.get("status", "COMPLETED")
+            status_data["status"] = final_status
+            status_data["progress_pct"] = 100.0
+            status_data["stage"] = "COMPLETED"
+            status_data["current_step"] = "Assessment successfully completed."
+            status_data["outputs"] = summary.get("outputs", {})
+            status_data["metrics"] = summary.get("metrics", {})
+        except Exception:
+            pass
+
+    curr_status = status_data.get("status", "RUNNING")
+    is_finished = curr_status in ["COMPLETED", "DEGRADED", "FAILED"]
+
+    return {
+        "run_id": run_id,
+        "status": curr_status,
+        "stage": status_data.get("stage", "UNKNOWN"),
+        "progress_pct": status_data.get("progress_pct", 0.0),
+        "elapsed_seconds": status_data.get("elapsed_seconds", 0.0),
+        "current_step": status_data.get("current_step", ""),
+        "outputs": status_data.get("outputs", {}),
+        "metrics": status_data.get("metrics", {}),
+        "error": status_data.get("error"),
+        "is_finished": is_finished
+    }
+
+
+@app.get("/api/runs")
+def list_runs(show_all: bool = Query(False)):
+    """
+    Scans runs/ directory. By default, returns ONLY completed/degraded runs
+    verified under pipeline tag e2e-final4 (manifest-backed) and user-initiated runs.
+    Other runs are accessible when show_all=True.
+    """
+    if not RUNS_DIR.exists():
+        return []
+
+    manifest = load_runs_manifest()
+    verified_map = manifest.get("verified_runs", {})
+
+    runs = []
+    for item in RUNS_DIR.iterdir():
+        if item.is_dir() and (item / "run_summary.json").exists():
+            meta = get_run_metadata(item)
+            if not meta:
+                continue
+
+            if not show_all:
+                is_user_run = item.name.startswith("run_") or (item / "status.json").exists()
+                if (meta["id"] in verified_map or is_user_run) and meta["status"] in ["COMPLETED", "DEGRADED"]:
+                    runs.append(meta)
+            else:
+                runs.append(meta)
+
+    # Sort logically
+    runs.sort(key=lambda r: (0 if "verify" in r["id"] or "practice" in r["id"] else 1, r["event_date"]), reverse=False)
+    return runs
+
+
+@app.get("/api/runs/{run_id}")
+def get_run_details(run_id: str):
+    """Returns detailed summary payload and layer stats for a specific run."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists() or not (run_folder / "run_summary.json").exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    meta = get_run_metadata(run_folder)
+    if not meta:
+        raise HTTPException(status_code=500, detail="Error reading run summary")
+
+    proc = run_folder / "processed"
+    routing = proc / "routing"
+    details = dict(meta)
+
+    if (proc / "l2_stats.json").exists():
+        try:
+            details["l2_stats"] = json.loads((proc / "l2_stats.json").read_text())
+        except Exception:
+            pass
+    if (proc / "damage_summary.json").exists():
+        try:
+            details["damage_summary"] = json.loads((proc / "damage_summary.json").read_text())
+        except Exception:
+            pass
+    if (routing / "cutoff_summary.json").exists():
+        try:
+            details["cutoff_summary"] = json.loads((routing / "cutoff_summary.json").read_text())
+        except Exception:
+            pass
+    if (routing / "repair_packages.json").exists():
+        try:
+            details["repair_packages"] = json.loads((routing / "repair_packages.json").read_text())
+        except Exception:
+            pass
+
+    return details
+
+
+@app.get("/api/runs/{run_id}/layer/{layer_name}")
+def get_run_layer(run_id: str, layer_name: str):
+    """Serves GeoJSON layer for a specific run."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    proc = run_folder / "processed"
+    routing = proc / "routing"
+
+    layer_map = {
+        "hazards": proc / "hazard_polygons.geojson",
+        "buildings": proc / "buildings_graded.geojson",
+        "roads": proc / "roads_graded.geojson",
+        "bridges": proc / "bridges_graded.geojson",
+        "settlements": routing / "settlements.geojson",
+    }
+
+    if layer_name not in layer_map:
+        raise HTTPException(status_code=400, detail=f"Unknown layer {layer_name}")
+
+    target_file = layer_map[layer_name]
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail=f"Layer {layer_name} not available for this run")
+
+    return FileResponse(target_file, media_type="application/geo+json")
+
+
+@app.get("/api/runs/{run_id}/repair-packages")
+def get_repair_packages(run_id: str):
+    """Serves repair packages analysis JSON for a specific run."""
+    run_folder = RUNS_DIR / run_id
+    pkg_file = run_folder / "processed" / "routing" / "repair_packages.json"
+    if not pkg_file.exists():
+        raise HTTPException(status_code=404, detail="Repair packages not found")
+    return JSONResponse(content=json.loads(pkg_file.read_text()))
+
+
+@app.get("/api/runs/{run_id}/s2-meta")
+def get_s2_metadata(run_id: str):
+    """Returns metadata for Sentinel-2 cloud-masked composite scenes matching run_summary."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    summary_file = run_folder / "run_summary.json"
+    if not summary_file.exists():
+        raise HTTPException(status_code=404, detail="Run summary not found")
+
+    try:
+        summary = json.loads(summary_file.read_text())
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error reading summary")
+
+    s2_scenes = summary.get("s2_scenes_used", [])
+    pre_scenes = [s for s in s2_scenes if s.startswith("pre_")]
+    post_scenes = [s for s in s2_scenes if s.startswith("post_")]
+
+    def extract_dates(scenes_list):
+        dates = set()
+        for s in scenes_list:
+            for p in s.split("_"):
+                if len(p) >= 8 and p[:8].isdigit():
+                    dates.add(f"{p[:4]}-{p[4:6]}-{p[6:8]}")
+        return sorted(dates)
+
+    pre_dates = extract_dates(pre_scenes)
+    post_dates = extract_dates(post_scenes)
+
+    meta = get_run_metadata(run_folder)
+    return {
+        "run_id": run_id,
+        "bbox": meta["bbox"] if meta else [],
+        "pre": {
+            "scenes_count": len(pre_scenes),
+            "date_range": f"{pre_dates[0]} to {pre_dates[-1]}" if pre_dates else "—",
+            "scenes": pre_scenes
+        },
+        "post": {
+            "scenes_count": len(post_scenes),
+            "date_range": f"{post_dates[0]} to {post_dates[-1]}" if post_dates else "—",
+            "scenes": post_scenes
+        }
+    }
+
+
+@app.get("/api/runs/{run_id}/s2-image")
+def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$")):
+    """Generates read-only cloud-masked median composite Sentinel-2 JPEG from raw cache."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    jpeg_bytes = generate_cloud_masked_median_composite(run_folder, type)
+    if not jpeg_bytes:
+        raise HTTPException(status_code=404, detail=f"Could not generate {type} S2 composite")
+
+    return Response(content=jpeg_bytes, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/runs/{run_id}/basemap/hillshade")
+def get_run_hillshade(run_id: str):
+    """Serves cached Copernicus DEM-30 topographic relief hillshade PNG for the run."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    from src.dashboard.basemap_renderer import generate_run_hillshade
+    png_path, _ = generate_run_hillshade(run_folder)
+    if not png_path or not png_path.exists():
+        raise HTTPException(status_code=404, detail="Hillshade could not be generated for this run")
+    return FileResponse(png_path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/runs/{run_id}/basemap/meta")
+def get_run_basemap_meta(run_id: str):
+    """Serves hillshade bounds metadata."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    from src.dashboard.basemap_renderer import generate_run_hillshade
+    _, meta = generate_run_hillshade(run_folder)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Hillshade metadata not found")
+    return JSONResponse(meta)
+
+
+@app.get("/api/runs/{run_id}/basemap/waterways")
+def get_run_basemap_waterways(run_id: str):
+    """Serves raw OSM rivers/waterways GeoJSON."""
+    run_folder = RUNS_DIR / run_id
+    target = run_folder / "raw" / "osm" / "osm_waterways.geojson"
+    if not target.exists():
+        target = BASE_DIR / "data" / "raw" / "osm" / "osm_waterways.geojson"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Waterways not found")
+    return FileResponse(target, media_type="application/geo+json")
+
+
+@app.get("/api/runs/{run_id}/basemap/roads")
+def get_run_basemap_roads(run_id: str):
+    """Serves raw OSM roads GeoJSON for baseline rendering."""
+    run_folder = RUNS_DIR / run_id
+    target = run_folder / "raw" / "osm" / "osm_roads.geojson"
+    if not target.exists():
+        target = BASE_DIR / "data" / "raw" / "osm" / "osm_roads.geojson"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Roads not found")
+    return FileResponse(target, media_type="application/geo+json")
+
+
+@app.get("/api/runs/{run_id}/basemap/places")
+def get_run_basemap_places(run_id: str):
+    """Serves raw OSM places GeoJSON with Latin and Devanagari labels."""
+    run_folder = RUNS_DIR / run_id
+    target = run_folder / "raw" / "osm" / "osm_places.geojson"
+    if not target.exists():
+        target = BASE_DIR / "data" / "raw" / "osm" / "osm_places.geojson"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Places not found")
+    return FileResponse(target, media_type="application/geo+json")
+
+
+# Mount static assets
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/")
+def index():
+    """Serves the main dashboard HTML interface."""
+    index_file = STATIC_DIR / "index.html"
+    if not index_file.exists():
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+    return FileResponse(index_file)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting Disaster Dashboard server on http://0.0.0.0:{port}")
+    uvicorn.run("src.dashboard.app:app", host="0.0.0.0", port=port, reload=False)
