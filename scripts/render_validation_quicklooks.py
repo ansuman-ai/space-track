@@ -8,7 +8,8 @@ import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 from scipy.ndimage import label
 
-sys.path.insert(0, '/home/zeus/Downloads/project1')
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 from src.common.plot_utils import plot_raster_background
 from src.l2_detection.flat_floodplain import otsu_threshold
 
@@ -116,7 +117,7 @@ def render_event_quicklook(
     print(f"Saved quicklook to {out_png}")
 
 if __name__ == '__main__':
-    art_dir = '/home/zeus/.gemini/antigravity/brain/9e2afbf7-ac9b-4fd3-9cad-b12786f88814'
+    art_dir = os.environ.get('ARTIFACTS_DIR', str(ROOT_DIR / 'scratch'))
 
     # Italy EMSR659 AOI01 (Largest flood area in Emilia-Romagna)
     render_event_quicklook(

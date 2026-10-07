@@ -10,11 +10,9 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-sys.path.insert(0, '/home/zeus/Downloads/project1')
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 from src.l2_detection.flat_floodplain import detect_flat_floodplain_hazard, otsu_threshold
-
-# Add path for project1-l6
-sys.path.insert(0, '/home/zeus/Downloads/project1-l6')
 from src.l6_ai_model.model import load_model
 from src.l6_ai_model.predict import predict
 
@@ -149,7 +147,7 @@ def evaluate_run(run_dir, aoi_shp, event_shp, is_event=True, device='cpu', weigh
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
-    weights_path = '/home/zeus/Downloads/project1-l6/weights/best_segmentation.pt'
+    weights_path = ROOT_DIR / 'weights' / 'best_segmentation.pt'
 
     # 1. EMSR659 Italy
     aoi_659 = 'validation/emsr659/EMSR659_AOI02_DEL_PRODUCT_v2/EMSR659_AOI02_DEL_PRODUCT_v2/EMSR659_AOI02_DEL_PRODUCT_areaOfInterestA_v2.shp'

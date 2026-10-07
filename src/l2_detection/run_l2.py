@@ -217,16 +217,26 @@ def load_s1_features(
     else:
         seas_post_out = None
 
+    def _align_hw(a):
+        if a is None or not isinstance(a, np.ndarray):
+            return a
+        if a.shape == (h, w):
+            return a
+        aligned = np.zeros((h, w), dtype=a.dtype)
+        min_h, min_w = min(h, a.shape[0]), min(w, a.shape[1])
+        aligned[:min_h, :min_w] = a[:min_h, :min_w]
+        return aligned
+
     return {
-        "z_vv_asc_event": z_vv_asc_event,
-        "z_vv_asc_ctrl": z_vv_asc_ctrl,
-        "desc_lr_event": desc_lr_event,
-        "o19_lr_event": desc_lr_event,
+        "z_vv_asc_event": _align_hw(z_vv_asc_event),
+        "z_vv_asc_ctrl": _align_hw(z_vv_asc_ctrl),
+        "desc_lr_event": _align_hw(desc_lr_event),
+        "o19_lr_event": _align_hw(desc_lr_event),
         "post_vv": post_vv,
-        "pre_vv": pre_vv_out if 'pre_vv_out' in locals() else None,
-        "ctrl_post_vv": ctrl_post_out if 'ctrl_post_out' in locals() else None,
-        "ctrl_pre_vv": ctrl_pre_out if 'ctrl_pre_out' in locals() else None,
-        "seasonal_post_vv": seas_post_out
+        "pre_vv": _align_hw(pre_vv_out if 'pre_vv_out' in locals() else None),
+        "ctrl_post_vv": _align_hw(ctrl_post_out if 'ctrl_post_out' in locals() else None),
+        "ctrl_pre_vv": _align_hw(ctrl_pre_out if 'ctrl_pre_out' in locals() else None),
+        "seasonal_post_vv": _align_hw(seas_post_out)
     }
 
 
@@ -328,6 +338,34 @@ def run_layer2(
         cvm_ctrl = np.zeros((h, w), dtype=np.float32)
         post_vis = None
     else:
+        def _align(arr):
+            if arr is None or not isinstance(arr, np.ndarray):
+                return arr
+            if arr.shape[:2] == (h, w):
+                return arr
+            if arr.ndim == 2:
+                aligned = np.zeros((h, w), dtype=arr.dtype)
+                min_h, min_w = min(h, arr.shape[0]), min(w, arr.shape[1])
+                aligned[:min_h, :min_w] = arr[:min_h, :min_w]
+                return aligned
+            elif arr.ndim == 3 and arr.shape[0] == 3:
+                aligned = np.zeros((3, h, w), dtype=arr.dtype)
+                min_h, min_w = min(h, arr.shape[1]), min(w, arr.shape[2])
+                aligned[:, :min_h, :min_w] = arr[:, :min_h, :min_w]
+                return aligned
+            elif arr.ndim == 3 and arr.shape[2] == 3:
+                aligned = np.zeros((h, w, 3), dtype=arr.dtype)
+                min_h, min_w = min(h, arr.shape[0]), min(w, arr.shape[1])
+                aligned[:min_h, :min_w, :] = arr[:min_h, :min_w, :]
+                return aligned
+            return arr
+
+        for k in list(s2_data.keys()):
+            if isinstance(s2_data[k], np.ndarray):
+                s2_data[k] = _align(s2_data[k])
+            elif isinstance(s2_data[k], dict):
+                s2_data[k] = {sub_k: _align(sub_v) for sub_k, sub_v in s2_data[k].items()}
+
         pre_comp = s2_data['pre_composite']
         post_comp = s2_data['post_composite']
         d_ndvi_event = s2_data['d_ndvi_event']
@@ -341,8 +379,11 @@ def run_layer2(
         band_keys = ['b02', 'b03', 'b04', 'b08', 'b11', 'b12']
         sq_ev = sum([((post_comp[b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
         cvm_ev = np.sqrt(sq_ev).astype(np.float32)
-        sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
-        cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
+        if s2_data.get('ctrl_post_composite'):
+            sq_ctrl = sum([((s2_data['ctrl_post_composite'][b] - pre_comp[b]) / 10000.0) ** 2 for b in band_keys])
+            cvm_ctrl = np.sqrt(sq_ctrl).astype(np.float32)
+        else:
+            cvm_ctrl = np.zeros((h, w), dtype=np.float32)
 
     try:
         np.save(in_path / "s2_event_valid.npy", s2_event_valid)
@@ -522,9 +563,21 @@ def run_layer2(
         pre_vv_in = s1_data.get('pre_vv') if s1_data.get('pre_vv') is not None else post_vv
         if detector == "kurosiwo":
             logger.info("Detecting Flat-Floodplain Flood using Kuro Siwo SNUNet (optional detector)...")
-            sys.path.insert(0, '/home/zeus/Downloads/project1-l6')
             from src.l6_ai_model.predict import predict as ks_predict
-            weights_path = "/home/zeus/Downloads/project1-l6/weights/best_segmentation.pt"
+            weights_path = Path("weights/best_segmentation.pt")
+            if not weights_path.exists():
+                raise RuntimeError(
+                    f"Kuro Siwo weights missing at {weights_path}. "
+                    "Download the pretrained checkpoint (MD5: 07c6f40cb71290d93ba232ab03f74b1e) "
+                    "per instructions in README.md."
+                )
+            import hashlib
+            weights_hash = hashlib.md5(weights_path.read_bytes()).hexdigest()
+            if weights_hash != "07c6f40cb71290d93ba232ab03f74b1e":
+                raise RuntimeError(
+                    f"Kuro Siwo weights corrupted at {weights_path} (MD5: {weights_hash} != 07c6f40cb71290d93ba232ab03f74b1e). "
+                    "Download the official checkpoint per instructions in README.md."
+                )
             ks_out_dir = out_path / "snunet_output"
             ks_mask_path = ks_out_dir / "flood_mask.tif"
             if not ks_mask_path.exists():
@@ -534,12 +587,14 @@ def run_layer2(
                     post_vv_path=str(in_path / "post_vv.tif"),
                     post_vh_path=str(in_path / "post_vh.tif"),
                     slope_path=str(in_path / "slope.tif"),
-                    weights_path=weights_path,
+                    weights_path=str(weights_path),
                     output_dir=str(ks_out_dir),
                     device="cpu"
                 )
             with rasterio.open(ks_mask_path) as src_ks:
                 ks_arr = src_ks.read(1)
+            if ks_arr.shape != (h, w):
+                ks_arr = ks_arr[:h, :w]
             aff_ev_clean = ((ks_arr == 2) & (hand <= 15.0) & (nodata_mask == 0)).astype(np.uint8)
             source_mask_ev = np.where(aff_ev_clean == 1, 2, 0).astype(np.uint8)
             fp_thresh = {"model": "kurosiwo_snunet"}

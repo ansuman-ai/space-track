@@ -139,6 +139,25 @@ gcc -O3 -shared -fPIC src/l1_preprocessing/hand_c.c -o src/l1_preprocessing/libh
 - To explicitly force the pure-Python implementation (e.g. for testing or non-C environments), set `HAND_DISABLE_C=1` in your environment.
 - **Byte-Identity Guarantee**: The C extension and the Python fallback produce bit-for-bit identical results (`Max diff HAND: 0.0`, byte-identical `hand.tif`).
 
+### 4. Optional Pretrained Weights (Kuro Siwo SNUNet Detector)
+The default operational path uses the physics-informed Sentinel-2 + Sentinel-1 engine (`detector: "combined"`) and requires zero deep learning model weights.
+
+If executing with the optional experimental detector (`detector: "kurosiwo"`):
+1. Create the `weights/` directory:
+   ```bash
+   mkdir -p weights
+   ```
+2. Place the pretrained Kuro Siwo SNUNet checkpoint `best_segmentation.pt` in `weights/`:
+   ```bash
+   # Checkpoint file path: weights/best_segmentation.pt
+   ```
+3. Verify the checksum:
+   ```bash
+   md5sum weights/best_segmentation.pt
+   # Must match: 07c6f40cb71290d93ba232ab03f74b1e
+   ```
+If `weights/best_segmentation.pt` is absent or checksum verification fails when `detector: "kurosiwo"` is explicitly configured, the pipeline terminates with an actionable error.
+
 ---
 
 ## Required Data Attribution

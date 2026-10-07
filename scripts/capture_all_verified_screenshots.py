@@ -4,9 +4,9 @@ import base64
 import urllib.request
 import subprocess
 from pathlib import Path
-import websockets
+import os
 
-ARTIFACTS_DIR = Path("/home/zeus/.gemini/antigravity/brain/9e2afbf7-ac9b-4fd3-9cad-b12786f88814")
+ARTIFACTS_DIR = Path(os.environ.get("ARTIFACTS_DIR", str(Path(__file__).resolve().parent.parent / "scratch")))
 
 async def send_cdp(ws, method, params=None, msg_id=[1]):
     mid = msg_id[0]

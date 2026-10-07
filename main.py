@@ -132,7 +132,8 @@ def run_pipeline(
     config_path: str = "configs/default.yaml",
     no_cache: bool = False,
     no_quicklooks: bool = False,
-    event_name: Optional[str] = None
+    event_name: Optional[str] = None,
+    detector: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Executes full end-to-end disaster impact assessment pipeline (L0 -> L5).
@@ -165,6 +166,8 @@ def run_pipeline(
 
     prep_cfg = cfg.get("preprocessing", {})
     det_cfg = cfg.get("detection", {})
+    if detector:
+        det_cfg["detector"] = detector
     dmg_cfg = cfg.get("damage_grading", {})
     rt_cfg = cfg.get("routing", {})
     perf_cfg = cfg.get("performance", {})
@@ -733,6 +736,7 @@ def main():
     parser.add_argument("--event-date", type=str, required=True, help="YYYY-MM-DD (event date)")
     parser.add_argument("--out-dir", type=str, required=True, help="Output directory path")
     parser.add_argument("--event-name", type=str, default=None, help="Optional disaster event name")
+    parser.add_argument("--detector", type=str, default=None, choices=["combined", "kurosiwo"], help="Optional detector override (combined or kurosiwo)")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to default config yaml")
     parser.add_argument("--no-cache", action="store_true", help="Disable copying pre-existing cache from data/")
     parser.add_argument("--no-quicklooks", action="store_true", help="Disable rendering quicklook visualization plots")
@@ -745,7 +749,8 @@ def main():
         config_path=args.config,
         no_cache=args.no_cache,
         no_quicklooks=args.no_quicklooks,
-        event_name=args.event_name
+        event_name=args.event_name,
+        detector=args.detector
     )
 
 

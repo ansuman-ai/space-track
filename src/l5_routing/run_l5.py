@@ -147,7 +147,7 @@ def run_layer5(
     bbox_osm_dir: str = "data/raw/osm",
     out_dir: str = "data/processed/routing",
     control_out_dir: str = "data/control/processed/routing",
-    artifact_dir: str = "/home/zeus/.gemini/antigravity/brain/52dd5215-6165-4f39-8912-cfce41bfdff1",
+    artifact_dir: Optional[str] = None,
     enable_quicklooks: bool = True
 ) -> Dict[str, Any]:
     """
@@ -562,7 +562,7 @@ def run_layer5(
             logger.debug(f"Dead end zoom plot skipped: {e}")
 
     # Copy artifacts to artifact dir
-    if os.path.exists(artifact_dir):
+    if artifact_dir and os.path.exists(artifact_dir):
         for p in [overview_png, s3_comp_png, dead_end_png, repair_json_path, packages_json_path, str(settle_geojson_path), str(summary_json_path)] + zoom_png_paths:
             if os.path.exists(p):
                 shutil.copy(p, os.path.join(artifact_dir, os.path.basename(p)))
