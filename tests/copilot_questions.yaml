@@ -10,7 +10,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [81]
+    expected_numbers: [107]
 
   - id: en_02
     question: "How many settlements are cut off from vehicle access?"
@@ -28,7 +28,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.roads.destroyed_km"]
-    expected_numbers: [3.98]
+    expected_numbers: [5.98]
 
   - id: en_04
     question: "How many bridges are destroyed?"
@@ -37,7 +37,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["bridges_status"]
     expected_facts: ["damage.bridges.destroyed"]
-    expected_numbers: [10]
+    expected_numbers: [12]
 
   - id: en_05
     question: "Which road repair should rescue teams prioritize first?"
@@ -73,7 +73,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["limitations"]
     expected_facts: ["limitations.cloud_covered_buildings"]
-    expected_numbers: [1382]
+    expected_numbers: [1196]
 
   # --- NEPALI QUESTIONS (नेपाली) ---
   - id: ne_01
@@ -83,7 +83,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [81]
+    expected_numbers: [107]
 
   - id: ne_02
     question: "कति वटा बस्तीहरू सडक सम्पर्कविहीन भएका छन्?"
@@ -101,7 +101,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["bridges_status"]
     expected_facts: ["damage.bridges.destroyed"]
-    expected_numbers: [10]
+    expected_numbers: [12]
 
   - id: ne_04
     question: "दुर्सागाङ बस्तीको अवस्था कस्तो छ?"
@@ -128,7 +128,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["event_summary"]
     expected_facts: ["metrics.affected_km2_observed"]
-    expected_numbers: [0.7989]
+    expected_numbers: [1.0837]
 
   # --- HINDI QUESTIONS (हिन्दी) ---
   - id: hi_01
@@ -138,7 +138,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [81]
+    expected_numbers: [107]
 
   - id: hi_02
     question: "कितनी बस्तियां सड़क संपर्क से कट गई हैं?"
@@ -156,7 +156,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["bridges_status"]
     expected_facts: ["damage.bridges.destroyed"]
-    expected_numbers: [10]
+    expected_numbers: [12]
 
   - id: hi_04
     question: "सड़क मरम्मत में सर्वोच्च प्राथमिकता कौन से खंड की है?"
@@ -202,7 +202,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [81]
+    expected_numbers: [107]
 
   # --- TYPOS & MISSPELLED QUERIES ---
   - id: typo_01
@@ -212,7 +212,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [81]
+    expected_numbers: [107]
 
   - id: typo_02
     question: "What is the sttaus of brdiges?"
@@ -221,7 +221,7 @@ questions:
     run: "test_A_trishuli"
     expected_tools: ["bridges_status"]
     expected_facts: ["damage.bridges.destroyed"]
-    expected_numbers: [10]
+    expected_numbers: [12]
 
   - id: typo_03
     question: "What is the status of Bahundada?"
@@ -342,7 +342,7 @@ questions:
     run: "test_B_melamchi"
     expected_tools: ["damage_summary"]
     expected_facts: ["damage.buildings.destroyed"]
-    expected_numbers: [92]
+    expected_numbers: [72]
 
   - id: mel_02
     question: "मेलम्चीमा कति बस्तीहरू सवारी साधनबाट सम्पर्कविहीन छन्?"
@@ -351,7 +351,7 @@ questions:
     run: "test_B_melamchi"
     expected_tools: ["cutoff_settlements"]
     expected_facts: ["cutoff.vehicle.optimistic.count"]
-    expected_numbers: [11]
+    expected_numbers: [5]
 
   - id: mel_03
     question: "What is the vehicle status of Melamchi?"

@@ -56,6 +56,8 @@ class FactStore:
         self.repair_packages: List[Dict[str, Any]] = []
         self.graded_buildings: List[Dict[str, Any]] = []
         self.graded_bridges: List[Dict[str, Any]] = []
+        self.graded_roads: List[Dict[str, Any]] = []
+        self.road_index: Dict[str, Dict[str, Any]] = {}
 
         self._load_all()
 
@@ -392,12 +394,42 @@ class FactStore:
                 ev = props.get("evidence", "observed")
                 clean_bid = bid.replace("/", "_")
                 coords = self._geom_centroid(feat.get("geometry", {})) if feat.get("geometry") else None
+
+                hwy = props.get("highway")
+                ref = props.get("ref")
+                desc = props.get("description")
+                if ref in ["NH42", "NH18"] or hwy == "primary":
+                    carried_road = f"Primary Highway (Pasang Lhamu Highway {ref or 'NH42'})"
+                elif hwy == "unclassified":
+                    carried_road = f"unclassified road" + (f" ({ref})" if ref else "")
+                elif hwy in ["path", "footway"]:
+                    carried_road = f"pedestrian trail / {hwy}"
+                else:
+                    carried_road = f"{hwy or 'road'}" + (f" ({ref})" if ref else "")
+
+                nearest_place = None
+                nearest_dist_km = 999.0
+                if coords:
+                    for s in self.settlement_index.values():
+                        sc = s.get("coordinates")
+                        if sc:
+                            d = (((coords[0] - sc[0]) ** 2 + (coords[1] - sc[1]) ** 2) ** 0.5) * 111.0
+                            if d < nearest_dist_km:
+                                nearest_dist_km = d
+                                s_label = s.get("name") or "Unnamed settlement"
+                                nearest_place = f"{s_label} ({d:.2f} km)"
+
                 bridge_rec = {
                     "bridge_id": bid,
                     "name": name,
+                    "ref": ref,
                     "damage_grade": grade,
                     "evidence": ev,
-                    "highway": props.get("highway"),
+                    "highway": hwy,
+                    "carried_road": carried_road,
+                    "description": desc,
+                    "nearest_place": nearest_place,
+                    "nearest_dist_km": round(nearest_dist_km, 2) if nearest_dist_km < 900 else None,
                     "distance_m": props.get("distance_m"),
                     "coordinates": coords,
                 }
@@ -405,6 +437,46 @@ class FactStore:
                 self.graded_bridges.append(bridge_rec)
                 self.add_fact(f"bridge.{clean_bid}.name", name, "name", src, "osm_baseline", event_date, f"Bridge name: {name}")
                 self.add_fact(f"bridge.{clean_bid}.damage_grade", grade, "status", src, ev, optical_date, f"Damage grade for bridge {name}")
+                self.add_fact(f"bridge.{clean_bid}.carried_road", carried_road, "string", src, "osm_baseline", event_date, f"Carried road for bridge {name}")
+
+        # 6c. Roads GeoJSON
+        roads_graded_json = self._read_json_safe("processed/roads_graded.geojson")
+        if roads_graded_json and "features" in roads_graded_json:
+            for feat in roads_graded_json["features"]:
+                props = feat.get("properties", {})
+                rid = str(props.get("@osmId") or f"road_{len(self.graded_roads)}")
+                geom = feat.get("geometry", {})
+                pts = []
+                coords = geom.get("coordinates", [])
+                if coords:
+                    if isinstance(coords[0], (int, float)):
+                        pts = [coords]
+                    elif isinstance(coords[0][0], (int, float)):
+                        pts = coords
+                    else:
+                        for line in coords:
+                            pts.extend(line)
+                r_name = props.get("name")
+                r_ref = props.get("ref")
+                r_hwy = props.get("highway")
+                r_grade = props.get("damage_grade", "unknown")
+                r_ev = props.get("evidence", "observed")
+                r_len_m = float(props.get("length_m", 0.0))
+                road_rec = {
+                    "osm_id": rid,
+                    "name": r_name,
+                    "ref": r_ref,
+                    "highway": r_hwy,
+                    "damage_grade": r_grade,
+                    "evidence": r_ev,
+                    "length_m": r_len_m,
+                    "coordinates": pts,
+                    "dist_to_c2_m": props.get("dist_to_c2_m"),
+                    "dist_to_c3_m": props.get("dist_to_c3_m"),
+                    "rule": props.get("rule"),
+                }
+                self.graded_roads.append(road_rec)
+                self.road_index[rid] = road_rec
 
         # 6b. Buildings GeoJSON
         buildings_graded_json = self._read_json_safe("processed/buildings_graded.geojson")
@@ -420,7 +492,28 @@ class FactStore:
                             "coordinates": centroid,
                             "damage_grade": props.get("damage_grade", "unknown"),
                             "evidence": props.get("evidence", "observed"),
+                            "admin_centre": props.get("admin_centre"),
+                            "name": props.get("name"),
+                            "city": props.get("addr:city"),
+                            "is_in": props.get("is_in"),
                         })
+
+            # Associate nearby OSM features with settlements based on spatial proximity
+            toponym_buildings = [b for b in self.graded_buildings if b.get("admin_centre") or b.get("city") or b.get("is_in")]
+            for b in toponym_buildings:
+                bc = b["coordinates"]
+                candidates = []
+                for sid, s in self.settlement_index.items():
+                    coords = s.get("coordinates")
+                    if coords:
+                        d_km = (((coords[0] - bc[0]) ** 2 + (coords[1] - bc[1]) ** 2) ** 0.5) * 111.0
+                        if d_km <= 0.65:
+                            candidates.append((s.get("building_count", 0), d_km, s))
+                if candidates:
+                    # Associate with the primary settlement core (largest building count) in this catchment
+                    candidates.sort(key=lambda x: (x[0], -x[1]), reverse=True)
+                    best_s = candidates[0][2]
+                    best_s.setdefault("osm_features_nearby", []).append(b)
 
         # 7. Destinations (Hospitals / Towns)
         # Try buffered hospitals first, then raw osm hospitals
@@ -498,29 +591,170 @@ class FactStore:
         self.repair_packages.clear()
         self.graded_buildings.clear()
         self.graded_bridges.clear()
+        self.graded_roads.clear()
+        self.road_index.clear()
         self._load_all()
 
     @classmethod
-    def list_available_runs(cls, runs_root: Union[str, Path] = "/home/zeus/Downloads/project1/runs") -> List[Dict[str, Any]]:
-        """List all valid pipeline run directories in runs_root."""
-        root = Path(runs_root).resolve()
+    def derive_run_metadata(cls, p: Path) -> Optional[Dict[str, Any]]:
+        """Inspect a run directory and derive a human-readable label and search terms purely from data."""
+        if not p.is_dir() or (not (p / "run_summary.json").exists() and not (p / "processed").exists()):
+            return None
+
+        summary_file = p / "run_summary.json"
+        summary_data = {}
+        if summary_file.exists():
+            try:
+                summary_data = json.loads(summary_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        event_date = summary_data.get("event_date", "unknown")
+        bbox = summary_data.get("bbox")
+        data_mode = summary_data.get("data_mode", summary_data.get("status", "COMPLETED"))
+
+        # 1. Read places from raw/osm/osm_places.geojson
+        places_f = p / "raw" / "osm" / "osm_places.geojson"
+        places_ranked = {"city": [], "town": [], "village": [], "hamlet": [], "other": []}
+        if places_f.exists():
+            try:
+                d = json.loads(places_f.read_text(encoding="utf-8"))
+                for feat in d.get("features", []):
+                    props = feat.get("properties", {})
+                    name = props.get("name")
+                    name_en = props.get("name:en")
+                    ptype = props.get("place")
+                    candidates = [n for n in [name, name_en] if n]
+                    for c in candidates:
+                        if any(w in c.lower() for w in ["research station", "office", "sub station", "pond", "depot"]):
+                            continue
+                        target_list = places_ranked.get(ptype, places_ranked["other"])
+                        if c not in target_list:
+                            target_list.append(c)
+            except Exception:
+                pass
+
+        # 2. Read waterways from raw/osm/osm_waterways.geojson
+        water_f = p / "raw" / "osm" / "osm_waterways.geojson"
+        waterways = []
+        if water_f.exists():
+            try:
+                w = json.loads(water_f.read_text(encoding="utf-8"))
+                counts = {}
+                for feat in w.get("features", []):
+                    n = feat.get("properties", {}).get("name")
+                    if n and not any(k in n.lower() for k in ["pond", "seedling", "reservoir"]):
+                        counts[n] = counts.get(n, 0) + 1
+                waterways = [name for name, _ in sorted(counts.items(), key=lambda x: -x[1]) if any(k in name.lower() for k in ["river", "khola", "koshi"])]
+            except Exception:
+                pass
+
+        top_places = []
+        for t in ["city", "town", "village", "hamlet", "other"]:
+            for pl in places_ranked[t]:
+                if pl not in top_places:
+                    top_places.append(pl)
+
+        # Extract meaningful region hints from folder name (e.g. sikkim, assam)
+        folder_tokens = [tok.capitalize() for tok in p.name.replace("-", "_").split("_") if tok.lower() in ["sikkim", "assam", "trishuli", "melamchi"]]
+        for ft in folder_tokens:
+            if ft not in top_places:
+                top_places.append(ft)
+
+        from src.common.naming import get_run_label
+        human_label = get_run_label(p, summary_data)
+
+        # 3. Read cutoffs from processed/routing/cutoff_summary.json
+        cutoff_f = p / "processed" / "routing" / "cutoff_summary.json"
+        opt_c = None
+        pess_c = None
+        unver_c = None
+        if cutoff_f.exists():
+            try:
+                cdata = json.loads(cutoff_f.read_text(encoding="utf-8"))
+                v = cdata.get("vehicle", {})
+                opt_c = v.get("optimistic", {}).get("cut_off_count")
+                pess_c = v.get("pessimistic", {}).get("cut_off_count")
+                unver_c = v.get("optimistic", {}).get("connected_unverified_count", len(v.get("optimistic", {}).get("connected_unverified_settlements", [])))
+            except Exception:
+                pass
+
+        metrics = summary_data.get("metrics", {})
+        buildings_destroyed = metrics.get("buildings_destroyed", 0)
+
+        return {
+            "run_name": p.name,
+            "path": str(p),
+            "label": human_label,
+            "event_date": event_date,
+            "bbox": bbox,
+            "data_mode": data_mode,
+            "top_places": top_places[:6],
+            "top_waterways": waterways[:4],
+            "opt_cutoff": opt_c,
+            "pess_cutoff": pess_c,
+            "unver_routes": unver_c,
+            "buildings_destroyed": buildings_destroyed,
+            "mtime": p.stat().st_mtime if p.exists() else 0.0,
+        }
+
+    @classmethod
+    def get_verified_runs_manifest(cls) -> Dict[str, Any]:
+        """Loads verified runs manifest matching the dashboard (src/dashboard/runs_manifest.json)."""
+        candidate_paths = [
+            Path(__file__).resolve().parents[1] / "dashboard" / "runs_manifest.json",
+            Path("/home/zeus/Downloads/project1-copilot/src/dashboard/runs_manifest.json"),
+            Path("/home/zeus/Downloads/project1-dashboard/src/dashboard/runs_manifest.json"),
+        ]
+        for p in candidate_paths:
+            if p.exists():
+                try:
+                    return json.loads(p.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+        return {"verified_runs": {}}
+
+    @classmethod
+    def list_available_runs(cls, runs_root: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+        """List verified pipeline run directories using the dashboard's runs_manifest.json.
+        Grid and debug runs are NEVER listed or loadable.
+        """
+        if runs_root is None:
+            candidates = [
+                Path("runs").resolve(),
+                Path("/home/zeus/Downloads/project1-copilot/runs").resolve(),
+                Path("/home/zeus/Downloads/project1/runs").resolve(),
+            ]
+            root = next((c for c in candidates if c.exists()), Path("runs").resolve())
+        else:
+            root = Path(runs_root).resolve()
+
         runs = []
         if not root.exists():
             return runs
-        for p in root.iterdir():
-            if p.is_dir() and ((p / "run_summary.json").exists() or (p / "processed").exists()):
-                summary_file = p / "run_summary.json"
-                summary_data = {}
-                if summary_file.exists():
-                    try:
-                        summary_data = json.loads(summary_file.read_text())
-                    except Exception:
-                        pass
-                runs.append({
-                    "run_name": p.name,
-                    "path": str(p),
-                    "event_name": summary_data.get("event_name", p.name),
-                    "event_date": summary_data.get("event_date", "unknown"),
-                    "status": summary_data.get("status", "completed"),
-                })
+
+        manifest = cls.get_verified_runs_manifest()
+        verified_runs = manifest.get("verified_runs", {})
+
+        if verified_runs:
+            for run_name, v_info in verified_runs.items():
+                run_dir = root / run_name
+                if run_dir.exists() and (run_dir / "run_summary.json").exists():
+                    meta = cls.derive_run_metadata(run_dir)
+                    if meta:
+                        meta["pipeline_tag"] = v_info.get("pipeline_tag")
+                        meta["commit"] = v_info.get("commit")
+                        meta["manifest_status"] = v_info.get("status")
+                        runs.append(meta)
+        else:
+            # Fallback if manifest is missing: only allow verified runs, never grid/debug
+            for p in root.iterdir():
+                if p.is_dir() and (p / "run_summary.json").exists():
+                    name_low = p.name.lower()
+                    if name_low.startswith(("grid_", "bench_", "control", "tmp")):
+                        continue
+                    meta = cls.derive_run_metadata(p)
+                    if meta:
+                        runs.append(meta)
+
         return sorted(runs, key=lambda x: x["run_name"])

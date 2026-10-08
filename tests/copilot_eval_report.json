@@ -2,11 +2,11 @@
   "offline": {
     "provider": "offline",
     "total_questions": 39,
-    "tool_selection_accuracy_pct": 100.0,
-    "answer_correctness_pct": 100.0,
-    "number_guard_violation_pct": 0.0,
+    "tool_selection_accuracy_pct": 92.31,
+    "answer_correctness_pct": 76.92,
+    "number_guard_violation_pct": 2.56,
     "language_match_accuracy_pct": 100.0,
     "not_available_behavior_pct": 100.0,
-    "ambiguity_handling_pct": 100.0
+    "ambiguity_handling_pct": 33.33
   }
 }

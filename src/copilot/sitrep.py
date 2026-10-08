@@ -296,19 +296,19 @@ class SitRepGenerator:
         if top_step is None:
             top_step = 1
 
-        top_elem = self.store.get_value(f"repair.step_{top_step}.osm_id", "way/1266396385")
-        top_len = self.store.get_value(f"repair.step_{top_step}.length_m", 103.3)
-        top_set = self.store.get_value(f"repair.step_{top_step}.settlements_reconnected", 19)
-        top_bld = self.store.get_value(f"repair.step_{top_step}.buildings_reconnected", 939)
+        top_elem = self.store.get_value(f"repair.step_{top_step}.osm_id", "not computed")
+        top_len = self.store.get_value(f"repair.step_{top_step}.length_m", "not computed")
+        top_set = self.store.get_value(f"repair.step_{top_step}.settlements_reconnected", "not computed")
+        top_bld = self.store.get_value(f"repair.step_{top_step}.buildings_reconnected", "not computed")
 
-        bbox_raw = self.store.metadata.get("bbox", [85.3, 28.1, 85.42, 28.25])
+        bbox_raw = self.store.metadata.get("bbox", "not computed")
         bbox_str = f"[{bbox_raw[0]:.2f}, {bbox_raw[1]:.2f}, {bbox_raw[2]:.2f}, {bbox_raw[3]:.2f}]" if isinstance(bbox_raw, list) else str(bbox_raw)
 
         sensors = self.store.metadata.get("sensors_used", ["Sentinel-2 MSI", "Sentinel-1 RTC SAR", "Copernicus DEM-30", "OpenStreetMap"])
         sensors_str = ", ".join(sensors) if isinstance(sensors, list) else str(sensors)
 
-        event_date = str(self.store.get_value("event.date", "2026-08-26"))
-        event_year = "2021" if (event_date.startswith("2021") or "melamchi" in str(self.store.run_dir).lower()) else "2026"
+        event_date = str(self.store.get_value("event.date", self.store.metadata.get("event_date", "not computed")))
+        event_year = str(event_date)[:4] if event_date != "not computed" and len(event_date) >= 4 else "2026"
 
         attributions = (
             f"Contains modified Copernicus Sentinel data {event_year}.\n"
@@ -316,39 +316,40 @@ class SitRepGenerator:
             "© OpenStreetMap contributors."
         )
 
-        pkg1_elem_cnt = str(self.store.get_value("repair.package_1.element_count", 4))
-        pkg1_set_cnt = str(self.store.get_value("repair.package_1.settlements_count", 19))
-        pkg1_bld_cnt = str(self.store.get_value("repair.package_1.buildings_count", 939))
-        pkg1_elems_list = "way/1266396385, way/332122791, way/84566285, way/84566287"
-        pkg1_length_m = "421.3"
+        pkg1 = self.store.get_value("repair.package_1", {}) if isinstance(self.store.get_value("repair.package_1"), dict) else {}
+        pkg1_elem_cnt = str(self.store.get_value("repair.package_1.element_count", pkg1.get("element_count", "not computed")))
+        pkg1_set_cnt = str(self.store.get_value("repair.package_1.settlements_count", pkg1.get("settlements_count", "not computed")))
+        pkg1_bld_cnt = str(self.store.get_value("repair.package_1.buildings_count", pkg1.get("buildings_count", "not computed")))
+        pkg1_elems_list = str(pkg1.get("elements", "not computed"))
+        pkg1_length_m = str(pkg1.get("length_m", "not computed"))
 
         values = {
             "event_date": event_date,
             "bbox": bbox_str,
-            "optical_evidence_date": str(self.store.metadata.get("optical_date", "2026-08-27")),
+            "optical_evidence_date": str(self.store.metadata.get("optical_date", "not computed")),
             "sensors_used": sensors_str,
-            "affected_km2_observed": str(self.store.get_value("hazard.area.event_total_affected", self.store.get_value("metrics.affected_km2_observed", 0.7989))),
-            "affected_km2_inferred": str(self.store.get_value("hazard.area.event_inferred_affected", self.store.get_value("metrics.affected_km2_inferred", 0.8789))),
-            "buildings_total": str(self.store.get_value("damage.buildings.total", 3738)),
-            "buildings_affected_total": str(self.store.get_value("damage.buildings.affected_total", 226)),
-            "buildings_destroyed": str(self.store.get_value("damage.buildings.destroyed", 81)),
-            "buildings_damaged": str(self.store.get_value("damage.buildings.damaged", 42)),
-            "buildings_possibly_damaged": str(self.store.get_value("damage.buildings.possibly_damaged", 103)),
-            "buildings_cloud_unverified": str(self.store.get_value("damage.buildings.unknown_cloud", 1382)),
-            "bridges_total": str(self.store.get_value("damage.bridges.total", 27)),
-            "bridges_affected_total": str(self.store.get_value("damage.bridges.affected_total", 16)),
-            "bridges_destroyed": str(self.store.get_value("damage.bridges.destroyed", 10)),
-            "bridges_possibly_damaged": str(self.store.get_value("damage.bridges.possibly_damaged", 6)),
-            "bridges_cloud_unverified": str(self.store.get_value("damage.bridges.unknown_cloud", 5)),
-            "roads_total_km": str(self.store.get_value("damage.roads.total_km", 104.6)),
-            "roads_drivable_km": str(self.store.get_value("damage.roads.drivable_km", 66.64)),
-            "roads_destroyed_km": str(self.store.get_value("damage.roads.destroyed_km", 3.98)),
-            "roads_possibly_damaged_km": str(self.store.get_value("damage.roads.possibly_damaged_km", 5.28)),
-            "roads_cloud_unverified_km": str(self.store.get_value("damage.roads.unknown_cloud_km", 39.98)),
-            "cutoff_vehicle_optimistic_count": str(self.store.get_value("cutoff.vehicle.optimistic.count", 44)),
-            "cutoff_vehicle_pessimistic_count": str(self.store.get_value("cutoff.vehicle.pessimistic.count", 44)),
-            "cutoff_walking_optimistic_count": str(self.store.get_value("cutoff.walking.optimistic.count", 4)),
-            "connected_unverified_count": str(self.store.get_value("cutoff.vehicle.optimistic.connected_unverified", 23)),
+            "affected_km2_observed": str(self.store.get_value("hazard.area.event_total_affected", self.store.get_value("metrics.affected_km2_observed", "not computed"))),
+            "affected_km2_inferred": str(self.store.get_value("hazard.area.event_inferred_affected", self.store.get_value("metrics.affected_km2_inferred", "not computed"))),
+            "buildings_total": str(self.store.get_value("damage.buildings.total", "not computed")),
+            "buildings_affected_total": str(self.store.get_value("damage.buildings.affected_total", "not computed")),
+            "buildings_destroyed": str(self.store.get_value("damage.buildings.destroyed", "not computed")),
+            "buildings_damaged": str(self.store.get_value("damage.buildings.damaged", "not computed")),
+            "buildings_possibly_damaged": str(self.store.get_value("damage.buildings.possibly_damaged", "not computed")),
+            "buildings_cloud_unverified": str(self.store.get_value("damage.buildings.unknown_cloud", "not computed")),
+            "bridges_total": str(self.store.get_value("damage.bridges.total", "not computed")),
+            "bridges_affected_total": str(self.store.get_value("damage.bridges.affected_total", "not computed")),
+            "bridges_destroyed": str(self.store.get_value("damage.bridges.destroyed", "not computed")),
+            "bridges_possibly_damaged": str(self.store.get_value("damage.bridges.possibly_damaged", "not computed")),
+            "bridges_cloud_unverified": str(self.store.get_value("damage.bridges.unknown_cloud", "not computed")),
+            "roads_total_km": str(self.store.get_value("damage.roads.total_km", "not computed")),
+            "roads_drivable_km": str(self.store.get_value("damage.roads.drivable_km", "not computed")),
+            "roads_destroyed_km": str(self.store.get_value("damage.roads.destroyed_km", "not computed")),
+            "roads_possibly_damaged_km": str(self.store.get_value("damage.roads.possibly_damaged_km", "not computed")),
+            "roads_cloud_unverified_km": str(self.store.get_value("damage.roads.unknown_cloud_km", "not computed")),
+            "cutoff_vehicle_optimistic_count": str(self.store.get_value("cutoff.vehicle.optimistic.count", "not computed")),
+            "cutoff_vehicle_pessimistic_count": str(self.store.get_value("cutoff.vehicle.pessimistic.count", "not computed")),
+            "cutoff_walking_optimistic_count": str(self.store.get_value("cutoff.walking.optimistic.count", "not computed")),
+            "connected_unverified_count": str(self.store.get_value("cutoff.vehicle.optimistic.connected_unverified", "not computed")),
             "package_1_element_count": pkg1_elem_cnt,
             "package_1_elements_list": pkg1_elems_list,
             "package_1_length_m": pkg1_length_m,

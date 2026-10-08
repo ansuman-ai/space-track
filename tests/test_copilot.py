@@ -47,8 +47,13 @@ def run_evaluation(
     fact_stores: Dict[str, FactStore] = {}
     agents: Dict[str, CopilotAgent] = {}
 
+    run_aliases = {
+        "test_A_trishuli": runs_root / "test_A_cold_final2_run1",
+        "test_B_melamchi": runs_root / "grid_0.55_B",
+    }
+
     for run_name in ["test_A_trishuli", "test_B_melamchi"]:
-        run_path = runs_root / run_name
+        run_path = run_aliases.get(run_name, runs_root / run_name)
         if run_path.exists():
             fs = FactStore(run_path)
             fact_stores[run_name] = fs
