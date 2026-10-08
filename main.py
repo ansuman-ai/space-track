@@ -683,10 +683,13 @@ def run_pipeline(
             "buildings_flooded": b_counts.get("Flooded", 0),
             "buildings_possibly_flooded": b_counts.get("Possibly flooded", 0),
             "bridges_affected_total": (
-                br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0)
+                br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0) +
+                br_counts.get("Flooded / impassable", 0) + br_counts.get("Possibly flooded", 0)
             ),
             "bridges_destroyed": br_counts.get("Destroyed", 0),
             "bridges_possibly_damaged": br_counts.get("Possibly damaged", 0),
+            "bridges_flooded": br_counts.get("Flooded / impassable", 0),
+            "bridges_possibly_flooded": br_counts.get("Possibly flooded", 0),
             "cut_off_settlements": cut_off_veh
         },
         "validation_status": l2_res.get("validation_status", "validated on EMSR927 (F1 0.57, precision 0.94)"),

@@ -259,7 +259,10 @@ def run_layer4(
             "damage_grade_counts": br_counts,
             "rule_counts": br_graded["rule"].value_counts().to_dict() if len(br_graded) > 0 and "rule" in br_graded.columns else {},
             "evidence_counts": br_graded["evidence"].value_counts().to_dict() if len(br_graded) > 0 and "evidence" in br_graded.columns else {},
-            "affected_count": int(br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0)),
+            "affected_count": int(
+                br_counts.get("Destroyed", 0) + br_counts.get("Possibly damaged", 0) +
+                br_counts.get("Flooded / impassable", 0) + br_counts.get("Possibly flooded", 0)
+            ),
             "parameters": {
                 "bridge_distance_m": bridge_distance_m,
                 "bridge_reach_radius_m": bridge_reach_radius_m

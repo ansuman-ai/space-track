@@ -738,7 +738,9 @@ function updateSidePanel(data) {
   brTags.innerHTML = "";
   if (br.destroyed) brTags.innerHTML += `<span class="tag-pill tag-destroyed">Destroyed: <b>${br.destroyed}</b></span>`;
   if (br.possibly_damaged) brTags.innerHTML += `<span class="tag-pill tag-damaged">Possibly damaged: <b>${br.possibly_damaged}</b></span>`;
-  if (!br.destroyed && !br.possibly_damaged) brTags.innerHTML = `<span class="tag-pill">0 affected bridges</span>`;
+  if (br.flooded) brTags.innerHTML += `<span class="tag-pill tag-flooded">Flooded / impassable: <b>${br.flooded}</b></span>`;
+  if (br.possibly_flooded) brTags.innerHTML += `<span class="tag-pill tag-flooded">Possibly flooded: <b>${br.possibly_flooded}</b></span>`;
+  if (!br.destroyed && !br.possibly_damaged && !br.flooded && !br.possibly_flooded) brTags.innerHTML = `<span class="tag-pill">0 affected bridges</span>`;
 
   // Roads: Destroyed and possibly damaged km shown separately
   const r = m.roads_km || {};
@@ -1033,8 +1035,8 @@ async function loadBridgesLayer(runId) {
       pointToLayer: (feature, latlng) => {
         const grade = feature.properties.damage_grade || "Not affected";
         let color = "#475569";
-        if (grade === "Destroyed") color = "#dc2626";
-        else if (grade === "Possibly damaged") color = "#ea580c";
+        if (grade === "Destroyed" || grade === "Flooded / impassable") color = "#dc2626";
+        else if (grade === "Possibly damaged" || grade === "Possibly flooded") color = "#ea580c";
         else if (grade.includes("cloud")) color = "#64748b";
 
         return L.circleMarker(latlng, {

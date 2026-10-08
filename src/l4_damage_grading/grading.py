@@ -413,24 +413,24 @@ def grade_bridges(
 
         # 4. Grading classification & rule assignment
         if reach_c2:
-            grades.append("Destroyed")
+            grades.append("Flooded / impassable" if is_flat_floodplain else "Destroyed")
             rules.append("reach")
-            evidence.append("observed")
+            evidence.append("observed-s1" if is_flat_floodplain else "observed")
             applied_dists.append(round(reach_dist_c2 if reach_dist_c2 < 99999.0 else d_c2, 1))
         elif d_c2 <= bridge_distance_m:
-            grades.append("Destroyed")
+            grades.append("Flooded / impassable" if is_flat_floodplain else "Destroyed")
             rules.append("distance")
-            evidence.append("observed")
+            evidence.append("observed-s1" if is_flat_floodplain else "observed")
             applied_dists.append(round(d_c2, 1))
         elif reach_c3:
-            grades.append("Possibly damaged")
+            grades.append("Possibly flooded" if is_flat_floodplain else "Possibly damaged")
             rules.append("reach")
-            evidence.append("inferred")
+            evidence.append("observed-s1" if is_flat_floodplain else "inferred")
             applied_dists.append(round(reach_dist_c3 if reach_dist_c3 < 99999.0 else d_c3, 1))
         elif d_c3 <= bridge_distance_m:
-            grades.append("Possibly damaged")
+            grades.append("Possibly flooded" if is_flat_floodplain else "Possibly damaged")
             rules.append("distance")
-            evidence.append("inferred")
+            evidence.append("observed-s1" if is_flat_floodplain else "inferred")
             applied_dists.append(round(d_c3, 1))
         elif cloud and not is_flat_floodplain:
             grades.append("Unknown (cloud)")

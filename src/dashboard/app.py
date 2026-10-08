@@ -281,8 +281,10 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     br_grades = dmg_summary.get("bridges", {}).get("damage_grade_counts", {})
     destroyed_br = br_grades.get("Destroyed", 0)
     possibly_damaged_br = br_grades.get("Possibly damaged", 0)
+    flooded_br = br_grades.get("Flooded / impassable", 0)
+    possibly_flooded_br = br_grades.get("Possibly flooded", 0)
     unverified_br = br_grades.get("Unknown (cloud)", 0)
-    total_affected_br = destroyed_br + possibly_damaged_br
+    total_affected_br = destroyed_br + possibly_damaged_br + flooded_br + possibly_flooded_br
 
     roads_km = dmg_summary.get("roads", {}).get("km_by_damage_grade", {})
     destroyed_road_km = float(roads_km.get("Destroyed", 0.0))
@@ -386,6 +388,8 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             "total_affected": total_affected_br,
             "destroyed": destroyed_br,
             "possibly_damaged": possibly_damaged_br,
+            "flooded": flooded_br,
+            "possibly_flooded": possibly_flooded_br,
             "unverified": unverified_br
         },
         "roads_km": {

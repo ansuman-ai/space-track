@@ -165,9 +165,9 @@ def render_l4_quicklook(
         br_box = br_utm.cx[xmin:xmax, ymin:ymax]
         for _, br in br_box.iterrows():
             pt = br.geometry.centroid
-            if br["damage_grade"] == "Destroyed":
+            if br["damage_grade"] in ["Destroyed", "Flooded / impassable"]:
                 ax.plot(pt.x, pt.y, marker="D", color="#ff0044", markeredgecolor="white", markersize=9, markeredgewidth=1.2, zorder=11)
-            elif br["damage_grade"] == "Possibly damaged":
+            elif br["damage_grade"] in ["Possibly damaged", "Possibly flooded"]:
                 ax.plot(pt.x, pt.y, marker="D", color="#ff8800", markeredgecolor="white", markersize=8, markeredgewidth=1.2, zorder=11)
             else:
                 ax.plot(pt.x, pt.y, marker="D", color="#00ffcc", markeredgecolor="black", markersize=6, zorder=11)

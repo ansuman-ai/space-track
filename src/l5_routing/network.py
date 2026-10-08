@@ -196,14 +196,14 @@ def build_routing_networks(
     r_graded = gpd.read_file(hazard_roads_path).to_crs(utm_crs)
     br_graded = gpd.read_file(hazard_bridges_path).to_crs(utm_crs)
 
-    r_dest = r_graded[r_graded["damage_grade"] == "Destroyed"]
-    br_dest = br_graded[br_graded["damage_grade"] == "Destroyed"]
+    r_dest = r_graded[r_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
+    br_dest = br_graded[br_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
     dest_union = r_dest.union_all()
     if len(br_dest) > 0:
         dest_union = dest_union.union(br_dest.union_all()) if dest_union is not None and not dest_union.is_empty else br_dest.union_all()
 
-    r_poss = r_graded[r_graded["damage_grade"] == "Possibly damaged"]
-    br_poss = br_graded[br_graded["damage_grade"] == "Possibly damaged"]
+    r_poss = r_graded[r_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
+    br_poss = br_graded[br_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
     poss_union = r_poss.union_all()
     if len(br_poss) > 0:
         poss_union = poss_union.union(br_poss.union_all()) if poss_union is not None and not poss_union.is_empty else br_poss.union_all()

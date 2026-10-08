@@ -88,8 +88,10 @@ def verify_run(run_folder: Path) -> bool:
         # Bridges
         exp_destroyed_br = br_counts.get("Destroyed", 0)
         exp_pos_damaged_br = br_counts.get("Possibly damaged", 0)
+        exp_flooded_br = br_counts.get("Flooded / impassable", 0)
+        exp_pos_flooded_br = br_counts.get("Possibly flooded", 0)
         exp_unverified_br = br_counts.get("Unknown (cloud)", 0)
-        exp_total_br = exp_destroyed_br + exp_pos_damaged_br
+        exp_total_br = exp_destroyed_br + exp_pos_damaged_br + exp_flooded_br + exp_pos_flooded_br
 
         if m["bridges"]["total_affected"] != exp_total_br:
             errors.append(f"Total affected bridges mismatch: API={m['bridges']['total_affected']} vs JSON={exp_total_br}")
@@ -97,6 +99,10 @@ def verify_run(run_folder: Path) -> bool:
             errors.append(f"Destroyed bridges mismatch: API={m['bridges']['destroyed']} vs JSON={exp_destroyed_br}")
         if m["bridges"]["possibly_damaged"] != exp_pos_damaged_br:
             errors.append(f"Possibly damaged bridges mismatch: API={m['bridges']['possibly_damaged']} vs JSON={exp_pos_damaged_br}")
+        if m["bridges"].get("flooded", 0) != exp_flooded_br:
+            errors.append(f"Flooded bridges mismatch: API={m['bridges'].get('flooded', 0)} vs JSON={exp_flooded_br}")
+        if m["bridges"].get("possibly_flooded", 0) != exp_pos_flooded_br:
+            errors.append(f"Possibly flooded bridges mismatch: API={m['bridges'].get('possibly_flooded', 0)} vs JSON={exp_pos_flooded_br}")
         if m["bridges"]["unverified"] != exp_unverified_br:
             errors.append(f"Unverified bridges mismatch: API={m['bridges']['unverified']} vs JSON={exp_unverified_br}")
 
