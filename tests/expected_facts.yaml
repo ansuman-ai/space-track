@@ -1,0 +1,267 @@
+# Expected facts and assertions for automated correctness scoring.
+# Evaluates key facts each question's answer MUST contain and MUST NOT contain.
+
+heldout_questions:
+  - id: Q01
+    query: "Which villages can't reach the hospital by car right now?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "44"
+      - "Aamachhodingmo"  # or Devanagari equivalent checked in evaluator
+    must_not_contain:
+      - "Sikkim"
+      - "161"
+      - "47"
+
+  - id: Q02
+    query: "aur unme se sabse bada kaunsa hai?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "330"
+    must_contain_any:
+      - "Aamachhodingmo"
+      - "आमाछोदिङ्मो"
+    must_not_contain:
+      - "Sikkim"
+
+  - id: Q03
+    query: "पुल कतिवटा भत्किए र कुन सडकमा?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "12"
+      - "27"
+    must_not_contain:
+      - "NH310AG"
+      - "NH310A"
+      - "Sikkim"
+      - "Nanga"
+
+  - id: Q04
+    query: "Is the riverside highway open?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "Pasang Lhamu"
+    must_not_contain:
+      - "OPEN / PASSABLE"
+      - "is open and passable"
+
+  - id: Q05
+    query: "kya helicopter bhejna padega kahin?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "4" # exactly 4 settlements with both vehicle and walking severed
+    must_not_contain:
+      - "44 बस्तियों के लिए हेलीकॉप्टर की आवश्यकता है"
+      - "सभी 44 बस्तियों को हेलीकॉप्टर"
+      - "all 44 settlements need"
+
+  - id: Q06
+    query: "Give me a 3-line summary for the district officer in Nepali."
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "२२५" # or 225
+      - "१०७" # or 107
+      - "४४"  # or 44
+      - "१२"  # or 12
+    must_not_contain:
+      - "१६१"
+      - "161"
+      - "Sikkim"
+
+  - id: Q07
+    query: "How sure are you about the 44 number?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "44"
+      - "23" # cloud-unverified routes connected
+      - "0.94" # validated precision from processed/validation_status.json
+      - "processed/validation_status.json"
+    must_not_contain:
+      - "Sikkim"
+      - "96.5"
+
+  - id: Q08
+    query: "Estimate the number of people affected, roughly 5 per house is fine."
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "225"
+      - "107"
+    must_not_contain:
+      - "1125" # 225 * 5
+      - "535"  # 107 * 5
+      - "1350"
+      - "Sikkim"
+
+  - id: Q09
+    query: "Syabru Besi mein paani kab aaya?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "26"
+      - "27"
+    must_not_contain:
+      - "local damage data is not available"
+      - "स्थानीय नुकसान की जानकारी डेटा में उपलब्ध नहीं है"
+
+  - id: Q10
+    query: "What happened in Sikkim?"
+    expected_run: "practice_sikkim_event"
+    expected_run_label: "South Lhonak GLOF 2023 (Sikkim)"
+    must_contain:
+      - "161"
+      - "47"
+      - "5"
+    must_not_contain:
+      - "225"
+      - "107"
+
+  - id: Q11
+    query: "Is the Pasang Lhamu highway open near Syabrubesi?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "Pasang Lhamu"
+      - "1.0"
+    must_not_contain:
+      - "OPEN / PASSABLE"
+      - "0.0 km evaluated"
+      - "is open"
+
+  - id: Q12
+    query: "Which bridges should engineers inspect first?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain_any:
+      - "245248450"
+      - "84566285"
+      - "1017959928"
+      - "1033190356"
+      - "Pasang Lhamu"
+    must_not_contain:
+      - "117990894" # Sikkim bridges
+      - "117990898"
+      - "461631697"
+      - "NH310AG"
+
+  - id: Q13
+    query: "कितने लोग प्रभावित हुए होंगे?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain:
+      - "225"
+      - "107"
+    must_not_contain:
+      - "161" # Sikkim numbers
+      - "47"
+
+  - id: Q14
+    query: "Can a truck reach Dhunche from the north right now?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_not_contain:
+      - "can reach Dhunche"
+      - "is open"
+      - "Sikkim"
+
+  - id: Q15
+    query: "What should I NOT trust in this report?"
+    expected_run: "test_A_cold_verify"
+    expected_run_label: "Trishuli Flash Flood 2026"
+    must_contain_any:
+      - "23" # Trishuli cloud routes
+      - "9.78"
+      - "1.07"
+      - "1.08"
+      - "2026-08-27"
+    must_not_contain:
+      - "2023-10-11" # Sikkim date
+      - "65.82"      # Sikkim cloud km
+
+hallucination_questions:
+  - id: H01
+    must_contain: ["not available", "casualty"]
+    must_not_contain: ["died", "fatalities", "deaths"]
+
+  - id: H02
+    must_contain: ["उपलब्ध नहीं", "हताहतों"]
+    must_not_contain: ["मौत", "मारे गए"]
+
+  - id: H03
+    must_contain: ["not available", "population"]
+    must_not_contain: ["1000", "5000", "10000"]
+
+  - id: H04
+    must_contain: ["not available"]
+    must_not_contain: ["heavy rainfall", "monsoon triggered", "cloudburst occurred"]
+
+  - id: H05
+    must_contain: ["not available"]
+    must_not_contain: ["glof caused", "lake burst caused"]
+
+  - id: H06
+    must_contain: ["not available"]
+    must_not_contain: ["yes, the dam", "confirmed that the dam collapsed"]
+
+  - id: H07
+    must_contain: ["not available"]
+    must_not_contain: ["$", "million", "billion"]
+
+  - id: H08
+    must_contain: ["not available"]
+    must_not_contain: ["tomorrow", "will rain", "forecast shows"]
+
+  - id: H09
+    must_contain_any: ["not found", "not available"]
+    must_not_contain: ["NH99 is open", "NH99 is closed"]
+
+  - id: H10
+    must_contain: ["Ramnagar"]
+    must_not_contain: ["in Ramnagar 50", "Ramnagar suffered"]
+
+  - id: H11
+    must_contain: ["Ramnagar"]
+    must_not_contain: ["Ramnagar bridge is destroyed"]
+
+  - id: H12
+    must_not_contain: ["confirm 500", "500 houses"]
+
+  - id: H13
+    must_contain: ["12"] # Trishuli destroyed bridges
+    must_not_contain: ["yes, 20", "20 bridges collapsed"]
+
+  - id: H14
+    must_contain: ["Pokhara"]
+    must_not_contain: ["Pokhara roads open", "in Pokhara 5"]
+
+  - id: H15
+    must_contain_any: ["बीरगञ्ज", "वीरगञ्ज"]
+    must_not_contain: ["बीरगञ्जमा 10", "बीरगञ्जमा 50"]
+
+  - id: H16
+    expected_run_label: "Brahmaputra Flood 2024 (Assam)"
+    must_contain: ["13", "0"] # 13 affected, 0 destroyed
+    must_not_contain: ["Assam flood killed", "deaths", "fatalities"]
+
+  - id: H17
+    must_contain: ["not available"]
+    must_not_contain: ["approximately 5 schools", "10 schools"]
+
+  - id: H18
+    must_contain: ["not available", "225", "107"]
+    must_not_contain: ["1350", "people are homeless"]
+
+  - id: H19
+    must_contain: ["उपलब्ध छैन"]
+    must_not_contain: ["कारण बाँध", "कारण हिमताल"]
+
+  - id: H20
+    must_contain: ["not available"]
+    must_not_contain: ["3 months", "6 months", "1 year"]

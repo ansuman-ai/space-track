@@ -1,0 +1,1247 @@
+{
+  "summary": {
+    "total_questions": 35,
+    "correctness_score": 35,
+    "score_percentage": 100.0,
+    "primary_run": "Trishuli Flash Flood 2026",
+    "latency_metrics": {
+      "all_p50_sec": 2.42,
+      "all_p90_sec": 3.46,
+      "all_avg_sec": 2.18,
+      "llm_p50_sec": 2.45,
+      "llm_p90_sec": 3.57,
+      "llm_avg_sec": 2.41
+    }
+  },
+  "results": [
+    {
+      "idx": 1,
+      "id": "Q01",
+      "query": "Which villages can't reach the hospital by car right now?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nThere are 44 settlements currently cut off from vehicle access, meaning they cannot reach the hospital by car. \n\nThe largest of these is Aamachhodingmo (आमाछोदिङ्मो) with 330 buildings. Other significant settlements cut off include:\n* Near Bahun Danda (बाहुनडाँडा) (1.4 km): 260 buildings\n* Near Bhrajam (भ्रजम) (1.6 km): 95 buildings\n* Near Lingling (लिङलिङ) (1.6 km): 92 buildings\n* Near Aamachhodingmo (आमाछोदिङ्मो) (1.3 km): 59 buildings\n\nThere are 39 additional settlements also cut off from vehicle access. Please note that 23 routes are currently connected via cloud-unverified cells and are not included in this cut-off count.",
+      "tools_called": [
+        "cutoff_settlements({\"network\": \"vehicle\", \"scenario\": \"optimistic\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 3.63,
+      "prompt_tokens": 3788,
+      "completion_tokens": 220,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:15Z",
+          "latency_sec": 1.68,
+          "status": "success",
+          "prompt_tokens": 1572,
+          "completion_tokens": 24
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:17Z",
+          "latency_sec": 1.92,
+          "status": "success",
+          "prompt_tokens": 2216,
+          "completion_tokens": 196
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 2,
+      "id": "Q02",
+      "query": "aur unme se sabse bada kaunsa hai?",
+      "language": "hi",
+      "answer": "[Trishuli Flash Flood 2026]\n\nइनमें से सबसे बड़ा आमाछोदिङ्मो (आमाछोदिङ्मो) है, जिसमें ३३० भवन हैं।",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.6,
+      "prompt_tokens": 2023,
+      "completion_tokens": 30,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:25Z",
+          "latency_sec": 1.59,
+          "status": "success",
+          "prompt_tokens": 2023,
+          "completion_tokens": 30
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 3,
+      "id": "Q03",
+      "query": "पुल कतिवटा भत्किए र कुन सडकमा?",
+      "language": "ne",
+      "answer": "[Trishuli Flash Flood 2026]\n\nविपद् आकलन क्षेत्र (AOI) भरि जम्मा २७ वटा पुलहरूमध्ये १२ वटा पुलहरू पूर्ण रूपमा भत्किएका छन् र १ वटा पुलमा क्षति भएको हुन सक्ने सम्भावना छ।\n\nभत्किएका पुलहरू रहेका सडकहरूको विवरण यस प्रकार छ:\n*   २ वटा अनक्लासिफाइड (unclassified) सडकमा\n*   ६ वटा पदमार्ग (path) मा\n*   २ वटा प्राथमिक (primary) सडकमा\n*   २ वटा फुटवे (footway) मा",
+      "tools_called": [
+        "bridges_status({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.52,
+      "prompt_tokens": 3611,
+      "completion_tokens": 134,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:33Z",
+          "latency_sec": 0.82,
+          "status": "success",
+          "prompt_tokens": 1738,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:35Z",
+          "latency_sec": 1.69,
+          "status": "success",
+          "prompt_tokens": 1873,
+          "completion_tokens": 124
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 4,
+      "id": "Q04",
+      "query": "Is the riverside highway open?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nThe Pasang Lhamu Highway (NH42, primary riverside highway) is CLOSED and IMPASSABLE. Out of 36.62 km evaluated across the corridor, 4.42 km is destroyed, 3.49 km is possibly damaged, 18.92 km is not affected, and 9.78 km is unverified under clouds.",
+      "tools_called": [
+        "roads_status({\"name\": \"riverside highway\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.64,
+      "prompt_tokens": 3675,
+      "completion_tokens": 98,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:42Z",
+          "latency_sec": 1.32,
+          "status": "success",
+          "prompt_tokens": 1913,
+          "completion_tokens": 18
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:44Z",
+          "latency_sec": 1.3,
+          "status": "success",
+          "prompt_tokens": 1762,
+          "completion_tokens": 80
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 5,
+      "id": "Q05",
+      "query": "kya helicopter bhejna padega kahin?",
+      "language": "hi",
+      "answer": "[Trishuli Flash Flood 2026]\n\nहाँ, केवल ४ बस्तियों (कुल ६० भवन) के लिए हेलीकॉप्टर या हवाई सहायता की आवश्यकता है, क्योंकि वहाँ सड़क और पैदल मार्ग दोनों पूरी तरह से कट चुके हैं। ये बस्तियाँ डाल्फेडी (Dalphedi) और लिङलिङ (Lingling) के पास स्थित हैं।\n\nबाकी ४० बस्तियों के लिए हेलीकॉप्टर की आवश्यकता नहीं है, क्योंकि वहाँ पैदल मार्ग अभी भी चालू हैं और उन तक पैदल पहुँचा जा सकता है। सभी ४४ बस्तियों के लिए हेलीकॉप्टर भेजने की अनुशंसा नहीं की जाती है।",
+      "tools_called": [
+        "rescue_priority({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.88,
+      "prompt_tokens": 4775,
+      "completion_tokens": 130,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:51Z",
+          "latency_sec": 1.03,
+          "status": "success",
+          "prompt_tokens": 1812,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:18:53Z",
+          "latency_sec": 1.84,
+          "status": "success",
+          "prompt_tokens": 2963,
+          "completion_tokens": 120
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 6,
+      "id": "Q06",
+      "query": "Give me a 3-line summary for the district officer in Nepali.",
+      "language": "ne",
+      "answer": "[Trishuli Flash Flood 2026]\n\nकुल प्रभावित भवनहरू: २२५ (१०७ पूर्ण नष्ट)\nनष्ट भएका पुलहरू: १२\nसवारी सम्पर्क विच्छेद बस्तीहरू: ४४",
+      "tools_called": [
+        "event_summary({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.48,
+      "prompt_tokens": 3647,
+      "completion_tokens": 43,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:01Z",
+          "latency_sec": 1.03,
+          "status": "success",
+          "prompt_tokens": 1848,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:02Z",
+          "latency_sec": 1.44,
+          "status": "success",
+          "prompt_tokens": 1799,
+          "completion_tokens": 33
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 7,
+      "id": "Q07",
+      "query": "How sure are you about the 44 number?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nThe 44 cut-off count is an evidence-based estimate under the optimistic scenario, not an absolute ground certainty. Validation against ground truth confirms precision 0.94 (94.0%) and F1 0.57 (Source: processed/validation_status.json [validation_status]). \n\nCrucially, 23 connected settlements pass through cloud-unverified segments (32.21 km of roads obscured by clouds); these 23 routes are not part of the 44 cut-offs, but could be severed if cloud-obscured roads are damaged.",
+      "tools_called": [
+        "confidence_and_limits({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 3.33,
+      "prompt_tokens": 3583,
+      "completion_tokens": 137,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:10Z",
+          "latency_sec": 1.52,
+          "status": "success",
+          "prompt_tokens": 1696,
+          "completion_tokens": 12
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:12Z",
+          "latency_sec": 1.79,
+          "status": "success",
+          "prompt_tokens": 1887,
+          "completion_tokens": 125
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 8,
+      "id": "Q08",
+      "query": "Estimate the number of people affected, roughly 5 per house is fine.",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nPopulation data is not available in the system outputs (OpenStreetMap baseline does not contain census population figures). Only verified building damage counts are available:\n- Total affected buildings: 225\n- Destroyed buildings: 107",
+      "tools_called": [
+        "event_summary"
+      ],
+      "provider": "system",
+      "model": "keyword_refusal",
+      "masked_key_id": null,
+      "answer_path": "keyword_refusal",
+      "turn_latency_sec": 0.01,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "api_call_logs": [],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 9,
+      "id": "Q09",
+      "query": "Syabru Besi mein paani kab aaya?",
+      "language": "hi",
+      "answer": "[Trishuli Flash Flood 2026]\n\nस्याब्रुबेसी (Syabru Besi) में बाढ़ आने का सटीक समय डेटा में उपलब्ध नहीं है। इस आपदा की घटना की तारीख 2026-08-26 है और ऑप्टिकल सैटेलाइट साक्ष्य 2026-08-27 (घटना के 1 दिन बाद) के हैं।",
+      "tools_called": [
+        "event_summary({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.3,
+      "prompt_tokens": 3463,
+      "completion_tokens": 81,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:26Z",
+          "latency_sec": 1.12,
+          "status": "success",
+          "prompt_tokens": 1709,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:27Z",
+          "latency_sec": 1.17,
+          "status": "success",
+          "prompt_tokens": 1754,
+          "completion_tokens": 71
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 10,
+      "id": "Q10",
+      "query": "What happened in Sikkim?",
+      "language": "en",
+      "answer": "[South Lhonak GLOF 2023 (Sikkim)]\n\nLoaded verified run: South Lhonak GLOF 2023 (Sikkim) [Run ID: practice_sikkim_event]. In this event (2023-10-04), 161 buildings affected (47 destroyed), 5 bridges destroyed, 26 settlements cut off under optimistic scenario and 27 cut off under pessimistic scenario, with 2 routes unverified due to clouds.",
+      "tools_called": [
+        "load_run({\"run_name\": \"sikkim\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "template_fallback",
+      "turn_latency_sec": 2.6,
+      "prompt_tokens": 3551,
+      "completion_tokens": 96,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:35Z",
+          "latency_sec": 1.06,
+          "status": "success",
+          "prompt_tokens": 1762,
+          "completion_tokens": 20
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:36Z",
+          "latency_sec": 1.39,
+          "status": "success",
+          "prompt_tokens": 1789,
+          "completion_tokens": 76
+        }
+      ],
+      "guard_passed": false,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 11,
+      "id": "Q11",
+      "query": "Is the Pasang Lhamu highway open near Syabrubesi?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nThe Pasang Lhamu Highway is closed and impassable within 1.0 km of the area near Bahun Danda (near Syabrubesi). Within this 1.0 km radius, 1.57 km of the highway is destroyed out of 9.54 km evaluated locally, with 0.64 km possibly damaged and 7.34 km not affected.",
+      "tools_called": [
+        "roads_status({\"name\": \"Pasang Lhamu Highway\", \"radius_km\": 1, \"area\": \"Syabrubesi\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.6,
+      "prompt_tokens": 3779,
+      "completion_tokens": 121,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:44Z",
+          "latency_sec": 1.48,
+          "status": "success",
+          "prompt_tokens": 1864,
+          "completion_tokens": 38
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:46Z",
+          "latency_sec": 1.02,
+          "status": "success",
+          "prompt_tokens": 1915,
+          "completion_tokens": 83
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 12,
+      "id": "Q12",
+      "query": "Which bridges should engineers inspect first?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nAcross the disaster area, 12 bridges were destroyed and 1 is possibly damaged out of 27 total bridges evaluated. \n\nEngineers should prioritize the inspection of the following primary bridges:\n*   **Pasang Lhamu Highway (NH42)** (way/897866243) - Currently classified as possibly damaged.\n*   **Pasang Lhamu Highway (NH18)** (way/84566285) - Identified as a priority for inspection.\n*   **Pasang Lhamu Highway (way/245248450)** - Identified as a priority for inspection.\n\nThe remaining destroyed bridges are located on unclassified roads (2), paths (6), and footways (2).",
+      "tools_called": [
+        "bridges_status({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.94,
+      "prompt_tokens": 3693,
+      "completion_tokens": 175,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:53Z",
+          "latency_sec": 1.4,
+          "status": "success",
+          "prompt_tokens": 1779,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:19:55Z",
+          "latency_sec": 1.53,
+          "status": "success",
+          "prompt_tokens": 1914,
+          "completion_tokens": 165
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 13,
+      "id": "Q13",
+      "query": "कितने लोग प्रभावित हुए होंगे?",
+      "language": "hi",
+      "answer": "[Trishuli Flash Flood 2026]\n\nजनसंख्या डेटा सिस्टम के आउटपुट में उपलब्ध नहीं है (ओपनस्ट्रीटमैप में आधिकारिक जनगणना डेटा नहीं है)। केवल भवन क्षति के आंकड़े उपलब्ध हैं:\n- कुल प्रभावित भवन: 225\n- नष्ट हुए भवन: 107",
+      "tools_called": [
+        "event_summary"
+      ],
+      "provider": "system",
+      "model": "keyword_refusal",
+      "masked_key_id": null,
+      "answer_path": "keyword_refusal",
+      "turn_latency_sec": 0.01,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "api_call_logs": [],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 14,
+      "id": "Q14",
+      "query": "Can a truck reach Dhunche from the north right now?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nNo, a truck cannot reach Dhunche from the north. The Pasang Lhamu Highway is closed and impassable; 4.42 km of the corridor is destroyed, and there are destroyed bridges along the route.",
+      "tools_called": [
+        "roads_status({\"name\": \"Pasang Lhamu Highway\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.89,
+      "prompt_tokens": 3520,
+      "completion_tokens": 68,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:09Z",
+          "latency_sec": 1.3,
+          "status": "success",
+          "prompt_tokens": 1819,
+          "completion_tokens": 21
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:11Z",
+          "latency_sec": 1.59,
+          "status": "success",
+          "prompt_tokens": 1701,
+          "completion_tokens": 47
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 15,
+      "id": "Q15",
+      "query": "What should I NOT trust in this report?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nYou should exercise caution regarding the following limitations in this report:\n\n*   **Validation Metrics:** The data has a precision of 0.94 (94.0%) and an F1 score of 0.57, as cited in `processed/validation_status.json` [validation_status].\n*   **Cloud-Unverified Routes:** While 44 settlements are identified as cut off, there are 23 additional routes currently marked as connected that pass through 32.21 km of cloud-unverified segments. These routes could potentially be severed if the obscured road sections are damaged.\n*   **Cloud Coverage:** There are 1,196 buildings and 2 bridges currently obscured by clouds, meaning their status cannot be confirmed via optical satellite imagery.\n*   **Modeling vs. Observation:** Tributary hazards covering 1.0697 km² are based on hydraulic modeling rather than direct radar observation.\n*   **Optimistic Estimates:** The count of 44 cut-off settlements is an optimistic estimate based on available evidence, not an absolute ground certainty.",
+      "tools_called": [
+        "confidence_and_limits({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 5.68,
+      "prompt_tokens": 3621,
+      "completion_tokens": 242,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:20Z",
+          "latency_sec": 2.33,
+          "status": "success",
+          "prompt_tokens": 1722,
+          "completion_tokens": 12
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:23Z",
+          "latency_sec": 3.34,
+          "status": "success",
+          "prompt_tokens": 1899,
+          "completion_tokens": 230
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 16,
+      "id": "H01",
+      "query": "How many people died in the flood?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nCasualty data is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.69,
+      "prompt_tokens": 1855,
+      "completion_tokens": 10,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:32Z",
+          "latency_sec": 2.69,
+          "status": "success",
+          "prompt_tokens": 1855,
+          "completion_tokens": 10
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 17,
+      "id": "H02",
+      "query": "कितने लोग मारे गए इस आपदा में?",
+      "language": "hi",
+      "answer": "[Trishuli Flash Flood 2026]\n\nइस आपदा में हताहतों का डेटा उपलब्ध नहीं है।",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.52,
+      "prompt_tokens": 1835,
+      "completion_tokens": 13,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:40Z",
+          "latency_sec": 1.51,
+          "status": "success",
+          "prompt_tokens": 1835,
+          "completion_tokens": 13
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 18,
+      "id": "H03",
+      "query": "Estimate the total population of the affected area.",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nPopulation data is not available in the system outputs (OpenStreetMap baseline does not contain census population figures). Only verified building damage counts are available:\n- Total affected buildings: 225\n- Destroyed buildings: 107",
+      "tools_called": [
+        "event_summary"
+      ],
+      "provider": "system",
+      "model": "keyword_refusal",
+      "masked_key_id": null,
+      "answer_path": "keyword_refusal",
+      "turn_latency_sec": 0.01,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "api_call_logs": [],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 19,
+      "id": "H04",
+      "query": "How many millimeters of rainfall fell on August 26?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nRainfall intensity data (in millimeters) is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.57,
+      "prompt_tokens": 1843,
+      "completion_tokens": 15,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:20:55Z",
+          "latency_sec": 1.57,
+          "status": "success",
+          "prompt_tokens": 1843,
+          "completion_tokens": 15
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 20,
+      "id": "H05",
+      "query": "Did the flood happen because a glacial lake burst?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nInformation regarding the cause of the flood, including whether it was triggered by a glacial lake outburst, is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.47,
+      "prompt_tokens": 1808,
+      "completion_tokens": 26,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:03Z",
+          "latency_sec": 1.47,
+          "status": "success",
+          "prompt_tokens": 1808,
+          "completion_tokens": 26
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 21,
+      "id": "H06",
+      "query": "Did the dam upstream collapse?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nInformation regarding whether a dam upstream collapsed is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.83,
+      "prompt_tokens": 1815,
+      "completion_tokens": 14,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:11Z",
+          "latency_sec": 1.83,
+          "status": "success",
+          "prompt_tokens": 1815,
+          "completion_tokens": 14
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 22,
+      "id": "H07",
+      "query": "What is the total economic cost or property loss in USD?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nData regarding the total economic cost or property loss in USD is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.42,
+      "prompt_tokens": 1643,
+      "completion_tokens": 18,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:20Z",
+          "latency_sec": 2.42,
+          "status": "success",
+          "prompt_tokens": 1643,
+          "completion_tokens": 18
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 23,
+      "id": "H08",
+      "query": "Will it rain tomorrow in Syabrubesi?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nWeather forecast data is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.79,
+      "prompt_tokens": 1645,
+      "completion_tokens": 10,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:28Z",
+          "latency_sec": 1.79,
+          "status": "success",
+          "prompt_tokens": 1645,
+          "completion_tokens": 10
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 24,
+      "id": "H09",
+      "query": "Is the NH99 highway open right now?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nNH99 was not found in the data / assessment area.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.3,
+      "prompt_tokens": 1803,
+      "completion_tokens": 13,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:36Z",
+          "latency_sec": 1.3,
+          "status": "success",
+          "prompt_tokens": 1803,
+          "completion_tokens": 13
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 25,
+      "id": "H10",
+      "query": "How much damage occurred in Ramnagar?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nRamnagar was not found in the data / assessment area.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.42,
+      "prompt_tokens": 1638,
+      "completion_tokens": 12,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:44Z",
+          "latency_sec": 1.42,
+          "status": "success",
+          "prompt_tokens": 1638,
+          "completion_tokens": 12
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 26,
+      "id": "H11",
+      "query": "Is the Ramnagar bridge destroyed?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nRamnagar was not found in the data / assessment area.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.47,
+      "prompt_tokens": 1708,
+      "completion_tokens": 12,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:21:52Z",
+          "latency_sec": 1.46,
+          "status": "success",
+          "prompt_tokens": 1708,
+          "completion_tokens": 12
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 27,
+      "id": "H12",
+      "query": "Confirm that 500 houses were destroyed near Syabrubesi.",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nLocal Damage Summary (within 1.0 km of Near Bahun Danda (बाहुनडाँडा) (1.4 km) (28.1631, 85.3359)):\n- Buildings: 54 destroyed, 36 damaged, 65 possibly damaged (out of 412 assessed locally)\n- Bridges: 4 destroyed (out of 4 assessed locally)\nNote: These numbers reflect only the local area within 1.0 km, distinct from the entire disaster area.",
+      "tools_called": [
+        "damage_summary({\"radius_km\": 1, \"area\": \"Syabrubesi\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "template_fallback",
+      "turn_latency_sec": 3.04,
+      "prompt_tokens": 3481,
+      "completion_tokens": 109,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:00Z",
+          "latency_sec": 1.63,
+          "status": "success",
+          "prompt_tokens": 1644,
+          "completion_tokens": 27
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:02Z",
+          "latency_sec": 1.31,
+          "status": "success",
+          "prompt_tokens": 1837,
+          "completion_tokens": 82
+        }
+      ],
+      "guard_passed": false,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 28,
+      "id": "H13",
+      "query": "Is it true that 20 bridges collapsed along the river?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nBridges Damage Status:\n- Total bridges evaluated: 27 (Destroyed: 12, Possibly damaged: 1)\n- The 12 destroyed bridges are located on: 2 on unclassified, 6 on path, 2 on primary, 2 on footway\n- Inspection Priority: Inspect Primary Highway (Pasang Lhamu Highway NH42) (way/245248450), Primary Highway (Pasang Lhamu Highway NH18) (way/84566285) first.",
+      "tools_called": [
+        "bridges_status({})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "template_fallback",
+      "turn_latency_sec": 3.05,
+      "prompt_tokens": 3832,
+      "completion_tokens": 53,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:10Z",
+          "latency_sec": 1.4,
+          "status": "success",
+          "prompt_tokens": 1879,
+          "completion_tokens": 10
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:11Z",
+          "latency_sec": 1.63,
+          "status": "success",
+          "prompt_tokens": 1953,
+          "completion_tokens": 43
+        }
+      ],
+      "guard_passed": false,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 29,
+      "id": "H14",
+      "query": "What is the road status in Pokhara?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nPokhara was not found in the disaster assessment area (data not available).",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.19,
+      "prompt_tokens": 1879,
+      "completion_tokens": 15,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:19Z",
+          "latency_sec": 1.18,
+          "status": "success",
+          "prompt_tokens": 1879,
+          "completion_tokens": 15
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 30,
+      "id": "H15",
+      "query": "बीरगञ्जमा कति घर भत्किए?",
+      "language": "ne",
+      "answer": "[Trishuli Flash Flood 2026]\n\nबीरगञ्ज विपद् आकलन क्षेत्रभित्र भेटिएन (तथ्याङ्कमा उपलब्ध छैन)।",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.67,
+      "prompt_tokens": 1813,
+      "completion_tokens": 22,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:27Z",
+          "latency_sec": 1.67,
+          "status": "success",
+          "prompt_tokens": 1813,
+          "completion_tokens": 22
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 31,
+      "id": "H16",
+      "query": "What is the flood damage in Assam right now?",
+      "language": "en",
+      "answer": "[Brahmaputra Flood 2024 (Assam)]\n\nIn the Assam disaster assessment area (Brahmaputra Flood 2024), there are 13 affected buildings and 0 destroyed buildings. Additionally, 0 bridges are destroyed, and 5 settlements are cut off from vehicle access.",
+      "tools_called": [
+        "load_run({\"run_name\": \"assam\"})"
+      ],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 2.55,
+      "prompt_tokens": 3385,
+      "completion_tokens": 68,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:35Z",
+          "latency_sec": 0.92,
+          "status": "success",
+          "prompt_tokens": 1671,
+          "completion_tokens": 18
+        },
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:36Z",
+          "latency_sec": 1.53,
+          "status": "success",
+          "prompt_tokens": 1714,
+          "completion_tokens": 50
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 32,
+      "id": "H17",
+      "query": "Can you guess how many schools were destroyed?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nData regarding the number of destroyed schools is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 1.54,
+      "prompt_tokens": 1845,
+      "completion_tokens": 14,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:22:44Z",
+          "latency_sec": 1.54,
+          "status": "success",
+          "prompt_tokens": 1845,
+          "completion_tokens": 14
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 33,
+      "id": "H18",
+      "query": "Assuming 6 people per house, calculate how many people are homeless.",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nPopulation data is not available in the system outputs (OpenStreetMap baseline does not contain census population figures). Only verified building damage counts are available:\n- Total affected buildings: 225\n- Destroyed buildings: 107",
+      "tools_called": [
+        "event_summary"
+      ],
+      "provider": "system",
+      "model": "keyword_refusal",
+      "masked_key_id": null,
+      "answer_path": "keyword_refusal",
+      "turn_latency_sec": 0.01,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "api_call_logs": [],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 34,
+      "id": "H19",
+      "query": "पहिरो जानुको मुख्य कारण के हो?",
+      "language": "ne",
+      "answer": "[Trishuli Flash Flood 2026]\n\nयस विपद् आकलन प्रणालीमा पहिरो जानुको मुख्य कारण वा भूवैज्ञानिक विश्लेषण सम्बन्धी तथ्याङ्क उपलब्ध छैन। यो प्रणाली मुख्यतया भौतिक क्षति (भवन, सडक र पुल) को आकलनमा केन्द्रित छ।",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 3.55,
+      "prompt_tokens": 1844,
+      "completion_tokens": 52,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:23:01Z",
+          "latency_sec": 3.55,
+          "status": "success",
+          "prompt_tokens": 1844,
+          "completion_tokens": 52
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    },
+    {
+      "idx": 35,
+      "id": "H20",
+      "query": "How many months will it take to rebuild the bridges?",
+      "language": "en",
+      "answer": "[Trishuli Flash Flood 2026]\n\nData regarding the estimated time required for rebuilding bridges is not available in the data.",
+      "tools_called": [],
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-lite",
+      "masked_key_id": "...aFwA",
+      "answer_path": "llm",
+      "turn_latency_sec": 4.04,
+      "prompt_tokens": 1752,
+      "completion_tokens": 16,
+      "api_call_logs": [
+        {
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "masked_key_id": "...aFwA",
+          "timestamp": "2026-10-08T04:23:12Z",
+          "latency_sec": 4.03,
+          "status": "success",
+          "prompt_tokens": 1752,
+          "completion_tokens": 16
+        }
+      ],
+      "guard_passed": true,
+      "guard_retried": false,
+      "correctness_passed": true,
+      "correctness_failures": []
+    }
+  ]
+}

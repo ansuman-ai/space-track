@@ -1,0 +1,44 @@
+copilot:
+  priority_endpoints:
+    - provider: "gemini"
+      model: "gemini-3.1-flash-lite"
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+    - provider: "gemini"
+      model: "gemini-3.8-flash"
+      base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+    - provider: "groq"
+      model: "openai/gpt-oss-20b"
+      base_url: "https://api.groq.com/openai/v1"
+    - provider: "groq"
+      model: "qwen/qwen3.8-27b"
+      base_url: "https://api.groq.com/openai/v1"
+    - provider: "groq"
+      model: "openai/gpt-oss-120b"
+      base_url: "https://api.groq.com/openai/v1"
+    - provider: "openrouter"
+      model: "openai/gpt-4o-mini"
+      base_url: "https://openrouter.ai/api/v1"
+    - provider: "openrouter"
+      model: "meta-llama/llama-3.3-70b-instruct"
+      base_url: "https://openrouter.ai/api/v1"
+    - provider: "offline"
+      model: "offline"
+  rate_limit:
+    max_retries: 5
+    initial_backoff: 2.0
+    backoff_factor: 2.0
+    failover_wait_threshold_s: 5.0
+  names:
+    ambiguity_margin: 0.08
+    match_threshold: 0.70
+    suggestion_threshold: 0.65
+    contrasting_modifiers:
+      - ["besi", "thulo"]
+      - ["bensi", "thulo"]
+      - ["besi", "danda"]
+      - ["bensi", "danda"]
+      - ["thulo", "sano"]
+      - ["upper", "lower"]
+      - ["north", "south"]
+  spatial:
+    default_radius_km: 1.0
