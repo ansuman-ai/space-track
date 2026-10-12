@@ -314,7 +314,7 @@ class SitRepGenerator:
             f"Contains modified Copernicus Sentinel data {event_year}.\n"
             "Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.\n"
             "© OpenStreetMap contributors.\n"
-            'Training dataset citation: Bountos et al., "Kuro Siwo: 33 billion m² under the water. A global multi-temporal satellite dataset for rapid flood mapping", NeurIPS 2024.'
+            "Bountos et al., 2024 (Kuro Siwo)"
         )
 
         pkg1 = self.store.repair_packages[0] if getattr(self.store, "repair_packages", None) else {}

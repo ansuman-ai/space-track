@@ -810,7 +810,7 @@ class NumberGuard:
             p1_count = p1.get("count", 0)
             p1_bldgs = p1.get("total_buildings", 0)
             p1_settlements = p1.get("settlements", [])
-            p1_names = ", ".join(f"{s.get('name')} ({s.get('building_count')} bldgs)" for s in p1_settlements[:3])
+            p1_names = ", ".join(f"{s.get('name')} ({s.get('building_count')} bldgs)" for s in p1_settlements)
 
             p2 = tool_output.get("priority_2_high_density_vehicle_cutoff") or {}
             p2_count = p2.get("count", 0)

@@ -1162,7 +1162,7 @@ class CopilotTools:
 
         total_walking_severed_bldgs = sum(x["building_count"] for x in walking_severed)
 
-        top_walk_names = ", ".join(f"{x['name']} ({x['building_count']} bldgs)" for x in walking_severed[:3])
+        top_walk_names = ", ".join(f"{x['name']} ({x['building_count']} bldgs)" for x in walking_severed)
         top_veh_names = ", ".join(f"{x['name']} ({x['building_count']} bldgs)" for x in vehicle_cut_off[:2])
         rec = (
             f"Only settlements cut off on BOTH vehicle and walking networks ({len(walking_severed)} settlements, {total_walking_severed_bldgs} buildings total) "
