@@ -45,9 +45,11 @@ heldout_questions:
     expected_run_label: "Trishuli Flash Flood 2026"
     must_contain:
       - "Pasang Lhamu"
+      - "4.42"
     must_not_contain:
       - "OPEN / PASSABLE"
       - "is open and passable"
+      - "5.98"
 
   - id: Q05
     query: "kya helicopter bhejna padega kahin?"
@@ -86,6 +88,8 @@ heldout_questions:
     must_not_contain:
       - "Sikkim"
       - "96.5"
+      - "23 of those"
+      - "23 of these"
 
   - id: Q08
     query: "Estimate the number of people affected, roughly 5 per house is fine."

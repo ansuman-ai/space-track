@@ -120,6 +120,40 @@ Features:
 
 ---
 
+## Remote Ingestion Performance & GDAL Range Request Optimization
+
+### Micro-Benchmark & Root Cause Investigation
+Planetary Computer and Azure Blob Storage mis-handle merged or multiplexed HTTP/2 range requests on remote Cloud-Optimized GeoTIFFs (COGs), issuing `206 Partial Content` responses that GDAL’s internal curl driver flagged as transport errors (`CPLE_AppDefined: Request for X-Y failed with response_code=206`). This led to repeated timeouts, exponential retries, and severe runtime regressions during Sentinel-2 band fetching.
+
+A micro-benchmark was performed reading the Sentinel-2 B04 sub-window over the Trishuli bounding box across 4 GDAL configurations (with an empty VSI cache per repetition):
+
+| Configuration | Parameters | Repetition 1 | Repetition 2 | 206 Warnings |
+|---|---|---|---|---|
+| **1) Previous Settings** | `HTTP/2, MULTIPLEX=YES, MERGE=YES` | 67.24 s (4.03 MB) | 19.56 s (4.03 MB) | 2 (Intermittent hangs) |
+| **2) HTTP/1.1 Single-stream** | `HTTP/1.1, MULTIPLEX=NO, MERGE=YES` | 14.67 s (4.03 MB) | 16.70 s (4.03 MB) | **0** |
+| **3) No Merged Ranges** | `HTTP/2, MULTIPLEX=YES, MERGE=NO` | 16.28 s (4.03 MB) | 18.61 s (4.03 MB) | **0** |
+| **4) Combined (Selected)** | `HTTP/1.1, MULTIPLEX=NO, MERGE=NO` | **15.11 s** (4.03 MB) | **18.07 s** (4.03 MB) | **0** |
+
+Configuration 4 (`GDAL_HTTP_VERSION="1.1"`, `GDAL_HTTP_MULTIPLEX="NO"`, `GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="NO"`) was committed to `src/l0_ingestion/gdal_env.py` with `GDAL_HTTP_MAX_RETRY="2"`, completely eliminating all 206 retry penalties and connection stalls.
+
+### Measured Cold Run Timings (`--no-cache`)
+A fresh cold Trishuli pipeline execution with `--no-cache` and empty caches was verified:
+- **Total Pipeline Duration**: **574.8 s** (~9.6 min, down from >1200 s).
+- **L0 Ingestion Sub-step Times**:
+  - `s2` (Sentinel-2 multi-scene fetch & composite): 482.5 s (164.4 MB downloaded)
+  - `s1` (Sentinel-1 RTC pre & post SAR): 113.5 s (61.5 MB downloaded)
+  - `dem` (Copernicus DEM-30 tile read & clip): 57.3 s (5.3 MB downloaded)
+  - `osm_buffered` (Overpass road/bridge corridor network): 56.1 s (15.6 MB downloaded)
+  - `osm_bbox` (Overpass primary footprint ingestion): 49.8 s (3.6 MB downloaded)
+- **Subsequent Layers**:
+  - `L1 Preprocessing`: 13.8 s
+  - `L2 Detection`: 20.0 s
+  - `L4 Damage Grading`: 5.5 s
+  - `L5 Network Routing & Isolations`: 66.8 s
+- **Bit-for-Bit Identity**: All 11 output files (`hazard_classes.tif`, `buildings_graded.geojson`, `bridges_graded.geojson`, `damage_summary.json`, `settlements.geojson`, etc.) remain **11/11 bit-for-bit MD5 identical** to benchmark Test A.
+
+---
+
 ## Installation & Build
 
 ### 1. Requirements

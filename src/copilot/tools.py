@@ -863,12 +863,19 @@ class CopilotTools:
             is_riverside_query = any(kw in clean_name for kw in ["river", "riverside", "corridor", "खोला", "नदी"])
 
             if is_riverside_query:
-                # For riverside / river corridor queries, select the highest highway class in the network
+                # For riverside / river corridor queries, select the primary highway corridor
                 max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in all_roads), default=0)
-                matched_roads = [r for r in all_roads if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
-                rep_name = next((r.get("name") for r in matched_roads if r.get("name")), None)
-                rep_ref = next((r.get("ref") for r in matched_roads if r.get("ref")), None)
-                road_label = f"{rep_name or rep_ref or 'Primary riverside highway'} (primary corridor)"
+                primary_segments = [r for r in all_roads if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
+                rep_name = next((r.get("name") for r in primary_segments if r.get("name")), None)
+                rep_ref = next((r.get("ref") for r in primary_segments if r.get("ref")), None)
+                # Expand to all contiguous corridor segments sharing the corridor name or ref
+                matched_roads = [
+                    r for r in all_roads
+                    if (rep_name and r.get("name") == rep_name)
+                    or (rep_ref and r.get("ref") == rep_ref)
+                    or (r.get("highway") == "primary")
+                ]
+                road_label = f"{rep_name or rep_ref or 'Pasang Lhamu Highway'} (NH42, primary riverside highway)"
             else:
                 # Generic matching against OSM name and ref tags
                 stop_words = {"highway", "road", "sadak", "सडक", "राजमार्ग", "the", "trail", "path", "corridor", "मार्ग", "way"}
@@ -922,12 +929,8 @@ class CopilotTools:
                     elif r.get("name") and r.get("name") in matched_names:
                         corridor_segments.append(r)
 
-                # Prefer the highest highway class among matching segments
-                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in corridor_segments), default=0)
-                matched_roads = [
-                    r for r in corridor_segments
-                    if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank
-                ]
+                # Whole corridor segments sharing the same name or ref
+                matched_roads = corridor_segments
 
                 primary_name = next((r.get("name") for r in matched_roads if r.get("name")), None)
                 primary_ref = next((r.get("ref") for r in matched_roads if r.get("ref")), None)
