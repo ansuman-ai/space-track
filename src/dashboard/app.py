@@ -21,7 +21,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from PIL import Image
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -171,6 +171,64 @@ def derive_operational_run_label(run_folder: Path, summary: Dict[str, Any]) -> s
     return f"{prefix} — {date} ({regime_str})"
 
 
+def extract_primary_river(run_folder: Path) -> Optional[str]:
+    """Finds the named OSM waterway with the most overlap/proximity to class 2/3 hazard."""
+    waterway_file = run_folder / "raw" / "osm" / "osm_waterways.geojson"
+    if not waterway_file.exists():
+        return None
+    hazard_file = run_folder / "processed" / "hazard_polygons.geojson"
+    try:
+        from shapely.geometry import shape
+
+        w_data = json.loads(waterway_file.read_text(encoding="utf-8"))
+        by_name = {}
+        for feat in w_data.get("features", []):
+            props = feat.get("properties", {})
+            ww = props.get("waterway")
+            name = props.get("name:en") or props.get("name")
+            if name and ww in ["river", "stream", "canal"]:
+                clean = name.strip()
+                try:
+                    geom = shape(feat["geometry"])
+                    by_name.setdefault(clean, []).append(geom)
+                except Exception:
+                    pass
+
+        if not by_name:
+            return None
+
+        h_geoms = []
+        if hazard_file.exists():
+            try:
+                h_data = json.loads(hazard_file.read_text(encoding="utf-8"))
+                h_geoms = [
+                    shape(f["geometry"])
+                    for f in h_data.get("features", [])
+                    if f.get("properties", {}).get("class") in (2, 3)
+                ]
+                if not h_geoms:
+                    h_geoms = [shape(f["geometry"]) for f in h_data.get("features", [])]
+            except Exception:
+                pass
+
+        scores = []
+        for name, geoms in by_name.items():
+            tot_len = sum(g.length for g in geoms)
+            if h_geoms:
+                near_count = sum(1 for g in geoms for hg in h_geoms if g.distance(hg) < 0.05)
+                overlap_len = sum(g.intersection(hg).length for g in geoms for hg in h_geoms if g.intersects(hg))
+                score = (overlap_len > 1e-6, overlap_len, near_count * tot_len, tot_len)
+            else:
+                score = (False, 0, len(geoms), tot_len)
+            scores.append((name, score))
+
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[0][0]
+    except Exception:
+        pass
+    return None
+
+
 def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     """Reads run metadata from underlying JSON files and compiles strict ground-truth metrics."""
     summary_file = run_folder / "run_summary.json"
@@ -230,6 +288,8 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         main_title = human_label
         subtitle = ""
         display_label = human_label
+
+    primary_river = extract_primary_river(run_folder)
 
     # 1. Validation Status & Provenance (file & field)
     val_status_file = proc / "validation_status.json"
@@ -386,6 +446,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         },
         "bridges": {
             "total_affected": total_affected_br,
+            "total_assessed": dmg_summary.get("bridges", {}).get("total_count", total_affected_br),
             "destroyed": destroyed_br,
             "possibly_damaged": possibly_damaged_br,
             "flooded": flooded_br,
@@ -435,6 +496,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         "main_title": main_title,
         "subtitle": subtitle,
         "event_name": event_name,
+        "primary_river": primary_river,
         "osm_label": human_label,
         "event_date": event_date,
         "event_year": event_year,
@@ -1028,6 +1090,143 @@ def get_run_basemap_places(run_id: str):
 # Mount static assets
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ==========================================
+# PHASE 3: COPILOT & SITREP ENDPOINTS
+# ==========================================
+@app.post("/api/runs/{run_id}/copilot/ask")
+async def copilot_ask(run_id: str, request: Request):
+    """Answers rescuer natural-language questions about the given run using CopilotAgent."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    question = (body.get("question") or body.get("query") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Missing question")
+
+    provider = body.get("provider") or "auto"
+
+    from src.copilot.facts import FactStore
+    from src.copilot.agent import CopilotAgent
+
+    try:
+        store = FactStore(run_folder)
+        agent = CopilotAgent(store, provider=provider)
+        resp = agent.ask(question)
+
+        # Build sources list (file + field per grounded fact/number)
+        sources = []
+        seen_keys = set()
+        for fact_id in getattr(resp, "tools_called", []):
+            pass
+
+        # Collect fact references from tool outputs
+        for t_out in getattr(resp, "tool_outputs", []):
+            f_ids = t_out.get("fact_ids", [])
+            for fid in f_ids:
+                if fid not in seen_keys and fid in store.facts:
+                    f = store.facts[fid]
+                    sources.append({
+                        "file": f.source_file,
+                        "field": f.id,
+                        "value": str(f.value),
+                        "unit": f.unit,
+                        "evidence": f.evidence,
+                    })
+                    seen_keys.add(fid)
+
+        # Fallback sources if tool outputs did not specify individual fact_ids
+        if not sources and resp.tools_called:
+            for tool_name in resp.tools_called:
+                if tool_name in ["event_summary", "damage_summary"]:
+                    sources.append({"file": "processed/damage_summary.json", "field": "buildings.damage_grade_counts"})
+                    sources.append({"file": "processed/damage_summary.json", "field": "roads.km_by_damage_grade"})
+                    sources.append({"file": "processed/l2_stats.json", "field": "areas_km2"})
+                elif tool_name == "cutoff_settlements":
+                    sources.append({"file": "processed/routing/cutoff_summary.json", "field": "vehicle.optimistic.cut_off_count"})
+                    sources.append({"file": "processed/routing/cutoff_summary.json", "field": "vehicle.optimistic.connected_unverified_count"})
+                elif tool_name == "bridges_status":
+                    sources.append({"file": "processed/damage_summary.json", "field": "bridges.damage_grade_counts"})
+                elif tool_name in ["repair_priority", "rescue_priority"]:
+                    sources.append({"file": "processed/routing/repair_packages.json", "field": "ranked_packages"})
+                    sources.append({"file": "processed/routing/cutoff_summary.json", "field": "walking.optimistic.cut_off_count"})
+                elif tool_name in ["limitations", "confidence_and_limits"]:
+                    sources.append({"file": "run_summary.json", "field": "validation_status"})
+                    sources.append({"file": "processed/damage_summary.json", "field": "roads.km_by_damage_grade.Unknown (cloud)"})
+
+        # Strip any internal secret strings from text or logs just in case
+        answer_text = resp.text
+
+        return JSONResponse({
+            "run_id": run_id,
+            "run_label": agent._turn_run_label or run_id,
+            "answer": answer_text,
+            "answer_path": resp.answer_path or "offline",
+            "provider": resp.provider or "offline",
+            "model": resp.model or "offline",
+            "language": resp.language or "en",
+            "tools_called": resp.tools_called,
+            "sources": sources,
+        })
+    except Exception as e:
+        logger.exception("Error in copilot_ask: %s", e)
+        # Fallback offline emergency response
+        return JSONResponse({
+            "run_id": run_id,
+            "run_label": run_id,
+            "answer": f"[ANSWERED IN OFFLINE MODE]\nAn offline processing error occurred: {str(e)}",
+            "answer_path": "offline",
+            "provider": "offline",
+            "model": "offline",
+            "language": "en",
+            "tools_called": [],
+            "sources": [],
+        })
+
+
+@app.get("/api/runs/{run_id}/sitrep")
+def get_run_sitrep(run_id: str, lang: str = "en", format: str = "pdf"):
+    """Generates and serves bilingual 1-page Situation Report (PDF or Markdown)."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    from src.copilot.facts import FactStore
+    from src.copilot.sitrep import SitRepGenerator
+
+    store = FactStore(run_folder)
+    gen = SitRepGenerator(store)
+
+    target_lang = "ne" if lang.lower() in ["ne", "nepali", "nep"] else "en"
+    cache_dir = run_folder / "processed" / "sitrep"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if format.lower() == "md" or format.lower() == "markdown":
+        md_text = gen.generate_markdown(lang=target_lang)
+        return PlainTextResponse(md_text, media_type="text/markdown; charset=utf-8")
+
+    # Generate PDF
+    pdf_path = cache_dir / f"sitrep_{target_lang}.pdf"
+    md_text = gen.generate_markdown(lang=target_lang)
+    gen.generate_pdf(md_text, pdf_path)
+
+    if not pdf_path.exists():
+        raise HTTPException(status_code=500, detail="Failed to generate SitRep PDF")
+
+    filename = f"sitrep_{run_id}_{target_lang}.pdf"
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 @app.get("/")

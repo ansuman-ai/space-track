@@ -7,21 +7,27 @@
   
   <!-- Local Vendored Leaflet CSS -->
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
-  
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <div id="app-container">
-    <!-- Operational Header (Simple title, No extra badge) -->
+    <!-- Direction A Operational Header -->
     <header id="top-navbar">
-      <div class="brand-section">
-        <div class="brand-text">
-          <h1 class="brand-title" data-i18n="app_title">Spaceborne Rapid Disaster Assessment</h1>
-          <p class="brand-subtitle" data-i18n="app_subtitle">Operational SAR & Optical Damage Assessment & Isolation Routing</p>
+      <div class="header-left">
+        <div class="header-titles">
+          <h1 id="run-main-title" class="title-main">Disaster Assessment</h1>
+          <div class="header-subtitle-row" id="run-subtitle-row">
+            <span id="val-header-date" class="meta-item font-mono">—</span>
+            <span class="meta-dot">•</span>
+            <span id="val-header-regime" class="meta-item">—</span>
+            <span class="meta-dot">•</span>
+            <span id="val-header-validation" class="badge-validation">Practice Assessment (Unvalidated)</span>
+            <span id="run-subtitle" class="meta-item hidden"></span>
+          </div>
         </div>
       </div>
 
-      <div class="header-controls">
+      <div class="header-right">
         <!-- Assessment Run Selector & History Filter -->
         <div class="control-group">
           <label for="run-select" class="control-label" data-i18n="select_run">Assessment:</label>
@@ -30,18 +36,37 @@
           </select>
           <label class="checkbox-label-compact" title="Include older exploratory and test runs from development">
             <input type="checkbox" id="chk-show-all-runs" />
-            <span data-i18n="show_all_runs">All Runs (77)</span>
+            <span data-i18n="show_all_runs">All runs (77)</span>
           </label>
         </div>
 
-        <!-- Before/After Slider Button -->
+        <!-- Projector / Lighter Hillshade Relief Toggle -->
+        <button id="btn-toggle-relief" class="btn-action" title="Toggle lighter hillshade relief for high-contrast projector displays">
+          <span class="btn-icon">💡</span>
+          <span class="btn-text">Projector relief</span>
+        </button>
+
+        <!-- Before/After S2 Slider Button -->
         <button id="btn-toggle-s2-slider" class="btn-action" title="Toggle Sentinel-2 Before/After Optical Composite Overlay">
           <span class="btn-text" data-i18n="toggle_s2_slider">Optical Before / After</span>
         </button>
 
+        <!-- Sitrep PDF Download Button -->
+        <div class="dropdown-wrap" id="sitrep-dropdown-wrap">
+          <button id="btn-download-sitrep" class="btn-action" title="Download Situation Report PDF (EN / NE)">
+            <span class="btn-icon">📄</span>
+            <span class="btn-text">Sitrep (PDF)</span>
+            <span class="dropdown-caret">▾</span>
+          </button>
+          <div class="dropdown-menu hidden" id="sitrep-menu">
+            <a href="#" id="link-sitrep-en" class="dropdown-item">English SitRep (PDF)</a>
+            <a href="#" id="link-sitrep-ne" class="dropdown-item">नेपाली SitRep (PDF)</a>
+          </div>
+        </div>
+
         <!-- New Analysis Button (Phase 2) -->
         <button id="btn-new-run" class="btn-action btn-primary" title="Trigger a new satellite disaster assessment">
-          <span class="btn-icon">＋</span> <span data-i18n="new_analysis">New Analysis</span>
+          <span class="btn-icon">＋</span> <span data-i18n="new_analysis">New analysis</span>
         </button>
 
         <!-- Language Toggle -->
@@ -53,13 +78,21 @@
       </div>
     </header>
 
-    <!-- Main Workspace -->
+    <!-- Main Workspace: Map 70% + Right Side Panel 30% -->
     <main id="main-content">
-      <!-- Map Container -->
-      <div id="map-container">
+      <!-- Left Map Container -->
+      <section id="map-container">
         <div id="map"></div>
 
-        <!-- Bounding Box Interactive Drawing Banner -->
+        <!-- North Arrow Indicator -->
+        <div class="map-north-arrow" title="North orientation">
+          <svg class="north-icon" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2">
+            <polygon points="12,2 18,20 12,15 6,20" fill="#0f172a" />
+          </svg>
+          <span>N</span>
+        </div>
+
+        <!-- Bounding Box Interactive Drawing Banner (Phase 2) -->
         <div id="draw-bbox-banner" class="draw-banner-overlay hidden">
           <span class="draw-banner-text">✏️ Click and drag on the map to define the assessment bounding box</span>
           <button id="btn-cancel-draw" class="btn-small-control">Cancel</button>
@@ -70,7 +103,7 @@
           <div class="progress-card-header">
             <div class="progress-title-wrap">
               <span class="status-pulse-dot" id="progress-pulse-dot"></span>
-              <h4 class="progress-card-title" id="progress-card-title">Analysis in Progress</h4>
+              <h4 class="progress-card-title" id="progress-card-title">Analysis in progress</h4>
             </div>
             <div class="progress-header-right">
               <span class="elapsed-badge font-mono" id="progress-elapsed">00:00</span>
@@ -120,223 +153,318 @@
         <!-- Before/After Comparison Bar (Cloud-Masked Median Composites) -->
         <div id="s2-slider-bar" class="slider-bar-overlay hidden">
           <div class="slider-info-left">
-            <span class="badge-pre">PRE-EVENT</span>
-            <span id="s2-pre-date" class="date-tag">—</span>
+            <span class="badge-pre">Pre-event</span>
+            <span id="s2-pre-date" class="date-tag font-mono">—</span>
           </div>
           <div class="slider-control-center">
             <input type="range" id="s2-range-slider" min="0" max="100" value="50" class="split-slider" />
             <div class="slider-hint">Drag slider to compare cloud-masked S2 median composites</div>
           </div>
           <div class="slider-info-right">
-            <span id="s2-post-date" class="date-tag">—</span>
-            <span class="badge-post">POST-EVENT</span>
-            <button id="btn-zoom-damage-slider" class="btn-small-control" title="Zoom to damage zone">Zoom to Damage</button>
+            <span id="s2-post-date" class="date-tag font-mono">—</span>
+            <span class="badge-post">Post-event</span>
+            <button id="btn-zoom-damage-slider" class="btn-small-control" title="Zoom to damage zone">Zoom to damage</button>
             <button id="btn-close-s2-slider" class="btn-close-slider" title="Exit comparison">✕</button>
           </div>
         </div>
 
-        <!-- Map Layer Switcher / Legend Overlay -->
-        <div id="layer-legend-panel" class="floating-panel">
-          <div class="panel-header" id="toggle-legend-btn">
-            <span class="panel-title" data-i18n="layers_and_legend">Layers & Legend</span>
+        <!-- Compact Collapsible Micro-Legend (Bottom-Left) -->
+        <div id="layer-legend-panel" class="map-micro-legend">
+          <div class="legend-header" id="toggle-legend-btn">
+            <span class="legend-header-title">Map layers</span>
             <span class="collapse-icon">▼</span>
           </div>
-          <div class="panel-body" id="legend-body">
+          <div class="legend-body" id="legend-body">
             <!-- Basemap Selection -->
-            <div class="layer-section">
-              <div class="section-title" data-i18n="basemap">Basemap</div>
+            <div class="legend-section">
+              <div class="section-title">Basemap</div>
               <div class="basemap-options">
                 <label class="radio-label">
                   <input type="radio" name="basemap" value="offline" checked>
-                  <span data-i18n="terrain_relief">Terrain Relief (Offline)</span>
+                  <span>Terrain relief (offline)</span>
                 </label>
                 <label class="radio-label">
                   <input type="radio" name="basemap" value="satellite">
-                  <span data-i18n="satellite">Satellite (S2)</span>
+                  <span>Satellite (S2)</span>
                 </label>
                 <label class="radio-label">
                   <input type="radio" name="basemap" value="osm">
-                  <span data-i18n="osm_streets">OpenStreetMap (Online)</span>
+                  <span>OpenStreetMap</span>
                 </label>
               </div>
             </div>
 
             <!-- Hazard Polygons -->
-            <div class="layer-section">
-              <div class="section-title" data-i18n="hazard_extent">Hazard & Inundation</div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-haz-obs" checked>
-                <span class="legend-swatch swatch-obs"></span>
-                <label for="layer-haz-obs" id="lbl-haz-obs" data-i18n="observed_hazard">Observed Damage / Flood (Class 2)</label>
+            <div class="legend-section">
+              <div class="section-title">Hazard & inundation</div>
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-haz-obs" checked>
+                  <span class="swatch-box swatch-obs"></span>
+                  <span id="lbl-haz-obs">Observed damage / flood</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-obs">0.00 km²</span>
               </div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-haz-inf" checked>
-                <span class="legend-swatch swatch-inf"></span>
-                <label for="layer-haz-inf" data-i18n="inferred_hazard">Inferred Hydraulic Fill (Class 3)</label>
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-haz-inf" checked>
+                  <span class="swatch-box swatch-inf"></span>
+                  <span id="lbl-haz-inf">Inferred hydraulic fill</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-inf">0.00 km²</span>
               </div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-haz-perm" checked>
-                <span class="legend-swatch swatch-perm"></span>
-                <label for="layer-haz-perm" data-i18n="permanent_water">water mask (may include terrain shadow)</label>
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-haz-perm" checked>
+                  <span class="swatch-box swatch-perm"></span>
+                  <span>Water mask (incl. shadows)</span>
+                </label>
               </div>
-              <div class="layer-item sub-toggle">
-                <input type="checkbox" id="chk-all-water">
-                <label for="chk-all-water" data-i18n="show_all_water">Show All Water Bodies / Ponds</label>
-              </div>
-            </div>
-
-            <!-- Infrastructure & Damage Grading -->
-            <div class="layer-section">
-              <div class="section-title" data-i18n="infrastructure_damage">Infrastructure Damage</div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-buildings" checked>
-                <label for="layer-buildings" class="layer-parent-label" data-i18n="affected_buildings_layer">Affected Buildings</label>
-              </div>
-              <div class="layer-item sub-toggle">
-                <input type="checkbox" id="layer-intact-buildings">
-                <label for="layer-intact-buildings" data-i18n="show_intact_buildings">Show Intact Buildings</label>
-              </div>
-              <div class="layer-item sub-toggle">
-                <input type="checkbox" id="layer-unverified-buildings">
-                <label for="layer-unverified-buildings" data-i18n="show_unverified_buildings">Show Cloud-Unverified Buildings</label>
-              </div>
-              <div class="nested-legend" id="buildings-legend">
-                <div class="sub-legend-item"><span class="legend-dot dot-destroyed"></span> <span id="lbl-legend-destroyed" data-i18n="legend_destroyed">Destroyed / Flooded</span></div>
-                <div class="sub-legend-item"><span class="legend-dot dot-damaged"></span> <span id="lbl-legend-damaged" data-i18n="legend_damaged">Damaged / Possibly Flooded</span></div>
-                <div class="sub-legend-item"><span class="legend-dot dot-unverified"></span> <span data-i18n="legend_unverified">Cloud-Unverified</span></div>
-              </div>
-
-              <div class="layer-item">
-                <input type="checkbox" id="layer-roads" checked>
-                <span class="legend-line line-roads"></span>
-                <label for="layer-roads" id="lbl-roads-layer" data-i18n="road_network">Roads (Destroyed / Damaged)</label>
-              </div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-bridges" checked>
-                <span class="legend-diamond diamond-bridges"></span>
-                <label for="layer-bridges" data-i18n="bridges">Bridges</label>
+              <div class="legend-sub-toggle">
+                <label>
+                  <input type="checkbox" id="chk-all-water">
+                  <span>Show all minor ponds</span>
+                </label>
               </div>
             </div>
 
-            <!-- Isolation & Access Routing -->
-            <div class="layer-section">
-              <div class="section-title" data-i18n="isolation_routing">Access & Repair</div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-settlements" checked>
-                <span class="legend-dot dot-cutoff"></span>
-                <label for="layer-settlements" data-i18n="settlements_cutoff">Cut-off Settlements</label>
+            <!-- Infrastructure Damage -->
+            <div class="legend-section">
+              <div class="section-title">Infrastructure</div>
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-buildings" checked>
+                  <span class="swatch-circle swatch-destroyed"></span>
+                  <span id="lbl-legend-buildings">Affected buildings</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-buildings">0</span>
               </div>
-              <div class="layer-item sub-toggle">
-                <input type="checkbox" id="chk-show-connected-settlements">
-                <label for="chk-show-connected-settlements" data-i18n="show_connected_settlements">Show Connected Settlements</label>
+              <div class="legend-sub-toggle">
+                <label>
+                  <input type="checkbox" id="layer-intact-buildings">
+                  <span>Show intact buildings</span>
+                </label>
               </div>
-              <div class="layer-item">
-                <input type="checkbox" id="layer-repair-pkg" checked>
-                <span class="legend-line line-repair"></span>
-                <label for="layer-repair-pkg" data-i18n="repair_package_1">Repair Package 1 Links</label>
+              <div class="legend-sub-toggle">
+                <label>
+                  <input type="checkbox" id="layer-unverified-buildings">
+                  <span>Show cloud-unverified</span>
+                </label>
+              </div>
+
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-bridges" checked>
+                  <span class="swatch-diamond swatch-destroyed"></span>
+                  <span>Affected bridges</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-bridges">0</span>
+              </div>
+
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-roads" checked>
+                  <span class="swatch-line swatch-destroyed"></span>
+                  <span id="lbl-roads-layer">Roads (severed / damaged)</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-roads">0.0 km</span>
+              </div>
+            </div>
+
+            <!-- Isolation & Repair -->
+            <div class="legend-section">
+              <div class="section-title">Settlement isolation & repair</div>
+              <!-- TWO distinct entries for isolated settlements -->
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-settlements" checked>
+                  <span class="swatch-circle swatch-cutoff-road"></span>
+                  <span>Cut off by road</span>
+                </label>
+                <span class="legend-row-stat font-mono" id="legend-stat-cutoff-road">0</span>
+              </div>
+              <div class="legend-row">
+                <div class="legend-toggle-label pl-indent">
+                  <span class="swatch-circle swatch-no-ground"></span>
+                  <span>No ground access (airdrop)</span>
+                </div>
+                <span class="legend-row-stat font-mono" id="legend-stat-no-ground">0</span>
+              </div>
+              <div class="legend-sub-toggle">
+                <label>
+                  <input type="checkbox" id="chk-show-connected-settlements">
+                  <span>Show connected settlements</span>
+                </label>
+              </div>
+
+              <div class="legend-row">
+                <label class="legend-toggle-label">
+                  <input type="checkbox" id="layer-repair-pkg" checked>
+                  <span class="swatch-line swatch-repair"></span>
+                  <span>Repair package 1 links</span>
+                </label>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Direction B: Bottom Map Status Ribbon -->
+        <footer class="map-status-bar" id="map-status-bar">
+          <div class="status-bar-left">
+            <span class="status-item mono" id="status-cursor-coords">28.1542° N, 85.3412° E</span>
+            <span class="status-divider">•</span>
+            <span class="status-item" id="status-zoom">Zoom 13</span>
+          </div>
+          <div class="status-bar-right">
+            <span class="status-item">Copernicus DEM GLO-30 (30 m)</span>
+            <span class="status-divider">•</span>
+            <span class="status-item">Sentinel-1 & Sentinel-2</span>
+            <span class="status-divider">•</span>
+            <span class="status-item">OpenStreetMap (Offline)</span>
+          </div>
+        </footer>
 
         <!-- Loading Spinner -->
         <div id="map-spinner" class="spinner-overlay hidden">
           <div class="spinner"></div>
           <span class="spinner-text" data-i18n="loading_layer_data">Loading geospatial data...</span>
         </div>
-      </div>
+      </section>
 
-      <!-- Side Panel: 4 Mission-Critical Sections -->
+      <!-- Right Side Panel (30% width) -->
       <aside id="side-panel">
         <div class="side-scroll-area">
+          
+          <!-- Top Section: Executive Brief & 4 Key Numbers -->
+          <div class="panel-executive-header">
+            <!-- 1-Sentence Summary (Data-Driven, No Speculative Causes) -->
+            <div class="summary-box" id="summary-sentence-box">
+              Loading assessment summary...
+            </div>
 
-          <!-- Run Title & Event Name Header (Item 3) -->
-          <div class="run-header-card" id="run-header-box">
-            <h2 class="run-main-title" id="run-main-title">—</h2>
-            <div class="run-subtitle" id="run-subtitle"></div>
+            <!-- 4 Key Numbers (2x2 Grid) -->
+            <div class="kpi-grid">
+              <div class="kpi-card" id="kpi-card-buildings">
+                <div class="kpi-value font-mono" id="kpi-val-buildings">0</div>
+                <div class="kpi-label" id="kpi-lbl-buildings">
+                  <span class="dot-semantic dot-destroyed"></span>
+                  <span>Buildings destroyed</span>
+                </div>
+              </div>
+
+              <div class="kpi-card" id="kpi-card-bridges">
+                <div class="kpi-value font-mono" id="kpi-val-bridges">0</div>
+                <div class="kpi-label" id="kpi-lbl-bridges">
+                  <span class="dot-semantic dot-destroyed"></span>
+                  <span>Bridges destroyed</span>
+                </div>
+              </div>
+
+              <div class="kpi-card" id="kpi-card-settlements">
+                <div class="kpi-value font-mono" id="kpi-val-settlements">0</div>
+                <div class="kpi-label" id="kpi-lbl-settlements">
+                  <span class="dot-semantic dot-cutoff"></span>
+                  <span>Settlements cut off</span>
+                </div>
+              </div>
+
+              <div class="kpi-card" id="kpi-card-roads">
+                <div class="kpi-value font-mono" id="kpi-val-roads">0.0 km</div>
+                <div class="kpi-label" id="kpi-lbl-roads">
+                  <span class="dot-semantic dot-destroyed"></span>
+                  <span>Roads severed</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- SECTION 1: WHAT HAPPENED -->
-          <section class="operational-section" id="section-what-happened">
-            <div class="section-header-box">
-              <span class="sec-number">1</span>
-              <h2 class="sec-title" data-i18n="sec1_title">WHAT HAPPENED</h2>
-            </div>
+          <!-- Navigation Tabs Bar -->
+          <nav class="tabs-nav" role="tablist">
+            <button class="tab-btn active" id="tab-btn-impact" data-tab="tab-panel-impact" role="tab">Impact</button>
+            <button class="tab-btn" id="tab-btn-isolation" data-tab="tab-panel-isolation" role="tab">Who is cut off</button>
+            <button class="tab-btn" id="tab-btn-repair" data-tab="tab-panel-repair" role="tab">What to repair</button>
+            <button class="tab-btn" id="tab-btn-validation" data-tab="tab-panel-validation" role="tab">Validation</button>
+            <button class="tab-btn" id="tab-btn-ask" data-tab="tab-panel-ask" role="tab">Ask</button>
+          </nav>
+
+          <!-- Tab Content Area -->
+          <div class="tabs-content-area">
             
-            <div class="card-box">
-              <div class="event-meta-table">
-                <div class="meta-row">
-                  <span class="meta-label" data-i18n="event_date">Event Date:</span>
-                  <span class="meta-val font-mono" id="val-event-date">—</span>
-                </div>
-                <div class="meta-row">
-                  <span class="meta-label" data-i18n="terrain_regime">Terrain Regime:</span>
-                  <span class="meta-val" id="val-regime">—</span>
-                </div>
-                <div class="meta-row">
-                  <span class="meta-label" data-i18n="image_dates_used">Image Dates Used:</span>
-                  <span class="meta-val font-mono" id="val-image-dates">—</span>
-                </div>
-              </div>
-
-              <!-- Impact Areas Grid -->
-              <div class="stat-card-grid">
-                <div class="stat-card card-red">
-                  <div class="stat-card-label" data-i18n="observed_area">Observed Damage</div>
-                  <div class="stat-card-val" id="val-area-obs">0.00 km²</div>
-                </div>
-                <div class="stat-card card-orange">
-                  <div class="stat-card-label" data-i18n="inferred_area">Inferred Hydraulic</div>
-                  <div class="stat-card-val" id="val-area-inf">0.00 km²</div>
-                </div>
-              </div>
-
-              <!-- Physical Impact Counts -->
-              <div class="impact-metrics-block">
-                <!-- Buildings -->
-                <div class="metric-row-item">
-                  <div class="item-head">
-                    <span class="item-title" data-i18n="affected_buildings">Buildings Affected</span>
-                    <span class="item-count font-mono" id="val-b-affected">0</span>
+            <!-- TAB 1: IMPACT (What Happened) -->
+            <section class="tab-panel active" id="tab-panel-impact" role="tabpanel">
+              <div class="content-card">
+                <h3 class="card-title">Event information</h3>
+                <div class="data-table">
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="event_date">Event date</span>
+                    <span class="row-value font-mono" id="val-event-date">—</span>
                   </div>
-                  <div class="item-breakdown" id="b-breakdown-tags"></div>
-                </div>
-
-                <!-- Bridges -->
-                <div class="metric-row-item">
-                  <div class="item-head">
-                    <span class="item-title" data-i18n="affected_bridges">Bridges Affected</span>
-                    <span class="item-count font-mono" id="val-br-affected">0</span>
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="terrain_regime">Terrain regime</span>
+                    <span class="row-value" id="val-regime">—</span>
                   </div>
-                  <div class="item-breakdown" id="br-breakdown-tags"></div>
-                </div>
-
-                <!-- Roads -->
-                <div class="metric-row-item">
-                  <div class="item-head">
-                    <span class="item-title" id="lbl-roads-impact-title" data-i18n="roads_damaged">Road Damage</span>
-                  </div>
-                  <div class="item-breakdown" id="roads-breakdown-tags">
-                    <span class="tag-pill tag-destroyed"><span id="lbl-tag-destroyed">Destroyed</span>: <b id="val-road-destroyed-km">0.0 km</b></span>
-                    <span class="tag-pill tag-damaged"><span id="lbl-tag-possible">Possibly damaged</span>: <b id="val-road-possible-km">0.0 km</b></span>
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="image_dates_used">Satellite imagery</span>
+                    <span class="row-value font-mono" id="val-image-dates">—</span>
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
 
-          <!-- SECTION 2: WHO IS CUT OFF -->
-          <section class="operational-section" id="section-who-cut-off">
-            <div class="section-header-box">
-              <span class="sec-number">2</span>
-              <h2 class="sec-title" data-i18n="sec2_title">WHO IS CUT OFF</h2>
-            </div>
+              <div class="content-card">
+                <h3 class="card-title">Inundation & damage extent</h3>
+                <div class="stat-mini-grid">
+                  <div class="mini-stat-card card-obs">
+                    <div class="mini-stat-lbl" data-i18n="observed_area">Observed damage</div>
+                    <div class="mini-stat-val font-mono" id="val-area-obs">0.00 km²</div>
+                  </div>
+                  <div class="mini-stat-card card-inf">
+                    <div class="mini-stat-lbl" data-i18n="inferred_area">Inferred hydraulic</div>
+                    <div class="mini-stat-val font-mono" id="val-area-inf">0.00 km²</div>
+                  </div>
+                </div>
+              </div>
 
-            <div class="card-box">
-              <!-- Top-Priority: No Ground Access Summary -->
+              <div class="content-card">
+                <h3 class="card-title">Infrastructure impact</h3>
+                <div class="impact-metrics-block">
+                  <!-- Buildings -->
+                  <div class="metric-row-item">
+                    <div class="item-head">
+                      <span class="item-title" data-i18n="affected_buildings">Buildings affected</span>
+                      <span class="item-count font-mono" id="val-b-affected">0</span>
+                    </div>
+                    <div class="item-breakdown" id="b-breakdown-tags"></div>
+                  </div>
+
+                  <!-- Bridges -->
+                  <div class="metric-row-item">
+                    <div class="item-head">
+                      <span class="item-title" data-i18n="affected_bridges">Bridges affected</span>
+                      <span class="item-count font-mono" id="val-br-affected">0</span>
+                    </div>
+                    <div class="item-breakdown" id="br-breakdown-tags"></div>
+                  </div>
+
+                  <!-- Roads -->
+                  <div class="metric-row-item">
+                    <div class="item-head">
+                      <span class="item-title" id="lbl-roads-impact-title" data-i18n="roads_damaged">Road damage</span>
+                    </div>
+                    <div class="item-breakdown" id="roads-breakdown-tags">
+                      <span class="tag-pill tag-destroyed"><span id="lbl-tag-destroyed">Destroyed</span>: <b id="val-road-destroyed-km">0.0 km</b></span>
+                      <span class="tag-pill tag-damaged"><span id="lbl-tag-possible">Possibly damaged</span>: <b id="val-road-possible-km">0.0 km</b></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- TAB 2: WHO IS CUT OFF -->
+            <section class="tab-panel" id="tab-panel-isolation" role="tabpanel">
+              <!-- Dual Header Cards -->
               <div class="cutoff-summary-banner-dual">
                 <div class="cutoff-stat-card card-critical">
-                  <div class="stat-badge-top" data-i18n="no_ground_access_badge">CRITICAL (NO GROUND ACCESS)</div>
+                  <div class="stat-badge-top" data-i18n="no_ground_access_badge">Critical (no ground access)</div>
                   <div class="stat-flex">
                     <span class="cutoff-num-lg font-mono" id="val-no-ground-count">0</span>
                     <span class="cutoff-text-desc" id="lbl-no-ground-desc" data-i18n="airdrop_only_label">Air / Helicopter Only</span>
@@ -344,7 +472,7 @@
                 </div>
 
                 <div class="cutoff-stat-card card-secondary">
-                  <div class="stat-badge-top" data-i18n="vehicle_cut_badge">VEHICLE ACCESS SEVERED</div>
+                  <div class="stat-badge-top" data-i18n="vehicle_cut_badge">Vehicle access severed</div>
                   <div class="stat-flex">
                     <span class="cutoff-num-lg font-mono" id="val-vehicle-cut-count">0</span>
                     <span class="cutoff-text-desc" data-i18n="vehicle_cut_desc">Communities Isolated</span>
@@ -352,108 +480,106 @@
                 </div>
               </div>
 
-              <!-- Routing Mode & Scenario Toggles -->
-              <div class="routing-filters">
-                <div class="filter-col">
-                  <span class="filter-label" data-i18n="mode_label">Transport Mode:</span>
-                  <div class="btn-group">
-                    <button class="btn-toggle active" id="btn-mode-vehicle" data-i18n="vehicle">Vehicle</button>
-                    <button class="btn-toggle" id="btn-mode-walking" data-i18n="walking">Walking</button>
+              <!-- Transport Mode & Scenario Filters -->
+              <div class="content-card">
+                <div class="routing-filters">
+                  <div class="filter-col">
+                    <span class="filter-label" data-i18n="mode_label">Transport mode:</span>
+                    <div class="btn-group">
+                      <button class="btn-toggle active" id="btn-mode-vehicle" data-i18n="vehicle">Vehicle</button>
+                      <button class="btn-toggle" id="btn-mode-walking" data-i18n="walking">Walking</button>
+                    </div>
                   </div>
-                </div>
-                <div class="filter-col">
-                  <span class="filter-label" data-i18n="scenario_label">Damage Scenario:</span>
-                  <div class="btn-group">
-                    <button class="btn-toggle active" id="btn-scen-opt" data-i18n="optimistic">Optimistic</button>
-                    <button class="btn-toggle" id="btn-scen-pess" data-i18n="pessimistic">Pessimistic</button>
+                  <div class="filter-col">
+                    <span class="filter-label" data-i18n="scenario_label">Damage scenario:</span>
+                    <div class="btn-group">
+                      <button class="btn-toggle active" id="btn-scen-opt" data-i18n="optimistic">Optimistic</button>
+                      <button class="btn-toggle" id="btn-scen-pess" data-i18n="pessimistic">Pessimistic</button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Cut-off Settlements List -->
-              <div class="settlement-directory">
+              <!-- Cut-off Settlements Directory -->
+              <div class="content-card">
                 <div class="directory-header">
-                  <span data-i18n="settlement_list_title">Cut-off Settlement Directory</span>
-                  <span class="directory-count" id="directory-count-badge">0 items</span>
+                  <span data-i18n="settlement_list_title">Cut-off settlement directory</span>
+                  <span class="directory-count font-mono" id="directory-count-badge">0 items</span>
                 </div>
                 <ul id="settlements-list" class="settlements-list">
                   <li class="empty-list-item" data-i18n="loading_settlements">Loading settlements...</li>
                 </ul>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <!-- SECTION 3: WHAT TO REPAIR FIRST -->
-          <section class="operational-section" id="section-what-to-repair">
-            <div class="section-header-box">
-              <span class="sec-number">3</span>
-              <h2 class="sec-title" data-i18n="sec3_title">WHAT TO REPAIR FIRST</h2>
-            </div>
-
-            <div class="card-box">
-              <div class="repair-lead-banner">
-                <div class="repair-headline" id="repair-headline-text">
-                  Repair Package 1: Reconnects 0 settlements / 0 buildings
-                </div>
-                <div class="repair-subtext" id="repair-subtext">
-                  Priority access restoration analysis
-                </div>
-              </div>
-
-              <div class="repair-actions">
-                <button id="btn-zoom-repair" class="btn-small-action">
-                  <span data-i18n="highlight_repair_pkg">Highlight Package on Map</span>
-                </button>
-              </div>
-
-              <div class="repair-elements-box">
-                <div class="elements-title" data-i18n="critical_network_elements">Critical Road / Bridge Elements:</div>
-                <ul id="repair-elements-list" class="repair-elements-list"></ul>
-              </div>
-            </div>
-          </section>
-
-          <!-- SECTION 4: HOW SURE -->
-          <section class="operational-section" id="section-how-sure">
-            <div class="section-header-box">
-              <span class="sec-number">4</span>
-              <h2 class="sec-title" data-i18n="sec4_title">HOW SURE</h2>
-            </div>
-
-            <div class="card-box">
-              <!-- Validation Status Banner with Provenance Tag -->
-              <div id="validation-banner" class="status-banner">
-                <div class="banner-badge" data-i18n="validation_status_badge">VALIDATION</div>
-                <div class="banner-info">
-                  <div id="banner-text" class="banner-content">Loading status...</div>
-                  <div id="banner-provenance" class="banner-provenance-text">Source: processed/validation_status.json [validation_status]</div>
-                </div>
-              </div>
-
-              <div class="surety-meta-list">
-                <div class="surety-item">
-                  <span class="surety-label" data-i18n="optical_offset_label">Optical Evidence Offset:</span>
-                  <span class="surety-val" id="val-optical-offset">—</span>
-                </div>
-                <div class="surety-item">
-                  <span class="surety-label" data-i18n="cloud_unverified_label">Cloud-Unverified Infrastructure:</span>
-                  <div class="surety-subvals font-mono" id="val-unverified-summary">
-                    Buildings: 0 | Bridges: 0 | Roads: 0.0 km
+            <!-- TAB 3: WHAT TO REPAIR FIRST -->
+            <section class="tab-panel" id="tab-panel-repair" role="tabpanel">
+              <div class="content-card">
+                <div class="repair-lead-banner">
+                  <div class="repair-headline" id="repair-headline-text">
+                    Repair Package 1: Reconnects 0 settlements / 0 buildings
+                  </div>
+                  <div class="repair-subtext" id="repair-subtext">
+                    Priority access restoration analysis
                   </div>
                 </div>
-                <div class="surety-item">
-                  <span class="surety-label" data-i18n="sensors_used">Sensors Employed:</span>
-                  <span class="surety-val" id="val-sensors">—</span>
+
+                <div class="repair-actions">
+                  <button id="btn-zoom-repair" class="btn-small-action">
+                    <span data-i18n="highlight_repair_pkg">Highlight package on map</span>
+                  </button>
                 </div>
-                <div class="surety-item">
-                  <span class="surety-label" data-i18n="runtime">Compute Runtime / RAM:</span>
-                  <span class="surety-val font-mono" id="val-runtime-ram">—</span>
+
+                <div class="repair-elements-box">
+                  <div class="elements-title" data-i18n="critical_network_elements">Critical road / bridge elements:</div>
+                  <ul id="repair-elements-list" class="repair-elements-list"></ul>
+                </div>
+              </div>
+            </section>
+
+            <!-- TAB 4: HOW SURE (Validation & Sensors) -->
+            <section class="tab-panel" id="tab-panel-validation" role="tabpanel">
+              <div class="content-card">
+                <h3 class="card-title">Validation status</h3>
+                <!-- Subtle validation banner with provenance -->
+                <div id="validation-banner" class="status-banner">
+                  <div class="banner-badge" data-i18n="validation_status_badge">Validation</div>
+                  <div class="banner-info">
+                    <div id="banner-text" class="banner-content">Loading status...</div>
+                    <div id="banner-provenance" class="banner-provenance-text font-mono">Source: processed/validation_status.json [validation_status]</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="content-card">
+                <h3 class="card-title">Data sources & telemetry</h3>
+                <div class="data-table">
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="sensors_used">Sensors employed</span>
+                    <span class="row-value" id="val-sensors">—</span>
+                  </div>
+                  <div class="data-row">
+                    <span class="row-label">Digital elevation model</span>
+                    <span class="row-value font-mono">Copernicus DEM GLO-30 (30 m)</span>
+                  </div>
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="optical_offset_label">Optical evidence offset</span>
+                    <span class="row-value" id="val-optical-offset">—</span>
+                  </div>
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="cloud_unverified_label">Cloud-unverified items</span>
+                    <span class="row-value font-mono" id="val-unverified-summary">Buildings: 0 | Bridges: 0 | Roads: 0.0 km</span>
+                  </div>
+                  <div class="data-row">
+                    <span class="row-label" data-i18n="runtime">Compute runtime / RAM</span>
+                    <span class="row-value font-mono" id="val-runtime-ram">—</span>
+                  </div>
                 </div>
               </div>
 
               <!-- Known Scientific Limitations -->
-              <div class="limitations-box">
-                <div class="limitations-title" data-i18n="known_limits_title">Known Scope & Scientific Limitations:</div>
+              <div class="content-card">
+                <h3 class="card-title" data-i18n="known_limits_title">Known scope & scientific limitations</h3>
                 <ul class="limitations-list">
                   <li data-i18n="limit_shadow">Permanent water mask: ~40% of Class-1 pixels on steep mountain slopes (>20°) represent radar and topographic shadow rather than open water bodies.</li>
                   <li data-i18n="limit_revisit">Sentinel SAR / MSI revisit interval (6–12 days); not a real-time telemetry stream.</li>
@@ -462,9 +588,73 @@
                   <li data-i18n="limit_dl">Pretrained AI models segment flood water only; debris surge mapped by physical SAR/optical change.</li>
                 </ul>
               </div>
-            </div>
-          </section>
+            </section>
 
+            <!-- TAB 5: ASK (Disaster SitRep Copilot) -->
+            <section class="tab-panel" id="tab-panel-ask" role="tabpanel">
+              <div class="content-card">
+                <div class="card-header-flex">
+                  <h3 class="card-title">Disaster response copilot</h3>
+                  <span class="badge-copilot-status" id="copilot-mode-badge">Offline verified</span>
+                </div>
+                <p class="card-subtitle">Ask questions about access, damage, bridges, and data boundaries for the currently open run.</p>
+
+                <!-- 4 Suggested Question Chips -->
+                <div class="copilot-chips-wrap">
+                  <span class="chips-title">Suggested questions:</span>
+                  <div class="chips-list">
+                    <button class="copilot-chip" data-q="Which settlements need air access?">Which settlements need air access?</button>
+                    <button class="copilot-chip" data-q="Which bridges should be inspected first?">Which bridges should be inspected first?</button>
+                    <button class="copilot-chip" data-q="Is the main road open?">Is the main road open?</button>
+                    <button class="copilot-chip" data-q="What should I not trust?">What should I not trust?</button>
+                  </div>
+                </div>
+
+                <!-- Copilot Query Input Form -->
+                <form id="copilot-form" class="copilot-form">
+                  <div class="copilot-input-row">
+                    <input type="text" id="copilot-input" class="copilot-input" placeholder="Ask a question in English or नेपाली..." autocomplete="off" />
+                    <button type="submit" id="copilot-send-btn" class="btn-action btn-primary">Ask</button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Copilot Answer Display Card -->
+              <div class="content-card" id="copilot-result-card">
+                <div class="copilot-meta-ribbon" id="copilot-meta-ribbon">
+                  <span class="copilot-meta-item" id="copilot-run-label">Run: —</span>
+                  <span class="meta-dot">•</span>
+                  <span class="copilot-meta-item" id="copilot-engine-label">Path: —</span>
+                </div>
+
+                <div class="copilot-answer-box" id="copilot-answer-text">
+                  Select a suggested question above or type an operational query to consult the copilot.
+                </div>
+
+                <!-- Expandable Grounded Sources List -->
+                <div class="copilot-sources-section" id="copilot-sources-section">
+                  <button class="copilot-sources-toggle" id="copilot-sources-toggle" type="button">
+                    <span class="sources-toggle-icon">▶</span>
+                    <span class="sources-toggle-text">Data sources & grounded fields (<span id="copilot-source-count">0</span>)</span>
+                  </button>
+                  <div class="copilot-sources-content hidden" id="copilot-sources-content">
+                    <ul class="copilot-sources-list font-mono" id="copilot-sources-list"></ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sitrep Quick Download in Tab -->
+              <div class="content-card sitrep-quick-card">
+                <h4 class="card-title">Official Situation Report (SitRep)</h4>
+                <p class="card-subtitle">Grounded single-page report generated directly from verified run outputs.</p>
+                <div class="sitrep-btn-row">
+                  <a href="#" id="tab-sitrep-en-btn" class="btn-action btn-outline" target="_blank">Download SitRep (EN PDF)</a>
+                  <a href="#" id="tab-sitrep-ne-btn" class="btn-action btn-outline" target="_blank">Download SitRep (NE PDF)</a>
+                </div>
+              </div>
+            </section>
+
+          </div>
         </div>
       </aside>
     </main>
@@ -485,7 +675,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title-wrap">
-          <h3 class="modal-title" data-i18n="launch_new_analysis">Launch Disaster Assessment</h3>
+          <h3 class="modal-title" data-i18n="launch_new_analysis">Launch disaster assessment</h3>
           <p class="modal-subtitle">Execute spaceborne SAR + Optical pipeline (L0 - L5) for an event</p>
         </div>
         <button id="btn-close-modal" class="modal-close-btn" title="Close">&times;</button>
@@ -493,18 +683,18 @@
       
       <form id="new-run-form">
         <div class="form-group">
-          <label for="input-event-name" class="form-label">Event Name <span class="form-optional">(optional)</span></label>
-          <input type="text" id="input-event-name" class="form-input" placeholder="e.g., Trishuli Monsoon Inundation" />
+          <label for="input-event-name" class="form-label">Event name <span class="form-optional">(optional)</span></label>
+          <input type="text" id="input-event-name" class="form-input" placeholder="e.g. Trishuli Monsoon Inundation" />
           <div class="form-hint">Stored in run metadata and displayed as main assessment title</div>
         </div>
 
         <div class="form-row">
           <div class="form-group flex-1">
-            <label for="input-event-date" class="form-label">Event Date <span class="form-required">*</span></label>
+            <label for="input-event-date" class="form-label">Event date <span class="form-required">*</span></label>
             <input type="date" id="input-event-date" class="form-input font-mono" required />
           </div>
           <div class="form-group flex-1">
-            <label class="form-label">Quick Presets</label>
+            <label class="form-label">Quick presets</label>
             <div class="preset-buttons">
               <button type="button" class="btn-preset" data-preset="trishuli">Trishuli</button>
               <button type="button" class="btn-preset" data-preset="melamchi">Melamchi</button>
@@ -515,26 +705,26 @@
 
         <div class="form-group">
           <div class="form-label-row">
-            <label class="form-label">Bounding Box (WGS84 Coordinates) <span class="form-required">*</span></label>
+            <label class="form-label">Bounding box (WGS84 coordinates) <span class="form-required">*</span></label>
             <button type="button" id="btn-draw-bbox" class="btn-text-action">
-              <span>✏️</span> Draw on Map
+              <span>✏️</span> Draw on map
             </button>
           </div>
           <div class="bbox-grid">
             <div class="bbox-field">
-              <label for="input-bbox-w">West (Min Lon)</label>
+              <label for="input-bbox-w">West (Min lon)</label>
               <input type="number" step="0.0001" id="input-bbox-w" class="form-input font-mono" placeholder="85.3000" required />
             </div>
             <div class="bbox-field">
-              <label for="input-bbox-s">South (Min Lat)</label>
+              <label for="input-bbox-s">South (Min lat)</label>
               <input type="number" step="0.0001" id="input-bbox-s" class="form-input font-mono" placeholder="28.1000" required />
             </div>
             <div class="bbox-field">
-              <label for="input-bbox-e">East (Max Lon)</label>
+              <label for="input-bbox-e">East (Max lon)</label>
               <input type="number" step="0.0001" id="input-bbox-e" class="form-input font-mono" placeholder="85.4200" required />
             </div>
             <div class="bbox-field">
-              <label for="input-bbox-n">North (Max Lat)</label>
+              <label for="input-bbox-n">North (Max lat)</label>
               <input type="number" step="0.0001" id="input-bbox-n" class="form-input font-mono" placeholder="28.2500" required />
             </div>
           </div>
@@ -545,7 +735,7 @@
         <div class="modal-footer">
           <button type="button" id="btn-cancel-new-run" class="btn-secondary">Cancel</button>
           <button type="submit" id="btn-submit-new-run" class="btn-primary">
-            <span class="btn-icon">🚀</span> Start Assessment Pipeline
+            <span class="btn-icon">🚀</span> Start assessment pipeline
           </button>
         </div>
       </form>

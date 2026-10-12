@@ -703,8 +703,7 @@ class FactStore:
         """Loads verified runs manifest matching the dashboard (src/dashboard/runs_manifest.json)."""
         candidate_paths = [
             Path(__file__).resolve().parents[1] / "dashboard" / "runs_manifest.json",
-            Path("/home/zeus/Downloads/project1-copilot/src/dashboard/runs_manifest.json"),
-            Path("/home/zeus/Downloads/project1-dashboard/src/dashboard/runs_manifest.json"),
+            Path("src/dashboard/runs_manifest.json").resolve(),
         ]
         for p in candidate_paths:
             if p.exists():
@@ -720,12 +719,7 @@ class FactStore:
         Grid and debug runs are NEVER listed or loadable.
         """
         if runs_root is None:
-            candidates = [
-                Path("runs").resolve(),
-                Path("/home/zeus/Downloads/project1-copilot/runs").resolve(),
-                Path("/home/zeus/Downloads/project1/runs").resolve(),
-            ]
-            root = next((c for c in candidates if c.exists()), Path("runs").resolve())
+            root = Path("runs").resolve()
         else:
             root = Path(runs_root).resolve()
 

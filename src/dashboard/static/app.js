@@ -197,14 +197,43 @@ let s2PostOverlay = null;
 // Initialize on Load
 document.addEventListener("DOMContentLoaded", () => {
   initMap();
+  initTabs();
+  initProjectorRelief();
   initLanguageToggle();
   initLegendControls();
   initFilterControls();
   initS2Slider();
   initHistoryFilter();
   initPhase2Controls();
+  initCopilot();
+  initSitrepControls();
   loadRunsList();
 });
+
+function initTabs() {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      
+      btn.classList.add("active");
+      const targetId = btn.getAttribute("data-tab");
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) targetPanel.classList.add("active");
+    });
+  });
+}
+
+function initProjectorRelief() {
+  const btn = document.getElementById("btn-toggle-relief");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const mapEl = document.getElementById("map");
+    mapEl.classList.toggle("projector-relief");
+    btn.classList.toggle("active");
+  });
+}
 
 function initMap() {
   map = L.map("map", {
@@ -216,13 +245,32 @@ function initMap() {
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
+  // Status bar cursor coordinates and zoom updates
+  map.on("mousemove", (e) => {
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+    const latDir = lat >= 0 ? "N" : "S";
+    const lngDir = lng >= 0 ? "E" : "W";
+    const elCoords = document.getElementById("status-cursor-coords");
+    if (elCoords) {
+      elCoords.textContent = `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
+    }
+  });
+
+  map.on("zoomend", () => {
+    const elZoom = document.getElementById("status-zoom");
+    if (elZoom) {
+      elZoom.textContent = `Zoom ${map.getZoom()}`;
+    }
+  });
+
   // Custom panes to ensure raster basemaps stay below vector overlays
   map.createPane("basemapImagePane");
   map.getPane("basemapImagePane").style.zIndex = 150;
   map.createPane("basemapVectorPane");
   map.getPane("basemapVectorPane").style.zIndex = 250;
 
-  // 1. Offline Basemap: Copernicus DEM-30 hillshade + OSM waterways + OSM roads + OSM place labels
+  // 1. Offline Basemap: Copernicus DEM GLO-30 hillshade + OSM waterways + OSM roads + OSM place labels
   baseLayers.offline = L.layerGroup();
 
   // 2. Sentinel-2 True-Colour Composite basemap (offline composite from run cache)
@@ -245,7 +293,7 @@ function initMap() {
 async function updateOfflineBasemap(runId, data) {
   baseLayers.offline.clearLayers();
 
-  // 1. Copernicus DEM-30 Topographic Relief Hillshade
+  // 1. Copernicus DEM GLO-30 (30 m) Topographic Relief Hillshade
   try {
     const metaResp = await fetch(`/api/runs/${runId}/basemap/meta`);
     if (metaResp.ok) {
@@ -254,8 +302,9 @@ async function updateOfflineBasemap(runId, data) {
         const hillshade = L.imageOverlay(`/api/runs/${runId}/basemap/hillshade`, meta.bounds, {
           opacity: 1.0,
           interactive: false,
+          className: "hillshade-overlay",
           pane: "basemapImagePane",
-          attribution: 'Copernicus DEM-30 &copy; DLR e.V. 2010-2014 &copy; Airbus Defence and Space GmbH 2014-2018'
+          attribution: 'Copernicus DEM GLO-30 (30 m) &copy; DLR e.V. 2010-2014 &copy; Airbus Defence and Space GmbH 2014-2018'
         });
         baseLayers.offline.addLayer(hillshade);
       }
@@ -264,7 +313,7 @@ async function updateOfflineBasemap(runId, data) {
     console.warn("Could not load hillshade:", e);
   }
 
-  // 2. OSM Waterways (Rivers)
+  // 2. OSM Waterways (Rivers: thin, muted grey-blue clearly distinguishable from flood hazard)
   try {
     const riverResp = await fetch(`/api/runs/${runId}/basemap/waterways`);
     if (riverResp.ok) {
@@ -272,9 +321,9 @@ async function updateOfflineBasemap(runId, data) {
       const riverLayer = L.geoJSON(riverGeo, {
         pane: "basemapVectorPane",
         style: {
-          color: "#2563eb",
-          weight: 2.0,
-          opacity: 0.85
+          color: "#64748b",
+          weight: 1.2,
+          opacity: 0.65
         },
         interactive: false
       });
@@ -292,9 +341,9 @@ async function updateOfflineBasemap(runId, data) {
       const roadsLayer = L.geoJSON(roadsGeo, {
         pane: "basemapVectorPane",
         style: {
-          color: "#475569",
-          weight: 1.2,
-          opacity: 0.65
+          color: "#94a3b8",
+          weight: 1.0,
+          opacity: 0.5
         },
         interactive: false
       });
@@ -657,6 +706,74 @@ function zoomToDamagedArea(data) {
 }
 
 // ==========================================================================
+// Executive Summary Sentence & Bridges Breakdown Formatters
+// ==========================================================================
+function buildExecutiveSummary(data, m, isFlat) {
+  const b = m.buildings || {};
+  const br = m.bridges || {};
+  const cuts = m.cutoffs || {};
+  const scenKey = currentScenario === "optimistic" ? "optimistic" : "pessimistic";
+  const river = data.primary_river;
+
+  let bldText = "";
+  if (isFlat) {
+    bldText = `${b.flooded || b.total_affected || 0} buildings flooded`;
+  } else {
+    if (b.destroyed > 0) {
+      bldText = `${b.destroyed} buildings destroyed`;
+    } else if (b.total_affected > 0) {
+      bldText = `${b.total_affected} buildings affected`;
+    } else {
+      bldText = `0 buildings destroyed`;
+    }
+  }
+
+  let brText = "";
+  if (isFlat) {
+    brText = `${br.flooded || 0} bridges flooded / impassable`;
+  } else {
+    if (br.destroyed > 0) {
+      brText = `${br.destroyed} bridges destroyed`;
+    } else if (br.possibly_damaged > 0) {
+      brText = `${br.possibly_damaged} bridges possibly damaged`;
+    } else {
+      brText = `0 bridges destroyed`;
+    }
+  }
+
+  const vehCut = cuts[`vehicle_${scenKey}`] !== undefined ? cuts[`vehicle_${scenKey}`] : (cuts.vehicle_pessimistic || cuts.vehicle_optimistic || 0);
+  const noGround = cuts[`no_ground_access_${scenKey}`] !== undefined ? cuts[`no_ground_access_${scenKey}`] : (cuts.no_ground_access_pessimistic || cuts.no_ground_access_optimistic || 0);
+  const cutText = `${vehCut} settlements cut off by road (${noGround} with no ground access)`;
+
+  const riverText = river ? ` along ${river}` : "";
+
+  return `${bldText}, ${brText}, ${cutText}${riverText}.`;
+}
+
+function formatBridgesSummary(br, isFlat) {
+  const assessed = br.total_assessed || br.total_count || br.total_affected || 0;
+  if (isFlat) {
+    if (br.flooded > 0 && br.possibly_flooded > 0) {
+      return `${br.flooded} flooded, ${br.possibly_flooded} possibly flooded (${assessed} assessed)`;
+    } else if (br.flooded > 0) {
+      return `${br.flooded} flooded / impassable (${assessed} assessed)`;
+    } else {
+      return `0 affected (${assessed} assessed)`;
+    }
+  } else {
+    if (br.destroyed > 0 && br.possibly_damaged > 0) {
+      return `${br.destroyed} destroyed, ${br.possibly_damaged} possibly damaged (${assessed} assessed)`;
+    } else if (br.destroyed > 0) {
+      return `${br.destroyed} destroyed (${assessed} assessed)`;
+    } else if (br.possibly_damaged > 0) {
+      return `${br.possibly_damaged} possibly damaged (${assessed} assessed)`;
+    } else {
+      return `0 affected (${assessed} assessed)`;
+    }
+  }
+}
+
+// ==========================================================================
 // Side Panel: 4 Operational Sections
 // ==========================================================================
 function updateSidePanel(data) {
@@ -664,35 +781,98 @@ function updateSidePanel(data) {
   const m = data.metrics || {};
   const isFlat = data.regime === "flat_floodplain";
 
-  // RUN HEADER (Item 3: Main title & subtitle)
+  // HEADER TITLES & SUBTITLE ROW
   const titleEl = document.getElementById("run-main-title");
-  const subEl = document.getElementById("run-subtitle");
   if (titleEl) {
     titleEl.textContent = data.main_title || data.label || "Disaster Assessment";
   }
-  if (subEl) {
-    if (data.subtitle) {
-      subEl.textContent = data.subtitle;
-      subEl.classList.remove("hidden");
+
+  const dateEl = document.getElementById("val-header-date");
+  if (dateEl) dateEl.textContent = data.event_date || "—";
+
+  const regimeEl = document.getElementById("val-header-regime");
+  const regimeName = isFlat ? dict.flat_floodplain : dict.steep_valley;
+  if (regimeEl) regimeEl.textContent = regimeName;
+
+  const valBadgeEl = document.getElementById("val-header-validation");
+  const statusStr = data.validation_status || "not validated against an official map (practice run)";
+  if (valBadgeEl) {
+    if (statusStr.includes("EMSR") || (!statusStr.includes("not validated") && !statusStr.includes("weak"))) {
+      valBadgeEl.textContent = statusStr;
+      valBadgeEl.classList.add("verified");
     } else {
-      subEl.textContent = "";
-      subEl.classList.add("hidden");
+      valBadgeEl.textContent = "Practice assessment (unvalidated)";
+      valBadgeEl.classList.remove("verified");
     }
   }
 
-  // SECTION 1: WHAT HAPPENED
+  // 1-SENTENCE EXECUTIVE BRIEF (Strictly Data-Driven Template)
+  const summaryBox = document.getElementById("summary-sentence-box");
+  if (summaryBox) {
+    summaryBox.textContent = buildExecutiveSummary(data, m, isFlat);
+  }
+
+  // DATA CALCULATIONS
+  const areas = m.areas || {};
+  const b = m.buildings || {};
+  const br = m.bridges || {};
+  const r = m.roads_km || {};
+  const cuts = m.cutoffs || {};
+
+  const scenKey = currentScenario === "optimistic" ? "optimistic" : "pessimistic";
+  const noGroundCount = cuts[`no_ground_access_${scenKey}`] !== undefined ? cuts[`no_ground_access_${scenKey}`] : (cuts.no_ground_access_pessimistic || cuts.no_ground_access_optimistic || 0);
+  const vehCutCount = cuts[`vehicle_${scenKey}`] !== undefined ? cuts[`vehicle_${scenKey}`] : (cuts.vehicle_pessimistic || cuts.vehicle_optimistic || 0);
+
+  // 4 KEY NUMBERS (2x2 GRID)
+  const kpiValB = document.getElementById("kpi-val-buildings");
+  const kpiLblB = document.getElementById("kpi-lbl-buildings");
+  if (kpiValB) kpiValB.textContent = isFlat ? (b.flooded || b.total_affected || 0) : (b.destroyed || 0);
+  if (kpiLblB) kpiLblB.innerHTML = `<span class="dot-semantic dot-destroyed"></span><span>${isFlat ? "Buildings flooded" : "Buildings destroyed"}</span>`;
+
+  const kpiValBr = document.getElementById("kpi-val-bridges");
+  const kpiLblBr = document.getElementById("kpi-lbl-bridges");
+  if (kpiValBr) kpiValBr.textContent = isFlat ? (br.flooded || 0) : (br.destroyed || 0);
+  if (kpiLblBr) kpiLblBr.innerHTML = `<span class="dot-semantic dot-destroyed"></span><span>${formatBridgesSummary(br, isFlat)}</span>`;
+
+  const kpiValS = document.getElementById("kpi-val-settlements");
+  const kpiLblS = document.getElementById("kpi-lbl-settlements");
+  if (kpiValS) kpiValS.textContent = vehCutCount;
+  if (kpiLblS) kpiLblS.innerHTML = `<span class="dot-semantic dot-cutoff"></span><span>${vehCutCount} cut off (${noGroundCount} no ground)</span>`;
+
+  const kpiValR = document.getElementById("kpi-val-roads");
+  const kpiLblR = document.getElementById("kpi-lbl-roads");
+  if (kpiValR) kpiValR.textContent = `${(r.destroyed_km !== undefined ? r.destroyed_km.toFixed(1) : "0.0")} km`;
+  if (kpiLblR) kpiLblR.innerHTML = `<span class="dot-semantic dot-destroyed"></span><span>${isFlat ? "Roads impassable" : "Roads severed"}</span>`;
+
+  // MICRO-LEGEND STATISTICS
+  const legObs = document.getElementById("legend-stat-obs");
+  if (legObs) legObs.textContent = `${(areas.observed_km2 !== undefined ? areas.observed_km2.toFixed(2) : "0.00")} km²`;
+  const legInf = document.getElementById("legend-stat-inf");
+  if (legInf) legInf.textContent = `${(areas.inferred_km2 !== undefined ? areas.inferred_km2.toFixed(2) : "0.00")} km²`;
+  const legBld = document.getElementById("legend-stat-buildings");
+  if (legBld) legBld.textContent = b.total_affected || 0;
+  const legBr = document.getElementById("legend-stat-bridges");
+  if (legBr) legBr.textContent = br.total_affected || 0;
+  const legRd = document.getElementById("legend-stat-roads");
+  if (legRd) legRd.textContent = `${(r.destroyed_km !== undefined ? r.destroyed_km.toFixed(1) : "0.0")} km`;
+  const legCut = document.getElementById("legend-stat-cutoff-road");
+  if (legCut) legCut.textContent = vehCutCount;
+  const legNoG = document.getElementById("legend-stat-no-ground");
+  if (legNoG) legNoG.textContent = noGroundCount;
+
+  // TAB 1: IMPACT
   document.getElementById("val-event-date").textContent = data.event_date || "—";
-  const regimeName = isFlat ? dict.flat_floodplain : dict.steep_valley;
   document.getElementById("val-regime").textContent = regimeName;
   document.getElementById("val-image-dates").textContent = data.image_dates_summary || "—";
 
-  // Flat Terrain UI Adaptations (Item 5 & 6)
+  document.getElementById("val-area-obs").textContent = (areas.observed_km2 !== undefined ? areas.observed_km2.toFixed(2) : "0.00") + " km²";
+  document.getElementById("val-area-inf").textContent = (areas.inferred_km2 !== undefined ? areas.inferred_km2.toFixed(2) : "0.00") + " km²";
+
+  // Flat Terrain UI Label Adaptations
   const lblRoadsLayer = document.getElementById("lbl-roads-layer");
   const lblRoadsImpact = document.getElementById("lbl-roads-impact-title");
   const lblTagDestroyed = document.getElementById("lbl-tag-destroyed");
   const lblTagPossible = document.getElementById("lbl-tag-possible");
-  const lblLegendDestroyed = document.getElementById("lbl-legend-destroyed");
-  const lblLegendDamaged = document.getElementById("lbl-legend-damaged");
   const lblNoGroundDesc = document.getElementById("lbl-no-ground-desc");
 
   if (isFlat) {
@@ -700,28 +880,16 @@ function updateSidePanel(data) {
     if (lblRoadsImpact) lblRoadsImpact.textContent = dict.roads_damaged_flat;
     if (lblTagDestroyed) lblTagDestroyed.textContent = dict.legend_flooded;
     if (lblTagPossible) lblTagPossible.textContent = dict.legend_possibly_flooded;
-    if (lblLegendDestroyed) lblLegendDestroyed.textContent = dict.legend_flooded;
-    if (lblLegendDamaged) lblLegendDamaged.textContent = dict.legend_possibly_flooded;
     if (lblNoGroundDesc) lblNoGroundDesc.textContent = dict.airdrop_only_flat;
   } else {
     if (lblRoadsLayer) lblRoadsLayer.textContent = dict.road_network;
     if (lblRoadsImpact) lblRoadsImpact.textContent = dict.roads_damaged;
     if (lblTagDestroyed) lblTagDestroyed.textContent = dict.legend_destroyed;
     if (lblTagPossible) lblTagPossible.textContent = dict.legend_possibly_damaged;
-    if (lblLegendDestroyed) lblLegendDestroyed.textContent = dict.legend_destroyed;
-    if (lblLegendDamaged) lblLegendDamaged.textContent = dict.legend_damaged;
     if (lblNoGroundDesc) lblNoGroundDesc.textContent = dict.airdrop_only_label;
   }
 
-  // Areas
-  const areas = m.areas || {};
-  document.getElementById("val-area-obs").textContent = (areas.observed_km2 !== undefined ? areas.observed_km2.toFixed(2) : "0.00") + " km²";
-  document.getElementById("val-area-inf").textContent = (areas.inferred_km2 !== undefined ? areas.inferred_km2.toFixed(2) : "0.00") + " km²";
-  const elPerm = document.getElementById("val-area-perm");
-  if (elPerm) elPerm.textContent = (areas.permanent_water_km2 !== undefined ? areas.permanent_water_km2.toFixed(2) : "0.00") + " km²";
-
-  // Buildings
-  const b = m.buildings || {};
+  // Buildings Breakdown
   document.getElementById("val-b-affected").textContent = b.total_affected || 0;
   const bTags = document.getElementById("b-breakdown-tags");
   bTags.innerHTML = "";
@@ -730,33 +898,33 @@ function updateSidePanel(data) {
   if (b.possibly_damaged) bTags.innerHTML += `<span class="tag-pill tag-damaged">Possibly damaged: <b>${b.possibly_damaged}</b></span>`;
   if (b.flooded) bTags.innerHTML += `<span class="tag-pill tag-flooded">Flooded: <b>${b.flooded}</b></span>`;
   if (b.possibly_flooded) bTags.innerHTML += `<span class="tag-pill tag-flooded">Possibly flooded: <b>${b.possibly_flooded}</b></span>`;
+  if (!b.destroyed && !b.damaged && !b.possibly_damaged && !b.flooded && !b.possibly_flooded) {
+    bTags.innerHTML = `<span class="tag-pill">0 affected buildings</span>`;
+  }
 
-  // Bridges
-  const br = m.bridges || {};
-  document.getElementById("val-br-affected").textContent = br.total_affected || 0;
+  // Bridges Breakdown
+  const valBrAff = document.getElementById("val-br-affected");
+  if (valBrAff) valBrAff.textContent = formatBridgesSummary(br, isFlat);
+
   const brTags = document.getElementById("br-breakdown-tags");
   brTags.innerHTML = "";
   if (br.destroyed) brTags.innerHTML += `<span class="tag-pill tag-destroyed">Destroyed: <b>${br.destroyed}</b></span>`;
   if (br.possibly_damaged) brTags.innerHTML += `<span class="tag-pill tag-damaged">Possibly damaged: <b>${br.possibly_damaged}</b></span>`;
   if (br.flooded) brTags.innerHTML += `<span class="tag-pill tag-flooded">Flooded / impassable: <b>${br.flooded}</b></span>`;
   if (br.possibly_flooded) brTags.innerHTML += `<span class="tag-pill tag-flooded">Possibly flooded: <b>${br.possibly_flooded}</b></span>`;
-  if (!br.destroyed && !br.possibly_damaged && !br.flooded && !br.possibly_flooded) brTags.innerHTML = `<span class="tag-pill">0 affected bridges</span>`;
+  if (!br.destroyed && !br.possibly_damaged && !br.flooded && !br.possibly_flooded) {
+    brTags.innerHTML = `<span class="tag-pill">0 affected bridges</span>`;
+  }
 
-  // Roads: Destroyed and possibly damaged km shown separately
-  const r = m.roads_km || {};
+  // Roads Breakdown
   document.getElementById("val-road-destroyed-km").textContent = (r.destroyed_km !== undefined ? r.destroyed_km.toFixed(1) : "0.0") + " km";
   document.getElementById("val-road-possible-km").textContent = (r.possibly_damaged_km !== undefined ? r.possibly_damaged_km.toFixed(1) : "0.0") + " km";
 
-  // SECTION 2: WHO IS CUT OFF (Dual Header Stats - Item 10)
-  const cuts = m.cutoffs || {};
-  const scenKey = currentScenario === "optimistic" ? "optimistic" : "pessimistic";
-  const noGroundCount = cuts[`no_ground_access_${scenKey}`] || 0;
-  const vehCutCount = cuts[`vehicle_${scenKey}`] || 0;
-
+  // TAB 2: WHO IS CUT OFF
   document.getElementById("val-no-ground-count").textContent = noGroundCount;
   document.getElementById("val-vehicle-cut-count").textContent = vehCutCount;
 
-  // SECTION 3: WHAT TO REPAIR FIRST (Actionable Package Logic - Item 2)
+  // TAB 3: WHAT TO REPAIR FIRST (Actionable Package Logic)
   const rp = m.repair_package_1 || {};
   const repHeadline = document.getElementById("repair-headline-text");
   const repSub = document.getElementById("repair-subtext");
@@ -785,12 +953,11 @@ function updateSidePanel(data) {
     repList.innerHTML = `<li class="empty-list-item">No specific road/bridge repairs found</li>`;
   }
 
-  // SECTION 4: HOW SURE (Provenance Tagging - Item 4)
+  // TAB 4: HOW SURE (Validation & Provenance)
   const banner = document.getElementById("validation-banner");
   const bannerText = document.getElementById("banner-text");
   const bannerProv = document.getElementById("banner-provenance");
 
-  const statusStr = data.validation_status || "not validated against an official map (practice run)";
   bannerText.textContent = statusStr;
   bannerProv.textContent = `Source: ${data.validation_source_file || "run_summary.json"} [${data.validation_source_field || "validation_status"}]`;
 
@@ -904,41 +1071,62 @@ async function loadBuildingsLayer(runId) {
       },
       style: (feature) => {
         const grade = feature.properties.damage_grade || "Not affected";
-        if (grade === "Destroyed" || grade === "Flooded") {
-          return { color: "#ffffff", fillColor: "#dc2626", fillOpacity: 0.9, weight: 1.5 };
-        } else if (grade === "Damaged" || grade === "Possibly flooded") {
-          return { color: "#ffffff", fillColor: "#ea580c", fillOpacity: 0.85, weight: 1.5 };
+        if (grade === "Destroyed") {
+          return { color: "#b91c1c", fillColor: "#dc2626", fillOpacity: 0.85, weight: 1.5 };
+        } else if (grade === "Flooded") {
+          return { color: "#1d4ed8", fillColor: "#2563eb", fillOpacity: 0.85, weight: 1.5 };
+        } else if (grade === "Damaged") {
+          return { color: "#c2410c", fillColor: "#ea580c", fillOpacity: 0.85, weight: 1.5 };
+        } else if (grade === "Possibly flooded") {
+          return { color: "#0369a1", fillColor: "#0284c7", fillOpacity: 0.85, weight: 1.5 };
         } else if (grade === "Possibly damaged") {
-          return { color: "#ffffff", fillColor: "#f59e0b", fillOpacity: 0.8, weight: 1.5 };
+          return { color: "#b45309", fillColor: "#d97706", fillOpacity: 0.8, weight: 1.5 };
         } else if (grade.includes("cloud") || grade.includes("Unknown")) {
           return { color: "#64748b", fillColor: "#64748b", fillOpacity: 0.25, weight: 0.8, dashArray: "3, 3" };
         }
-        return { color: "#475569", fillColor: "#475569", fillOpacity: 0.2, weight: 0.5 };
+        return { color: "#94a3b8", fillColor: "#cbd5e1", fillOpacity: 0.2, weight: 0.5 };
       },
       pointToLayer: (feature, latlng) => {
         const grade = feature.properties.damage_grade || "Not affected";
-        let color = "#475569";
+        let fill = "#64748b";
+        let stroke = "#475569";
         let radius = 3;
-        let opacity = 0.6;
-        let fillOpacity = 0.5;
+        let opacity = 0.8;
+        let fillOpacity = 0.7;
 
-        if (grade === "Destroyed" || grade === "Flooded") {
-          color = "#dc2626";
+        if (grade === "Destroyed") {
+          fill = "#dc2626";
+          stroke = "#b91c1c";
           radius = 5.5;
           opacity = 1;
           fillOpacity = 0.9;
-        } else if (grade === "Damaged" || grade === "Possibly flooded") {
-          color = "#ea580c";
+        } else if (grade === "Flooded") {
+          fill = "#2563eb";
+          stroke = "#1d4ed8";
+          radius = 5.5;
+          opacity = 1;
+          fillOpacity = 0.9;
+        } else if (grade === "Damaged") {
+          fill = "#ea580c";
+          stroke = "#c2410c";
+          radius = 4.5;
+          opacity = 1;
+          fillOpacity = 0.85;
+        } else if (grade === "Possibly flooded") {
+          fill = "#0284c7";
+          stroke = "#0369a1";
           radius = 4.5;
           opacity = 1;
           fillOpacity = 0.85;
         } else if (grade === "Possibly damaged") {
-          color = "#f59e0b";
+          fill = "#d97706";
+          stroke = "#b45309";
           radius = 4;
           opacity = 0.9;
           fillOpacity = 0.8;
         } else if (grade.includes("cloud") || grade.includes("Unknown")) {
-          color = "#64748b";
+          fill = "#64748b";
+          stroke = "#64748b";
           radius = 2.5;
           opacity = 0.5;
           fillOpacity = 0.4;
@@ -946,9 +1134,9 @@ async function loadBuildingsLayer(runId) {
 
         return L.circleMarker(latlng, {
           radius: radius,
-          fillColor: color,
-          color: "#ffffff",
-          weight: 1,
+          fillColor: fill,
+          color: stroke,
+          weight: 1.5,
           opacity: opacity,
           fillOpacity: fillOpacity
         });
@@ -1222,9 +1410,22 @@ function updateSettlementsFilter() {
     }
   });
 
-  document.getElementById("val-no-ground-count").textContent = noGroundTotal;
-  document.getElementById("val-vehicle-cut-count").textContent = vehicleCutTotal;
-  countBadge.textContent = `${cutoffs.length} items`;
+  const elNoGround = document.getElementById("val-no-ground-count");
+  if (elNoGround) elNoGround.textContent = noGroundTotal;
+  const elVehCut = document.getElementById("val-vehicle-cut-count");
+  if (elVehCut) elVehCut.textContent = vehicleCutTotal;
+  if (countBadge) countBadge.textContent = `${cutoffs.length} items`;
+
+  // Sync micro-legend and KPI settlement counts
+  const legCut = document.getElementById("legend-stat-cutoff-road");
+  if (legCut) legCut.textContent = vehicleCutTotal;
+  const legNoG = document.getElementById("legend-stat-no-ground");
+  if (legNoG) legNoG.textContent = noGroundTotal;
+
+  const kpiValS = document.getElementById("kpi-val-settlements");
+  const kpiLblS = document.getElementById("kpi-lbl-settlements");
+  if (kpiValS) kpiValS.textContent = vehicleCutTotal;
+  if (kpiLblS) kpiLblS.innerHTML = `<span class="dot-semantic dot-cutoff"></span><span>${vehicleCutTotal} cut off (${noGroundTotal} no ground)</span>`;
 
   if (cutoffs.length === 0) {
     listEl.innerHTML = `<li class="empty-list-item">No cut-off settlements under current transport filter.</li>`;
@@ -1767,4 +1968,163 @@ function addReadyTag(text) {
   tag.className = "tag-ready";
   tag.textContent = text;
   container.appendChild(tag);
+}
+
+/* ==========================================
+   PHASE 3: COPILOT & SITREP INTERACTION
+   ========================================== */
+function initSitrepControls() {
+  const dropdownWrap = document.getElementById("sitrep-dropdown-wrap");
+  const btn = document.getElementById("btn-download-sitrep");
+  const menu = document.getElementById("sitrep-menu");
+  const linkEn = document.getElementById("link-sitrep-en");
+  const linkNe = document.getElementById("link-sitrep-ne");
+  const tabEn = document.getElementById("tab-sitrep-en-btn");
+  const tabNe = document.getElementById("tab-sitrep-ne-btn");
+
+  if (btn && menu) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", () => {
+      menu.classList.add("hidden");
+    });
+  }
+
+  function downloadSitrep(lang) {
+    if (!currentRunId) {
+      alert("Please select a disaster assessment run first.");
+      return;
+    }
+    const url = `/api/runs/${currentRunId}/sitrep?lang=${lang}&format=pdf`;
+    window.open(url, "_blank");
+  }
+
+  if (linkEn) linkEn.addEventListener("click", (e) => { e.preventDefault(); downloadSitrep("en"); });
+  if (linkNe) linkNe.addEventListener("click", (e) => { e.preventDefault(); downloadSitrep("ne"); });
+  if (tabEn) tabEn.addEventListener("click", (e) => { e.preventDefault(); downloadSitrep("en"); });
+  if (tabNe) tabNe.addEventListener("click", (e) => { e.preventDefault(); downloadSitrep("ne"); });
+}
+
+function initCopilot() {
+  const form = document.getElementById("copilot-form");
+  const input = document.getElementById("copilot-input");
+  const chips = document.querySelectorAll(".copilot-chip");
+  const sourcesToggle = document.getElementById("copilot-sources-toggle");
+  const sourcesContent = document.getElementById("copilot-sources-content");
+
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      const q = chip.getAttribute("data-q");
+      if (input) input.value = q;
+      askCopilot(q);
+    });
+  });
+
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q) return;
+      askCopilot(q);
+    });
+  }
+
+  if (sourcesToggle && sourcesContent) {
+    sourcesToggle.addEventListener("click", () => {
+      sourcesContent.classList.toggle("hidden");
+      const icon = sourcesToggle.querySelector(".sources-toggle-icon");
+      if (icon) {
+        icon.textContent = sourcesContent.classList.contains("hidden") ? "▶" : "▼";
+      }
+    });
+  }
+}
+
+async function askCopilot(question) {
+  if (!currentRunId) {
+    alert("Please select an assessment run first.");
+    return;
+  }
+
+  const answerBox = document.getElementById("copilot-answer-text");
+  const runLabelEl = document.getElementById("copilot-run-label");
+  const engineLabelEl = document.getElementById("copilot-engine-label");
+  const badgeEl = document.getElementById("copilot-mode-badge");
+  const countEl = document.getElementById("copilot-source-count");
+  const listEl = document.getElementById("copilot-sources-list");
+  const sendBtn = document.getElementById("copilot-send-btn");
+
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Thinking...";
+  }
+
+  if (answerBox) {
+    answerBox.textContent = `Consulting copilot on "${question}"...`;
+  }
+
+  try {
+    const res = await fetch(`/api/runs/${currentRunId}/copilot/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question })
+    });
+
+    const data = await res.json();
+
+    if (runLabelEl) runLabelEl.textContent = `Run: ${data.run_label || currentRunId}`;
+    if (engineLabelEl) {
+      const provStr = data.provider === "offline" ? "Offline rule engine" : `${data.provider}/${data.model}`;
+      engineLabelEl.textContent = `Path: ${data.answer_path || "offline"} (${provStr})`;
+    }
+
+    if (badgeEl) {
+      if (data.provider === "offline" || (data.answer && data.answer.includes("[ANSWERED IN OFFLINE MODE]"))) {
+        badgeEl.textContent = "Offline verified";
+        badgeEl.style.background = "#f1f5f9";
+        badgeEl.style.color = "#475569";
+      } else {
+        badgeEl.textContent = `${data.provider}`;
+        badgeEl.style.background = "#dbeafe";
+        badgeEl.style.color = "#1e40af";
+      }
+    }
+
+    if (answerBox) {
+      answerBox.textContent = data.answer || "No response received.";
+    }
+
+    // Populate sources accordion
+    const sources = data.sources || [];
+    if (countEl) countEl.textContent = sources.length;
+    if (listEl) {
+      listEl.innerHTML = "";
+      if (sources.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "General assessed boundaries (processed outputs)";
+        listEl.appendChild(li);
+      } else {
+        sources.forEach(s => {
+          const li = document.createElement("li");
+          const valStr = s.value !== undefined ? ` = ${s.value}${s.unit && s.unit !== "count" ? " " + s.unit : ""}` : "";
+          li.textContent = `${s.file} [${s.field}]${valStr}`;
+          listEl.appendChild(li);
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error("Copilot error:", err);
+    if (answerBox) {
+      answerBox.textContent = `[ANSWERED IN OFFLINE MODE]\nError querying copilot: ${err.message}`;
+    }
+  } finally {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Ask";
+    }
+  }
 }

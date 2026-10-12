@@ -313,15 +313,17 @@ class SitRepGenerator:
         attributions = (
             f"Contains modified Copernicus Sentinel data {event_year}.\n"
             "Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.\n"
-            "© OpenStreetMap contributors."
+            "© OpenStreetMap contributors.\n"
+            'Training dataset citation: Bountos et al., "Kuro Siwo: 33 billion m² under the water. A global multi-temporal satellite dataset for rapid flood mapping", NeurIPS 2024.'
         )
 
-        pkg1 = self.store.get_value("repair.package_1", {}) if isinstance(self.store.get_value("repair.package_1"), dict) else {}
-        pkg1_elem_cnt = str(self.store.get_value("repair.package_1.element_count", pkg1.get("element_count", "not computed")))
-        pkg1_set_cnt = str(self.store.get_value("repair.package_1.settlements_count", pkg1.get("settlements_count", "not computed")))
-        pkg1_bld_cnt = str(self.store.get_value("repair.package_1.buildings_count", pkg1.get("buildings_count", "not computed")))
-        pkg1_elems_list = str(pkg1.get("elements", "not computed"))
-        pkg1_length_m = str(pkg1.get("length_m", "not computed"))
+        pkg1 = self.store.repair_packages[0] if getattr(self.store, "repair_packages", None) else {}
+        pkg1_elem_cnt = str(pkg1.get("element_count", self.store.get_value("repair.package_1.element_count", "not computed")))
+        pkg1_set_cnt = str(pkg1.get("settlements_count", self.store.get_value("repair.package_1.settlements_count", "not computed")))
+        pkg1_bld_cnt = str(pkg1.get("buildings_count", self.store.get_value("repair.package_1.buildings_count", "not computed")))
+        elems_arr = pkg1.get("elements", [])
+        pkg1_elems_list = ", ".join(elems_arr) if isinstance(elems_arr, list) and elems_arr else str(elems_arr or "not computed")
+        pkg1_length_m = str(pkg1.get("length_m", round(sum(self.store.get_value(f"repair.step_{i}.length_m", 0.0) for i in range(1, 5)), 1)))
 
         values = {
             "event_date": event_date,

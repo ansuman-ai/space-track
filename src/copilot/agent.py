@@ -618,19 +618,11 @@ class CopilotAgent:
                 language=lang,
             )
 
-        # 4c. Helicopter / SAR intent
-        if _has_kw(["helicopter", "airdrop", "हेलिकप्टर"]):
+        # 4c. Helicopter / Air Access / SAR intent
+        if _has_kw(["helicopter", "airdrop", "हेलिकप्टर", "air access", "air rescue", "aerial", "हवाई"]):
             out = self.tools.rescue_priority()
             self.conversation_tool_outputs.append(out)
-            text = (
-                "हवाई उद्धार (हेलिकप्टर) को आवश्यकता छ: पैदल र सवारी दुवै सडक सम्पर्क विच्छेद भएका पूर्ण सम्पर्कविहीन बस्तीहरूमा तत्काल हेलिकप्टरबाट राहत र उद्धार आवश्यक छ।"
-                if lang == "ne"
-                else (
-                    "हाँ, हवाई सहायता (हेलिकॉप्टर/एयरड्रॉप) की आवश्यकता होगी: जिन बस्तियों के वाहन और पैदल दोनों मार्ग पूरी तरह कट चुके हैं (पूर्ण संपर्कविहीन), वहाँ जीवनरक्षक सहायता के लिए तुरंत हेलिकॉप्टर की आवश्यकता है।"
-                    if lang == "hi"
-                    else "Yes, helicopter / airdrop assistance will be required: settlements with zero vehicle and zero walking trail access (completely isolated) require aerial relief deployment."
-                )
-            )
+            text = self.guard.build_template_answer(out, lang)
             return AgentResponse(
                 text=text,
                 tools_called=["rescue_priority"],
@@ -1245,10 +1237,20 @@ class CopilotAgent:
                 turn_latency_sec=0.01,
             )
 
-        call_logs_this_turn: List[Dict[str, Any]] = []
-        last_error = None
-
+        t_turn_start = time.time()
         for endpoint in endpoints:
+            # Enforce 15-second total timeout before falling back to offline mode
+            if time.time() - t_turn_start > 14.5:
+                logger.warning("15-second LLM turn deadline exceeded; falling back to offline.")
+                resp = self._offline_answer(query, lang)
+                resp.text = f"[ANSWERED IN OFFLINE MODE]\n{resp.text}"
+                resp.provider = "offline"
+                resp.model = "offline"
+                resp.answer_path = "offline"
+                resp.masked_key_id = None
+                resp.api_call_logs = call_logs_this_turn
+                return resp
+
             provider = endpoint.get("provider", "offline")
             model_name = endpoint.get("model", "offline")
             base_url = endpoint.get("base_url")
@@ -1267,12 +1269,17 @@ class CopilotAgent:
                 return resp
 
             while True:
+                if time.time() - t_turn_start > 14.5:
+                    logger.warning("15-second LLM turn deadline exceeded inside loop; falling back to offline.")
+                    break
+
                 active_key = self.key_pool.get_active_key(provider)
                 if not active_key:
                     logger.warning("No active keys for provider %s. Failing over to next endpoint.", provider)
                     break
 
-                client = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=30.0)
+                rem_timeout = max(2.0, min(15.0, 15.0 - (time.time() - t_turn_start)))
+                client = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_timeout)
                 tools_called: List[str] = []
                 tool_outputs: List[Dict[str, Any]] = []
                 messages_copy = list(conv_messages)
