@@ -7,9 +7,27 @@ along with associated fact IDs for verification by the number guard.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .facts import FactStore
+
+HIGHWAY_CLASS_RANK: Dict[str, int] = {
+    "motorway": 10,
+    "trunk": 9,
+    "primary": 8,
+    "secondary": 7,
+    "tertiary": 6,
+    "unclassified": 5,
+    "residential": 4,
+    "living_street": 3,
+    "service": 2,
+    "track": 1,
+    "path": 1,
+    "footway": 1,
+    "cycleway": 1,
+    "pedestrian": 1,
+}
 from .names import (
     PlaceNameResolver,
     format_settlement_label,
@@ -796,62 +814,96 @@ class CopilotTools:
 
         if name:
             clean_name = str(name).strip().lower()
+            # Ambiguous query when user asks generically for "highway" or "road"
             if clean_name in ["highway", "road", "sadak", "सडक", "राजमार्ग"]:
-                return {
-                    "tool": "roads_status",
-                    "status": "ambiguous",
-                    "query": name,
-                    "candidates": [
-                        {"name": "Pasang Lhamu Highway (NH42, Primary riverside highway)", "ref": "NH42", "type": "primary"},
-                        {"name": "Langtang Trek Trail", "type": "path"},
-                        {"name": "Gosain Kund Footpath", "type": "path"},
-                    ],
-                    "clarification_prompt": (
-                        "Multiple highways/roads exist in the disaster area: "
-                        "1. Pasang Lhamu Highway (NH42, primary riverside highway), "
-                        "2. Langtang Trek Trail (pedestrian path), "
-                        "3. Gosain Kund Footpath. Which road would you like passability details for?"
-                    ),
-                    "fact_ids": [],
-                }
+                road_groups: Dict[Tuple[str, str, Optional[str]], float] = {}
+                for r in all_roads:
+                    rn = r.get("name")
+                    rf = r.get("ref")
+                    rh = r.get("highway") or "road"
+                    disp = rn or rf
+                    if disp:
+                        k = (disp, rh, rf)
+                        road_groups[k] = road_groups.get(k, 0.0) + r.get("length_m", 0.0)
 
-            is_riverside = any(kw in clean_name for kw in ["river", "riverside", "corridor", "खोला", "नदी"])
-            is_pasang = any(kw in clean_name for kw in ["pasang", "lhamu", "nh42", "nh18", "पासांग", "पासाङ"])
+                sorted_candidates = sorted(
+                    road_groups.items(),
+                    key=lambda item: (HIGHWAY_CLASS_RANK.get(item[0][1], 0), item[1]),
+                    reverse=True,
+                )
 
-            if is_riverside or is_pasang or "primary" in clean_name:
-                matched_roads = [
-                    r for r in matched_roads
-                    if (
-                        r.get("name") in ["Pasang Lhamu Highway", "पासांग लाहामु"]
-                        or r.get("ref") in ["NH42", "NH18"]
-                        or r.get("highway") == "primary"
-                    )
-                    and r.get("highway") != "tertiary"
-                    and r.get("ref") != "29A005"
-                ]
-                road_label = "Pasang Lhamu Highway (NH42, primary riverside highway)"
-            elif any(kw in clean_name for kw in ["langtang", "trek"]):
-                matched_roads = [
-                    r for r in matched_roads
-                    if "langtang" in str(r.get("name", "")).lower() or r.get("highway") == "path"
-                ]
-                road_label = "Langtang Trek Trail"
-            elif any(kw in clean_name for kw in ["gosain", "kund"]):
-                matched_roads = [
-                    r for r in matched_roads
-                    if "gosain" in str(r.get("name", "")).lower()
-                ]
-                road_label = "Gosain Kund Footpath"
+                seen_names = set()
+                candidate_list = []
+                for (c_name, c_hwy, c_ref), c_len in sorted_candidates:
+                    if c_name not in seen_names:
+                        seen_names.add(c_name)
+                        candidate_list.append({
+                            "name": f"{c_name} ({c_hwy})",
+                            "ref": c_ref,
+                            "type": c_hwy,
+                            "length_km": round(c_len / 1000.0, 1),
+                        })
+                    if len(candidate_list) >= 3:
+                        break
+
+                if len(candidate_list) > 1:
+                    prompt_items = [f"{i+1}. {c['name']}" for i, c in enumerate(candidate_list)]
+                    return {
+                        "tool": "roads_status",
+                        "status": "ambiguous",
+                        "query": name,
+                        "candidates": candidate_list,
+                        "clarification_prompt": (
+                            f"Multiple roads exist in the disaster area: {', '.join(prompt_items)}. "
+                            "Which road would you like passability details for?"
+                        ),
+                        "fact_ids": [],
+                    }
+
+            is_riverside_query = any(kw in clean_name for kw in ["river", "riverside", "corridor", "खोला", "नदी"])
+
+            if is_riverside_query:
+                # For riverside / river corridor queries, select the highest highway class in the network
+                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in all_roads), default=0)
+                matched_roads = [r for r in all_roads if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
+                rep_name = next((r.get("name") for r in matched_roads if r.get("name")), None)
+                rep_ref = next((r.get("ref") for r in matched_roads if r.get("ref")), None)
+                road_label = f"{rep_name or rep_ref or 'Primary riverside highway'} (primary corridor)"
             else:
-                filtered = [
-                    r for r in matched_roads
-                    if (r.get("name") and clean_name in str(r.get("name")).lower())
-                    or (r.get("ref") and clean_name in str(r.get("ref")).lower())
-                ]
-                if filtered:
-                    matched_roads = filtered
-                    road_label = name
-                else:
+                # Generic matching against OSM name and ref tags
+                stop_words = {"highway", "road", "sadak", "सडक", "राजमार्ग", "the", "trail", "path", "corridor", "मार्ग", "way"}
+                q_tokens = [t for t in re.findall(r"[\w\u0900-\u097F]+", clean_name) if t not in stop_words and len(t) >= 2]
+
+                matched_segments = []
+                matched_refs = set()
+                matched_names = set()
+
+                for r in all_roads:
+                    r_name = str(r.get("name") or "").lower()
+                    r_ref = str(r.get("ref") or "").lower()
+
+                    name_matched = False
+                    if r_name:
+                        if clean_name in r_name or r_name in clean_name:
+                            name_matched = True
+                        elif q_tokens and all(t in r_name for t in q_tokens):
+                            name_matched = True
+                        elif q_tokens and any(t in r_name for t in q_tokens):
+                            name_matched = True
+
+                    ref_matched = False
+                    if r_ref:
+                        if clean_name == r_ref or any(t == r_ref for t in q_tokens):
+                            ref_matched = True
+
+                    if name_matched or ref_matched:
+                        matched_segments.append(r)
+                        if r.get("ref"):
+                            matched_refs.add(r.get("ref"))
+                        if r.get("name"):
+                            matched_names.add(r.get("name"))
+
+                if not matched_segments:
                     return {
                         "tool": "roads_status",
                         "status": "not_found",
@@ -859,6 +911,36 @@ class CopilotTools:
                         "message": f"Road matching '{name}' was not found in this run.",
                         "fact_ids": [],
                     }
+
+                # Expand to whole corridor segments sharing the same name or ref
+                corridor_segments = []
+                for r in all_roads:
+                    if r in matched_segments:
+                        corridor_segments.append(r)
+                    elif r.get("ref") and r.get("ref") in matched_refs:
+                        corridor_segments.append(r)
+                    elif r.get("name") and r.get("name") in matched_names:
+                        corridor_segments.append(r)
+
+                # Prefer the highest highway class among matching segments
+                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in corridor_segments), default=0)
+                matched_roads = [
+                    r for r in corridor_segments
+                    if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank
+                ]
+
+                primary_name = next((r.get("name") for r in matched_roads if r.get("name")), None)
+                primary_ref = next((r.get("ref") for r in matched_roads if r.get("ref")), None)
+                hwy_type = next((r.get("highway") for r in matched_roads if r.get("highway")), "road")
+                label_parts = []
+                if primary_name:
+                    label_parts.append(primary_name)
+                if primary_ref and (not primary_name or primary_ref not in primary_name):
+                    label_parts.append(f"({primary_ref})")
+                if not primary_name and not primary_ref:
+                    label_parts.append(name)
+                label_parts.append(f"[{hwy_type}]")
+                road_label = " ".join(label_parts)
 
         if type:
             type_str = str(type).strip().lower()
@@ -1521,7 +1603,7 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Road or highway name (e.g. 'Pasang Lhamu', 'riverside highway')."},
+                    "name": {"type": "string", "description": "Road or highway name (e.g. primary arterial road or local highway name)."},
                     "type": {"type": "string", "description": "Highway classification (e.g. 'primary')."},
                     "area": {"type": "string", "description": "Optional local area or coordinates."},
                     "radius_km": {"type": "number", "description": "Radius in km."},

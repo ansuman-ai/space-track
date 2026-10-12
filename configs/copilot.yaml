@@ -1,10 +1,10 @@
 copilot:
   priority_endpoints:
     - provider: "gemini"
-      model: "gemini-3.1-flash-lite"
+      model: "gemini-3.5-flash"
       base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
     - provider: "gemini"
-      model: "gemini-3.8-flash"
+      model: "gemini-3.5-flash-lite"
       base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
     - provider: "groq"
       model: "openai/gpt-oss-20b"

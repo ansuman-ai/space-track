@@ -398,14 +398,35 @@ class FactStore:
                 hwy = props.get("highway")
                 ref = props.get("ref")
                 desc = props.get("description")
-                if ref in ["NH42", "NH18"] or hwy == "primary":
-                    carried_road = f"Primary Highway (Pasang Lhamu Highway {ref or 'NH42'})"
+
+                # Resolve carried road generically from bridge properties or matching graded road ref
+                road_name = props.get("name") if (props.get("name") and props.get("name") != name) else None
+                if not road_name and ref:
+                    for r in self.graded_roads:
+                        if r.get("ref") == ref and r.get("name"):
+                            rn = r.get("name")
+                            if not road_name or any(c.isascii() and c.isalpha() for c in rn):
+                                road_name = rn
+                                if any(c.isascii() and c.isalpha() for c in rn):
+                                    break
+
+                if hwy in ["motorway", "trunk", "primary"]:
+                    hwy_label = "Primary Highway"
+                elif hwy in ["secondary", "tertiary"]:
+                    hwy_label = f"{hwy.capitalize()} Road"
                 elif hwy == "unclassified":
-                    carried_road = f"unclassified road" + (f" ({ref})" if ref else "")
+                    hwy_label = "unclassified road"
                 elif hwy in ["path", "footway"]:
-                    carried_road = f"pedestrian trail / {hwy}"
+                    hwy_label = f"pedestrian trail / {hwy}"
                 else:
-                    carried_road = f"{hwy or 'road'}" + (f" ({ref})" if ref else "")
+                    hwy_label = f"{hwy or 'road'}"
+
+                if road_name:
+                    carried_road = f"{hwy_label} ({road_name}{f' {ref}' if ref and ref not in road_name else ''})"
+                elif ref:
+                    carried_road = f"{hwy_label} ({ref})"
+                else:
+                    carried_road = hwy_label
 
                 nearest_place = None
                 nearest_dist_km = 999.0

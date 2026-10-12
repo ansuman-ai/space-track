@@ -2,7 +2,7 @@
 
 Single source of truth used across Dashboard and Copilot:
 1. Settlement formatting: "Near <nearest named place> (<km> km)", NEVER "Unnamed settlement".
-2. Run label: event name from run_summary / event_name.txt if set (e.g. "Trishuli Flash Flood 2026"),
+2. Run label: event name from run_summary / event_name.txt if set (e.g. "Event Name Year"),
    otherwise the dashboard's operational OSM label.
 3. Validation metrics: reads processed/validation_status.json with provenance tracking.
 """
@@ -235,7 +235,7 @@ def get_run_label(run_folder: Path, summary: Optional[Dict[str, Any]] = None) ->
     """Return the operational run label:
 
     Uses event_name from run_summary.json / event_name.txt / event_metadata.json if set
-    (e.g. 'Trishuli Flash Flood 2026'), else the dashboard's operational OSM label.
+    (e.g. 'Event Name Year'), else the dashboard's operational OSM label.
     """
     if summary is None:
         summary_file = run_folder / "run_summary.json"

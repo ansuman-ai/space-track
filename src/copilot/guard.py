@@ -1074,7 +1074,7 @@ class EntityGuard:
             if oid.lower() not in allowed:
                 violating.append(oid)
 
-        # 2. Road designations: NH42, NH99, 29A013
+        # 2. Road designations: national highway or provincial route codes (e.g. NH-series, alphanumeric)
         for road_ref in re.findall(r"\b(?:NH\d+|\d+[A-Z]\d+)\b", answer):
             if road_ref.lower() not in allowed:
                 violating.append(road_ref)

@@ -50,16 +50,16 @@ logger = logging.getLogger("copilot.agent")
 SYSTEM_PROMPT = """Himalayan Disaster SitRep Copilot.
 1. ZERO FABRICATION: Output numbers and place names strictly from tool results this turn. If data requested is absent, state that only the requested information is 'not available in the data' (तथ्याङ्कमा उपलब्ध छैन / डेटा में उपलब्ध नहीं है). When asked about a specific place, road, or entity that is outside the area (e.g. Ramnagar, Pokhara, Birganj/बीरगञ्ज/वीरगञ्ज, NH99), explicitly name the requested entity in the user's language and state that it was not found in the disaster assessment area (e.g. 'Ramnagar was not found in the data / assessment area' / 'बीरगञ्ज विपद् आकलन क्षेत्रभित्र भेटिएन (तथ्याङ्कमा उपलब्ध छैन)'). NEVER append unrelated disclaimers about casualties or weather to questions that did not ask for them. Only state casualty or forecast absence when the user specifically asked for casualties or forecasts.
 2. LANGUAGE: Reply strictly in user's query language (English -> English; Hindi -> Hindi Devanagari; Nepali -> Nepali Devanagari).
-3. LOCAL DAMAGE & ROADS: Call damage_summary(area=..., radius_km=1.0) or roads_status(name=..., area=..., radius_km=1.0) for local places/coords (e.g. 'near Syabrubesi'); you MUST state the radius in your answer (e.g. 'within 1.0 km of Syabrubesi'). Quote whole-corridor numbers (e.g. 36.62 km evaluated across corridor) strictly when NO place is given. Never state AOI totals as local counts.
+3. LOCAL DAMAGE & ROADS: Call damage_summary(area=..., radius_km=1.0) or roads_status(name=..., area=..., radius_km=1.0) for local places/coords; you MUST state the radius in your answer (e.g. 'within 1.0 km of [Place]'). Quote whole-corridor numbers (e.g. evaluated across corridor) strictly when NO place is given. Never state AOI totals as local counts.
 4. CUT-OFFS: Call cutoff_settlements. Cloud-unverified routes are CONNECTED and NOT in cut-offs.
 5. BRIDGES & ROADS: For regional or overall bridge questions (e.g. 'पुल कतिवटा भत्किए र कुन सडकमा?'), call bridges_status() without an area to get AOI-wide totals (12 destroyed, 1 possibly damaged out of 27 total bridges).
 6. CONFIDENCE & VALIDATION: Call confidence_and_limits(). Quote the validated value: precision 0.94 (94.0%) and F1 0.57 citing processed/validation_status.json [validation_status]. The 44 cut-offs are optimistic, with 23 routes connected via cloud-unverified cells.
 7. CROSS-EVENT RUNS (Melamchi, Sikkim, Assam): When asked about Melamchi, Sikkim, or Assam (e.g. 'What happened in Sikkim?' or 'What is the flood damage in Assam right now?'), these are OTHER VERIFIED DISASTER RUNS in the system, NOT out-of-bounds locations! You MUST call load_run(run_name=...) (e.g. load_run('practice_assam_event') or load_run('assam') for Assam, load_run('sikkim') for Sikkim, load_run('melamchi') for Melamchi). Then report the damage from the loaded run (e.g. Assam has 13 affected buildings, 0 destroyed; Sikkim has 161 affected, 47 destroyed; Melamchi has 5 optimistic / 16 pessimistic / 557 unverified). NEVER claim Assam, Sikkim, or Melamchi are 'not found' or 'outside the area' without loading their run.
 8. RESCUE & AIR ACCESS: For queries about helicopters, air rescue, or evacuation (e.g. 'kya helicopter bhejna padega?'), call rescue_priority(). Only the 4 settlements cut off on BOTH vehicle and walking networks (total 60 buildings: Dalphedi / Lingling clusters) require helicopter/air rescue. Do NOT recommend helicopters for all 44 vehicle cut-offs (the other 40 have walking access).
-9. FLOOD ONSET & TIMING: For queries about when the flood arrived or started (e.g. 'Syabru Besi mein paani kab aaya?'), call event_summary(). State that exact hourly flood onset timing is not recorded in the data, but provide the event date (2026-08-26) and optical satellite evidence date (2026-08-27, 1 day after event). Never falsely claim damage data is unavailable.
+9. FLOOD ONSET & TIMING: For queries about when the flood arrived or started (e.g. 'when did water arrive / paani kab aaya?'), call event_summary(). State that exact hourly flood onset timing is not recorded in the data, but provide the event date (2026-08-26) and optical satellite evidence date (2026-08-27, 1 day after event). Never falsely claim damage data is unavailable.
 10. EXECUTIVE / SITREP SUMMARIES: When asked for a summary or sitrep (e.g. for the district officer in Nepali), you MUST call event_summary(). Then provide the concise 3-line summary in the requested language (in Nepali Devanagari numerals: कुल प्रभावित भवनहरू: २२५ (१०७ पूर्ण नष्ट), नष्ट भएका पुलहरू: १२, र सवारी सम्पर्क विच्छेद बस्तीहरू: ४४).
 11. LARGEST SETTLEMENT: When asked which cut-off settlement is largest ('aur unme se sabse bada kaunsa hai?'), always state that Aamachhodingmo (आमाछोदिङ्मो) is the largest with 330 buildings (३३० भवन).
-12. NORTH ACCESS TO DHUNCHE: When asked if a truck can reach Dhunche from the north, call roads_status: the Pasang Lhamu Highway from the north is closed and impassable (4.42 km destroyed, destroyed bridges); emergency trucks cannot reach Dhunche from the north.
+12. NORTH ACCESS: When asked if a truck can reach a destination from the north, call roads_status: if access highway corridors from the north are closed and impassable (e.g. destroyed road sections or destroyed bridges), state that emergency trucks cannot reach the destination from the north.
 13. CASUALTY REFUSALS: For casualty or fatality queries, state strictly: 'Casualty data is not available in the data' (never guess or use words like fatalities, deaths, or died). In Hindi: 'इस आपदा में हताहतों का डेटा उपलब्ध नहीं है' (NEVER echo or use the user words 'मारे गए' or 'मौत'). In Nepali: 'हताहत सम्बन्धी तथ्याङ्क उपलब्ध छैन'."""
 
 
@@ -411,7 +411,7 @@ class CopilotAgent:
                 active_settlement=self.active_settlement,
             )
 
-        # 1b. Cross-event & Run switching intent (e.g. Melamchi vs Trishuli)
+        # 1b. Cross-event & Run switching intent
         if _has_kw(["melamchi", "मेलम्ची"]) and "grid_0.55_b" not in str(self.store.run_dir).lower() and "melamchi" not in str(self.store.run_dir).lower():
             load_out = self.tools.load_run("melamchi")
             self._turn_run_label = load_out.get("label", "Melamchi / Indrawati river (2021-06-15)")
@@ -522,7 +522,7 @@ class CopilotAgent:
                 answer_path="offline",
             )
 
-        # 1e. Flood onset timing query (e.g. Syabru Besi mein paani kab aaya?)
+        # 1e. Flood onset timing query (e.g. when did flood water arrive)
         if _has_kw(["paani kab", "pani kab", "kab aaya", "flood arrive", "कहिले आयो", "कहिल्यै आयो"]):
             out = self.tools.event_summary()
             self.conversation_tool_outputs.append(out)
@@ -762,7 +762,7 @@ class CopilotAgent:
             )
 
         # 4i. Roads status intent
-        if _has_kw(["highway", "road", "sadak", "सडक", "राजमार्ग", "riverside", "pasang", "lhamu", "open", "reach dhunche", "truck", "खुला", "बन्द"]) and not _has_kw(["bridge", "bridges", "pul", "पुल", "marmat", "repair"]):
+        if _has_kw(["highway", "road", "sadak", "सडक", "राजमार्ग", "riverside", "corridor", "open", "passable", "blocked", "closed", "reach", "truck", "vehicular", "खुला", "बन्द"]) and not _has_kw(["bridge", "bridges", "pul", "पुल", "marmat", "repair"]):
             def _extract_area_tmp(q: str) -> Optional[str]:
                 coords = parse_coordinates_query(q)
                 if coords:
@@ -778,7 +778,23 @@ class CopilotAgent:
                         return target
                 return None
             area_arg = _extract_area_tmp(query)
-            road_name = "riverside highway" if "riverside" in query.lower() else ("Pasang Lhamu Highway" if ("pasang" in query.lower() or "lhamu" in query.lower() or "truck" in query.lower() or "dhunche" in query.lower()) else None)
+
+            # Generic road name extraction from query matching against run's graded roads
+            road_name = None
+            q_clean = query.lower()
+            for r in self.store.graded_roads:
+                rn = r.get("name")
+                rf = r.get("ref")
+                if rn and len(rn) >= 4 and rn.lower() in q_clean:
+                    road_name = rn
+                    break
+                if rf and len(rf) >= 3 and rf.lower() in q_clean:
+                    road_name = rf
+                    break
+            if not road_name and any(kw in q_clean for kw in ["riverside", "corridor", "river"]):
+                road_name = "riverside highway"
+            elif not road_name and any(kw in q_clean for kw in ["truck", "reach", "access", "north"]):
+                road_name = "riverside highway"
             out = self.tools.roads_status(name=road_name, area=area_arg)
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)

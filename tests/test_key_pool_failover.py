@@ -34,7 +34,7 @@ def test_key_failover_and_hot_reload() -> None:
 
     real_key = ""
     provider = "gemini"
-    model = "gemini-3.1-flash-lite"
+    model = "gemini-3.5-flash"
     base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
     env_var = "GEMINI_API_KEYS"
     fake_key_1 = "AQ.fake_invalid_key_9999"
