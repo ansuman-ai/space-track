@@ -130,10 +130,12 @@ heldout_questions:
     must_contain:
       - "Pasang Lhamu"
       - "1.0"
+      - "2.29"
     must_not_contain:
       - "OPEN / PASSABLE"
       - "0.0 km evaluated"
       - "is open"
+      - "9.54"
 
   - id: Q12
     query: "Which bridges should engineers inspect first?"

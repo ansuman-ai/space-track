@@ -29,6 +29,57 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
+def clip_linestring_to_circle(
+    coordinates: List[List[float]],
+    center_lon: float,
+    center_lat: float,
+    radius_km: float,
+    transformer: Optional[Any] = None,
+    circle_geom: Optional[Any] = None,
+) -> Tuple[float, float]:
+    """
+    Clip a WGS84 LineString coordinates list [[lon, lat], ...] to a circle of radius_km
+    around (center_lon, center_lat).
+
+    Uses Azimuthal Equidistant projection (AEQD) centered at (center_lon, center_lat),
+    where radial distances are exact metric Euclidean distances from (0, 0).
+
+    Returns:
+        (clipped_length_m, unclipped_length_m) in meters.
+        Guaranteed: 0.0 <= clipped_length_m <= unclipped_length_m.
+    """
+    if not coordinates or len(coordinates) < 2:
+        return 0.0, 0.0
+
+    radius_m = radius_km * 1000.0
+
+    import pyproj
+    import shapely
+    import shapely.ops
+
+    if transformer is None:
+        aeqd_crs = pyproj.CRS(f"+proj=aeqd +lat_0={center_lat} +lon_0={center_lon} +datum=WGS84 +units=m")
+        wgs84 = pyproj.CRS("EPSG:4326")
+        transformer = pyproj.Transformer.from_crs(wgs84, aeqd_crs, always_xy=True)
+
+    if circle_geom is None:
+        circle_geom = shapely.geometry.Point(0, 0).buffer(radius_m, quad_segs=64)
+
+    try:
+        line_wgs84 = shapely.geometry.LineString(coordinates)
+        line_proj = shapely.ops.transform(transformer.transform, line_wgs84)
+        unclipped_m = line_proj.length
+
+        if not line_proj.intersects(circle_geom):
+            return 0.0, unclipped_m
+
+        clipped_geom = line_proj.intersection(circle_geom)
+        clipped_m = getattr(clipped_geom, "length", 0.0) or 0.0
+        return min(clipped_m, unclipped_m), unclipped_m
+    except Exception:
+        return 0.0, 0.0
+
+
 class CopilotTools:
     """Toolkit grounded in FactStore and PlaceNameResolver."""
 
@@ -196,6 +247,29 @@ class CopilotTools:
                 aoi_bldg_dest = self.store.get_value("damage.buildings.destroyed", 0)
                 aoi_br_dest = self.store.get_value("damage.bridges.destroyed", 0)
 
+                # Clip road lengths within radius
+                r_clipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+                r_unclipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+                local_r_count = 0
+                if self.store.graded_roads:
+                    import pyproj, shapely
+                    radius_m = radius_km * 1000.0
+                    aeqd_crs = pyproj.CRS(f"+proj=aeqd +lat_0={coords[1]} +lon_0={coords[0]} +datum=WGS84 +units=m")
+                    wgs84 = pyproj.CRS("EPSG:4326")
+                    transformer = pyproj.Transformer.from_crs(wgs84, aeqd_crs, always_xy=True)
+                    circle_geom = shapely.geometry.Point(0, 0).buffer(radius_m, quad_segs=64)
+                    for r in self.store.graded_roads:
+                        pts = r.get("coordinates", [])
+                        clip_m, unclip_m = clip_linestring_to_circle(pts, coords[0], coords[1], radius_km, transformer=transformer, circle_geom=circle_geom)
+                        if clip_m > 0.0:
+                            g = r.get("damage_grade", "Not affected")
+                            r_clipped_by_grade[g] = r_clipped_by_grade.get(g, 0.0) + clip_m
+                            r_unclipped_by_grade[g] = r_unclipped_by_grade.get(g, 0.0) + unclip_m
+                            local_r_count += 1
+
+                local_r_dest_km = round(r_clipped_by_grade.get("Destroyed", 0.0) / 1000.0, 2)
+                local_r_tot_km = round(sum(r_clipped_by_grade.values()) / 1000.0, 2)
+
                 return {
                     "tool": "damage_summary",
                     "area": resolved_name,
@@ -218,6 +292,15 @@ class CopilotTools:
                         "possibly_damaged": br_grades["Possibly damaged"],
                         "not_affected": br_grades["Not affected"],
                     },
+                    "roads": {
+                        "total_km": local_r_tot_km,
+                        "destroyed_km": local_r_dest_km,
+                        "possibly_damaged_km": round(r_clipped_by_grade.get("Possibly damaged", 0.0) / 1000.0, 2),
+                        "not_affected_km": round(r_clipped_by_grade.get("Not affected", 0.0) / 1000.0, 2),
+                        "unknown_cloud_km": round(r_clipped_by_grade.get("Unknown (cloud)", 0.0) / 1000.0, 2),
+                        "unclipped_total_km": round(sum(r_unclipped_by_grade.values()) / 1000.0, 2),
+                        "segments_intersecting": local_r_count,
+                    },
                     "regional_aoi_totals_reference": {
                         "buildings_destroyed_aoi": aoi_bldg_dest,
                         "bridges_destroyed_aoi": aoi_br_dest,
@@ -225,11 +308,13 @@ class CopilotTools:
                     "statement": (
                         f"Within {radius_km} km of {resolved_name}: {b_grades['Destroyed']} buildings destroyed, "
                         f"{b_grades['Damaged']} damaged, {b_grades['Possibly damaged']} possibly damaged "
-                        f"(out of {local_b_total} assessed locally). {br_grades['Destroyed']} bridges destroyed."
+                        f"(out of {local_b_total} assessed locally). {br_grades['Destroyed']} bridges destroyed. "
+                        f"{local_r_dest_km} km roads destroyed out of {local_r_tot_km} km evaluated locally (clipped to {radius_km} km radius)."
                     ),
                     "note": (
                         f"Local damage metrics calculated within {radius_km} km of {resolved_name}: "
                         f"{b_grades['Destroyed']} buildings destroyed (out of {local_b_total} assessed locally). "
+                        f"Road lengths are clipped strictly to the {radius_km} km circle ({local_r_tot_km} km evaluated). "
                         f"This is distinct from the entire AOI regional total of {aoi_bldg_dest} destroyed buildings."
                     ),
                     "fact_ids": ["damage.buildings.destroyed", "damage.bridges.destroyed"],
@@ -736,9 +821,13 @@ class CopilotTools:
             if is_riverside or is_pasang or "primary" in clean_name:
                 matched_roads = [
                     r for r in matched_roads
-                    if r.get("name") in ["Pasang Lhamu Highway", "पासांग लाहामु"]
-                    or r.get("ref") in ["NH42", "NH18"]
-                    or r.get("highway") == "primary"
+                    if (
+                        r.get("name") in ["Pasang Lhamu Highway", "पासांग लाहामु"]
+                        or r.get("ref") in ["NH42", "NH18"]
+                        or r.get("highway") == "primary"
+                    )
+                    and r.get("highway") != "tertiary"
+                    and r.get("ref") != "29A005"
                 ]
                 road_label = "Pasang Lhamu Highway (NH42, primary riverside highway)"
             elif any(kw in clean_name for kw in ["langtang", "trek"]):
@@ -776,29 +865,59 @@ class CopilotTools:
             matched_roads = [r for r in matched_roads if str(r.get("highway", "")).lower() == type_str]
             road_label += f" ({type_str})"
 
-        # 3. Apply spatial filter if area/coords given
+        # 3. Apply spatial filter and geometric clipping if area/coords given
+        unclipped_total_m = 0.0
         if coords:
             c_lon, c_lat = coords[0], coords[1]
+            radius_m = radius_km * 1000.0
+
+            import pyproj
+            import shapely
+            aeqd_crs = pyproj.CRS(f"+proj=aeqd +lat_0={c_lat} +lon_0={c_lon} +datum=WGS84 +units=m")
+            wgs84 = pyproj.CRS("EPSG:4326")
+            transformer = pyproj.Transformer.from_crs(wgs84, aeqd_crs, always_xy=True)
+            circle = shapely.geometry.Point(0, 0).buffer(radius_m, quad_segs=64)
+
             local_matched = []
+            clipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+            unclipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+
             for r in matched_roads:
                 pts = r.get("coordinates", [])
-                if any(haversine(c_lon, c_lat, pt[0], pt[1]) <= radius_km for pt in pts):
-                    local_matched.append(r)
+                clip_m, unclip_m = clip_linestring_to_circle(pts, c_lon, c_lat, radius_km, transformer=transformer, circle_geom=circle)
+                if clip_m > 0.0:
+                    grade = r.get("damage_grade", "Not affected")
+                    clipped_by_grade[grade] = clipped_by_grade.get(grade, 0.0) + clip_m
+                    unclipped_by_grade[grade] = unclipped_by_grade.get(grade, 0.0) + unclip_m
+
+                    r_copy = dict(r)
+                    r_copy["clipped_length_m"] = round(clip_m, 2)
+                    r_copy["unclipped_length_m"] = round(unclip_m, 2)
+                    local_matched.append(r_copy)
+
             matched_roads = local_matched
             road_label += f" within {radius_km} km of {resolved_area}"
 
-        # 4. Metrics computation
-        total_m = sum(r.get("length_m", 0.0) for r in matched_roads)
-        dest_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Destroyed")
-        poss_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Possibly damaged")
-        clear_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Not affected")
-        cloud_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Unknown (cloud)")
+            total_m = sum(clipped_by_grade.values())
+            dest_m = clipped_by_grade.get("Destroyed", 0.0)
+            poss_m = clipped_by_grade.get("Possibly damaged", 0.0)
+            clear_m = clipped_by_grade.get("Not affected", 0.0)
+            cloud_m = clipped_by_grade.get("Unknown (cloud)", 0.0)
+            unclipped_total_m = sum(unclipped_by_grade.values())
+        else:
+            total_m = sum(r.get("length_m", 0.0) for r in matched_roads)
+            dest_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Destroyed")
+            poss_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Possibly damaged")
+            clear_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Not affected")
+            cloud_m = sum(r.get("length_m", 0.0) for r in matched_roads if r.get("damage_grade") == "Unknown (cloud)")
+            unclipped_total_m = total_m
 
         total_km = round(total_m / 1000.0, 2)
         dest_km = round(dest_m / 1000.0, 2)
         poss_km = round(poss_m / 1000.0, 2)
         clear_km = round(clear_m / 1000.0, 2)
         cloud_km = round(cloud_m / 1000.0, 2)
+        unclipped_total_km = round(unclipped_total_m / 1000.0, 2)
 
         dest_segments = sum(1 for r in matched_roads if r.get("damage_grade") == "Destroyed")
         total_segments = len(matched_roads)
@@ -837,8 +956,9 @@ class CopilotTools:
         if coords:
             stmt = (
                 f"Within {radius_km} km of {resolved_area}, {road_label} is {passability}. "
-                f"Exactly {dest_km} km is destroyed out of {total_km} km evaluated locally "
-                f"({poss_km} km possibly damaged, {clear_km} km not affected, {cloud_km} km under cloud)."
+                f"Exactly {dest_km} km is destroyed out of {total_km} km evaluated locally (clipped to {radius_km} km radius) "
+                f"({poss_km} km possibly damaged, {clear_km} km not affected, {cloud_km} km under cloud). "
+                f"Unclipped length of intersecting road segments is {unclipped_total_km} km."
             )
         else:
             stmt = (
@@ -858,6 +978,7 @@ class CopilotTools:
             "radius_km": radius_km if coords else None,
             "area_name": resolved_area,
             "total_km": total_km,
+            "unclipped_total_km": unclipped_total_km if coords else None,
             "destroyed_km": dest_km,
             "possibly_damaged_km": poss_km,
             "not_affected_km": clear_km,
