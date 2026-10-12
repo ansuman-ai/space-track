@@ -1238,6 +1238,7 @@ class CopilotAgent:
             )
 
         t_turn_start = time.time()
+        call_logs_this_turn: List[Dict[str, Any]] = []
         for endpoint in endpoints:
             # Enforce 15-second total timeout before falling back to offline mode
             if time.time() - t_turn_start > 14.5:
