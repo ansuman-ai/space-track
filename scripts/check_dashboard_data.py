@@ -176,6 +176,23 @@ def verify_run(run_folder: Path) -> bool:
         if m["repair_package_1"]["element_count"] != exp_p1_elem:
             errors.append(f"Repair pkg 1 element count mismatch: API={m['repair_package_1']['element_count']} vs JSON={exp_p1_elem}")
 
+        # Verify all subsequent repair packages
+        api_all_pkgs = m.get("repair_packages_all", [])
+        if len(api_all_pkgs) != len(actionable):
+            errors.append(f"Actionable repair packages count mismatch: API={len(api_all_pkgs)} vs JSON={len(actionable)}")
+        for idx, exp_pkg in enumerate(actionable):
+            if idx < len(api_all_pkgs):
+                api_p = api_all_pkgs[idx]
+                exp_set = exp_pkg.get("settlements_count", 0)
+                exp_b = exp_pkg.get("buildings_count", 0)
+                exp_e = exp_pkg.get("element_count", len(exp_pkg.get("elements", [])))
+                if api_p["reconnects_settlements"] != exp_set:
+                    errors.append(f"Repair pkg {idx+1} settlements mismatch: API={api_p['reconnects_settlements']} vs JSON={exp_set}")
+                if api_p["reconnects_buildings"] != exp_b:
+                    errors.append(f"Repair pkg {idx+1} buildings mismatch: API={api_p['reconnects_buildings']} vs JSON={exp_b}")
+                if api_p["element_count"] != exp_e:
+                    errors.append(f"Repair pkg {idx+1} element count mismatch: API={api_p['element_count']} vs JSON={exp_e}")
+
     # 5. Validation Banner logic verification
     val_status = meta["validation_status"]
     val_file = proc / "validation_status.json"

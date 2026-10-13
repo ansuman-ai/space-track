@@ -548,6 +548,16 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             "elements": pkg1_elements,
             "unconnectable_settlements_count": unconnectable_count
         },
+        "repair_packages_all": [
+            {
+                "rank": p.get("rank"),
+                "reconnects_settlements": p.get("settlements_count", 0),
+                "reconnects_buildings": p.get("buildings_count", 0),
+                "element_count": p.get("element_count", len(p.get("elements", []))),
+                "elements": p.get("elements", [])
+            }
+            for p in actionable_pkgs
+        ],
         "validation_metrics": val_meta.get("metrics") if val_status_file.exists() else None
     }
 

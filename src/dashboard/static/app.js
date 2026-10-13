@@ -78,8 +78,8 @@ function initMap() {
   // Zoom control in top right (above map action controls)
   L.control.zoom({ position: "topright" }).addTo(map);
 
-  // Scale bar in bottom left (above status ribbon, clear of copilot button and legend)
-  L.control.scale({ position: "bottomleft", metric: true, imperial: false }).addTo(map);
+  // Scale bar in bottom right (above status ribbon, left of "Ask copilot" button)
+  L.control.scale({ position: "bottomright", metric: true, imperial: false }).addTo(map);
 
   // Cursor and Center coordinates in status ribbon
   const updateCoords = (lat, lng) => {
@@ -179,10 +179,18 @@ function initHeaderControls() {
     });
   }
 
+  const btnBrandHome = document.getElementById("btn-brand-home");
+  if (btnBrandHome) {
+    btnBrandHome.addEventListener("click", () => {
+      showStartScreen();
+    });
+  }
+
   // More menu items
   const optSlider = document.getElementById("menu-opt-slider");
   if (optSlider) {
     optSlider.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
       toggleS2Slider(!s2OverlayActive);
     });
   }
@@ -198,6 +206,7 @@ function initHeaderControls() {
   const optLang = document.getElementById("menu-opt-lang");
   if (optLang) {
     optLang.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
       currentLang = currentLang === "en" ? "ne" : "en";
       optLang.textContent = currentLang === "en" ? "नेपाली" : "English";
       if (currentRunData) {
@@ -210,6 +219,7 @@ function initHeaderControls() {
   const optProj = document.getElementById("menu-opt-projector");
   if (optProj) {
     optProj.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
       document.body.classList.toggle("projector-mode");
       const isProj = document.body.classList.contains("projector-mode");
       optProj.textContent = isProj ? "Normal display mode" : "Projector mode";
@@ -219,6 +229,7 @@ function initHeaderControls() {
   const optOpenRun = document.getElementById("menu-opt-open-run");
   if (optOpenRun) {
     optOpenRun.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
       openRunSwitcherModal();
     });
   }
@@ -360,8 +371,18 @@ function initAccessFilters() {
   const btnZoomRepair = document.getElementById("btn-zoom-repair");
   if (btnZoomRepair) {
     btnZoomRepair.addEventListener("click", () => {
-      if (geojsonLayers.repair_packages && geojsonLayers.repair_packages.getLayers().length > 0) {
-        map.fitBounds(geojsonLayers.repair_packages.getBounds(), { padding: [40, 40], maxZoom: 15 });
+      if (!geojsonLayers.repair_packages || geojsonLayers.repair_packages.getLayers().length === 0) {
+        return;
+      }
+      if (map.hasLayer(geojsonLayers.repair_packages)) {
+        map.removeLayer(geojsonLayers.repair_packages);
+        btnZoomRepair.classList.remove("active");
+        btnZoomRepair.textContent = "Show on map";
+      } else {
+        geojsonLayers.repair_packages.addTo(map);
+        map.fitBounds(geojsonLayers.repair_packages.getBounds(), { padding: [50, 50], maxZoom: 15 });
+        btnZoomRepair.classList.add("active");
+        btnZoomRepair.textContent = "Clear from map";
       }
     });
   }
@@ -1413,18 +1434,47 @@ function updateSidePanel(data) {
 
   // TAB 3: REPAIR
   const rp = m.repair_package_1 || {};
+  const allPkgs = m.repair_packages_all || [];
   const rHeadline = document.getElementById("repair-pkg-headline");
   const rSub = document.getElementById("repair-pkg-sub");
   const rIds = document.getElementById("repair-pkg-osm-ids");
+  const rIntro = document.getElementById("repair-intro-sentence");
+  const rOtherList = document.getElementById("repair-other-pkgs");
+
+  const cutPess = m.cutoffs ? (m.cutoffs.vehicle_pessimistic || 0) : 0;
+  if (rIntro) {
+    rIntro.textContent = `Priority road and bridge links to restore vehicle and emergency access. Computed for the pessimistic scenario: ${cutPess} settlements cut off.`;
+  }
 
   if (rp.has_actionable_package && rp.element_count > 0) {
-    rHeadline.textContent = `Reconnects ${rp.reconnects_settlements} settlements and ${rp.reconnects_buildings} buildings`;
-    rSub.textContent = `${rp.element_count} elements prioritized for restoration`;
+    const elemWord = rp.element_count === 1 ? "1 element" : `${rp.element_count} elements`;
+    const settleWord = rp.reconnects_settlements === 1 ? "1 settlement" : `${rp.reconnects_settlements} settlements`;
+    rHeadline.textContent = `Reconnects ${settleWord} and ${rp.reconnects_buildings} buildings`;
+    rSub.textContent = `${elemWord} prioritized for restoration`;
     rIds.textContent = rp.elements.join(", ");
   } else {
     rHeadline.textContent = "No actionable road repair package";
     rSub.textContent = "0 elements";
     rIds.textContent = "No specific road links required";
+  }
+
+  // Render subsequent actionable packages (Package 2, Package 3, etc.)
+  if (rOtherList) {
+    rOtherList.innerHTML = "";
+    if (allPkgs.length > 1) {
+      allPkgs.slice(1, 5).forEach((pkg, idx) => {
+        const pkgNum = idx + 2;
+        const eWord = pkg.element_count === 1 ? "1 element" : `${pkg.element_count} elements`;
+        const sWord = pkg.reconnects_settlements === 1 ? "1 settlement" : `${pkg.reconnects_settlements} settlements`;
+        const row = document.createElement("div");
+        row.className = "plain-row";
+        row.innerHTML = `
+          <div class="plain-row-left"><span>Package ${pkgNum}</span></div>
+          <div class="plain-row-val font-mono">Reconnects ${sWord} / ${pkg.reconnects_buildings} buildings (${eWord})</div>
+        `;
+        rOtherList.appendChild(row);
+      });
+    }
   }
 
   // TAB 4: CONFIDENCE
@@ -1869,17 +1919,65 @@ async function loadRepairPackagesLayer(runId) {
     if (actionable.length === 0) return;
 
     const pkgElems = new Set(actionable[0].elements);
-    const roadsRes = await fetch(`/api/runs/${runId}/layer/roads`);
+
+    // Fetch roads and bridges to locate the package elements
+    const [roadsRes, bridgesRes] = await Promise.all([
+      fetch(`/api/runs/${runId}/layer/roads`),
+      fetch(`/api/runs/${runId}/layer/bridges`)
+    ]);
+
     const roadsGeo = await roadsRes.json();
-    const repairFeatures = roadsGeo.features.filter(f => pkgElems.has(f.properties.osm_id));
+    const bridgesGeo = await bridgesRes.json();
+
+    const getElemId = (props) => {
+      if (!props) return null;
+      return props["@osmId"] || props["osm_id"] || props["id"] || (props["segment_id"] ? props["segment_id"].split("_")[0] : null);
+    };
+
+    const repairFeatures = [];
+    if (roadsGeo && roadsGeo.features) {
+      roadsGeo.features.forEach(f => {
+        const id = getElemId(f.properties);
+        if (id && pkgElems.has(id)) {
+          repairFeatures.push(f);
+        }
+      });
+    }
+
+    if (bridgesGeo && bridgesGeo.features) {
+      bridgesGeo.features.forEach(f => {
+        const id = getElemId(f.properties);
+        if (id && pkgElems.has(id)) {
+          repairFeatures.push(f);
+        }
+      });
+    }
+
+    if (geojsonLayers.repair_packages && map.hasLayer(geojsonLayers.repair_packages)) {
+      map.removeLayer(geojsonLayers.repair_packages);
+    }
 
     geojsonLayers.repair_packages = L.geoJSON({ type: "FeatureCollection", features: repairFeatures }, {
-      style: {
-        color: "#0284C7",
-        weight: 4.5,
-        opacity: 0.95
+      style: (feature) => {
+        return {
+          color: "#0284C7",
+          weight: 6,
+          opacity: 1.0,
+          dashArray: null
+        };
+      },
+      pointToLayer: (feature, latlng) => {
+        return L.circleMarker(latlng, {
+          radius: 9,
+          fillColor: "#38BDF8",
+          color: "#0284C7",
+          weight: 4,
+          opacity: 1,
+          fillOpacity: 0.95
+        });
       }
     });
+
   } catch (err) {
     console.error("Error loading repair packages:", err);
   }

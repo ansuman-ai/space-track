@@ -312,6 +312,36 @@ html, body {
   background-color: var(--bg-page);
 }
 
+/* App Branding (Space Track) at Left of Header */
+.brand-home-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand-text {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-main);
+  transition: color 0.15s ease;
+}
+
+.brand-home-btn:hover .brand-text {
+  color: #0284C7;
+}
+
+.brand-divider {
+  width: 1px;
+  height: 22px;
+  background-color: var(--border-medium);
+  margin: 0 4px;
+}
+
 #map {
   width: 100%;
   height: calc(100% - 24px);
@@ -319,8 +349,9 @@ html, body {
 }
 
 /* OpenStreetMap Standard Raster Tiles - Muted Operational Cartography */
-/* Apply greyscale filter directly to tile images rather than whole pane to improve performance */
-.leaflet-pane.leaflet-osmTilePane-pane .leaflet-tile {
+/* Apply greyscale filter directly to tile images in custom OSM pane */
+.leaflet-pane.leaflet-osmTilePane-pane .leaflet-tile,
+.leaflet-pane.leaflet-osmTile-pane .leaflet-tile {
   filter: grayscale(1) brightness(1.05) contrast(0.9);
 }
 
@@ -408,13 +439,13 @@ html, body {
   height: 14px;
 }
 
-/* Position Leaflet scale control in bottom-left above status ribbon (bottom 30px) */
-.leaflet-bottom.leaflet-left {
-  bottom: 28px;
-  left: 14px;
+/* Position Leaflet scale control in bottom-right above status ribbon (bottom 38px), left of "Ask copilot" button */
+.leaflet-bottom.leaflet-right {
+  bottom: 38px;
+  right: 154px;
 }
 
-.leaflet-bottom.leaflet-left .leaflet-control-scale {
+.leaflet-bottom.leaflet-right .leaflet-control-scale {
   margin: 0;
 }
 
