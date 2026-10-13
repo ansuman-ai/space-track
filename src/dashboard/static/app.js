@@ -14,8 +14,12 @@ let currentScenario = "optimistic"; // "optimistic" | "pessimistic"
 
 // Map and Overlays
 let map = null;
-let baseLayers = {};
-let activeBasemap = "offline";
+let baseLayers = {
+  osmTiles: null,
+  hillshadeTiles: null,
+  offlineGroup: null
+};
+let isOfflineFallbackActive = false;
 let aoiDimLayer = null;
 let aoiDashedLine = null;
 
@@ -87,16 +91,26 @@ function initMap() {
   showCenterCoords();
 
   // Custom Panes to maintain visual stacking
-  map.createPane("basemapImagePane");
-  map.getPane("basemapImagePane").style.zIndex = 150;
+  // 1. OSM Tile Pane (z=100) - Muted via CSS filter
+  map.createPane("osmTilePane");
+  map.getPane("osmTilePane").style.zIndex = 100;
 
+  // 2. Terrain Overlay Pane (z=150) - mix-blend-mode: multiply over OSM base
+  map.createPane("hillshadePane");
+  map.getPane("hillshadePane").style.zIndex = 150;
+
+  // 3. Fallback Panes
+  map.createPane("basemapImagePane");
+  map.getPane("basemapImagePane").style.zIndex = 160;
+
+  map.createPane("basemapVectorPane");
+  map.getPane("basemapVectorPane").style.zIndex = 180;
+
+  // 4. AOI Dimming Pane (z=200)
   map.createPane("aoiDimPane");
   map.getPane("aoiDimPane").style.zIndex = 200;
 
-  map.createPane("basemapVectorPane");
-  map.getPane("basemapVectorPane").style.zIndex = 250;
-
-  baseLayers.offline = L.layerGroup().addTo(map);
+  baseLayers.offlineGroup = L.layerGroup();
 }
 
 // ==========================================================================
@@ -439,7 +453,7 @@ async function loadRun(runId) {
 
     // 4. Concurrently load basemap, AOI dim mask, and vector layers
     const promises = [
-      updateOfflineBasemap(runId, data),
+      setupBasemap(runId, data),
       setupAoiDimMask(data)
     ];
 
@@ -540,12 +554,83 @@ function setupAoiDimMask(data) {
 }
 
 // ==========================================================================
-// Offline Basemap Hillshade & Places (Item 1 & 4)
+// Basemap Architecture (Items 1-4)
+// Standard OSM Raster Tiles + DEM Hillshade Multiply Overlay + Offline Fallback
 // ==========================================================================
-async function updateOfflineBasemap(runId, data) {
-  baseLayers.offline.clearLayers();
+async function setupBasemap(runId, data) {
+  // Clear any existing basemap layers
+  if (baseLayers.osmTiles) {
+    map.removeLayer(baseLayers.osmTiles);
+    baseLayers.osmTiles = null;
+  }
+  if (baseLayers.hillshadeTiles) {
+    map.removeLayer(baseLayers.hillshadeTiles);
+    baseLayers.hillshadeTiles = null;
+  }
+  if (baseLayers.offlineGroup) {
+    map.removeLayer(baseLayers.offlineGroup);
+    baseLayers.offlineGroup.clearLayers();
+  }
 
-  // 1. Copernicus DEM GLO-30 (30 m) Topographic Relief Hillshade
+  // Remove hard bounds or minZoom restrictions so normal panning is allowed
+  map.setMaxBounds(null);
+  map.setMinZoom(0);
+
+  isOfflineFallbackActive = false;
+  const offlineBanner = document.getElementById("offline-basemap-notice");
+  if (offlineBanner) offlineBanner.classList.add("hidden");
+
+  // 1. OpenStreetMap Standard Raster Tiles
+  // Muted via CSS filter on pane 'osmTilePane'
+  let tileErrorCount = 0;
+  baseLayers.osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    pane: "osmTilePane",
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  });
+
+  baseLayers.osmTiles.on("tileerror", () => {
+    tileErrorCount++;
+    // If consecutive tile errors occur, trigger offline fallback
+    if (tileErrorCount >= 2 && !isOfflineFallbackActive) {
+      console.warn("OSM tile error detected. Activating offline basemap fallback...");
+      activateOfflineFallback(runId);
+    }
+  });
+
+  baseLayers.osmTiles.addTo(map);
+
+  // 2. Terrain Overlay: DEM Hillshade XYZ Tiles (z=9-15)
+  // mix-blend-mode: multiply over the OSM base in pane 'hillshadePane'
+  baseLayers.hillshadeTiles = L.tileLayer(`/api/runs/${runId}/basemap/tiles/{z}/{x}/{y}.png`, {
+    pane: "hillshadePane",
+    minZoom: 9,
+    maxZoom: 15,
+    opacity: 0.35,
+    tileSize: 256
+  });
+  baseLayers.hillshadeTiles.addTo(map);
+}
+
+// Offline fallback: activates DEM full hillshade + local OSM waterways & place labels
+async function activateOfflineFallback(runId) {
+  if (isOfflineFallbackActive) return;
+  isOfflineFallbackActive = true;
+
+  const offlineBanner = document.getElementById("offline-basemap-notice");
+  if (offlineBanner) offlineBanner.classList.remove("hidden");
+
+  // If live tiles were added, remove them
+  if (baseLayers.osmTiles && map.hasLayer(baseLayers.osmTiles)) {
+    map.removeLayer(baseLayers.osmTiles);
+  }
+  if (baseLayers.hillshadeTiles && map.hasLayer(baseLayers.hillshadeTiles)) {
+    map.removeLayer(baseLayers.hillshadeTiles);
+  }
+
+  baseLayers.offlineGroup.clearLayers();
+
+  // Load cached offline DEM relief hillshade PNG
   try {
     const metaResp = await fetch(`/api/runs/${runId}/basemap/meta`);
     if (metaResp.ok) {
@@ -556,31 +641,14 @@ async function updateOfflineBasemap(runId, data) {
           interactive: false,
           pane: "basemapImagePane"
         });
-        baseLayers.offline.addLayer(hillshade);
-
-        // Constrain panning to buffered DEM extent with a small safety margin
-        // so users never pan into empty space
-        const [[s, w], [n, e]] = meta.bounds;
-        const latBuf = (n - s) * 0.15;
-        const lngBuf = (e - w) * 0.15;
-        const bufferedExtent = [
-          [s - latBuf, w - lngBuf],
-          [n + latBuf, e + lngBuf]
-        ];
-        map.setMaxBounds(bufferedExtent);
-
-        // Compute minZoom so user cannot zoom out past DEM coverage
-        const demSpan = Math.max(n - s, e - w);
-        // A span of ~0.3 deg fits well at zoom 10 or 11
-        const calculatedMinZoom = demSpan > 1.0 ? 8 : (demSpan > 0.4 ? 9 : 10);
-        map.setMinZoom(calculatedMinZoom);
+        baseLayers.offlineGroup.addLayer(hillshade);
       }
     }
   } catch (e) {
-    console.warn("Could not load hillshade:", e);
+    console.warn("Could not load offline hillshade:", e);
   }
 
-  // 2. OSM Waterways (Rivers: #8DAFD0 thin)
+  // Load local OSM waterways
   try {
     const riverResp = await fetch(`/api/runs/${runId}/basemap/waterways`);
     if (riverResp.ok) {
@@ -594,20 +662,18 @@ async function updateOfflineBasemap(runId, data) {
         },
         interactive: false
       });
-      baseLayers.offline.addLayer(riverLayer);
+      baseLayers.offlineGroup.addLayer(riverLayer);
     }
   } catch (e) {
-    console.warn("Could not load waterways:", e);
+    console.warn("Could not load offline waterways:", e);
   }
 
-  // 3. OSM Places (Collision filter: max ~15 visible, Devanagari under Latin name, white halo)
+  // Load local OSM places
   try {
     const placesResp = await fetch(`/api/runs/${runId}/basemap/places`);
     if (placesResp.ok) {
       const placesGeo = await placesResp.json();
       const features = placesGeo.features || [];
-
-      // Filter non-generic named places and rank by importance
       const validPlaces = [];
       const seen = new Set();
       features.forEach(f => {
@@ -620,9 +686,7 @@ async function updateOfflineBasemap(runId, data) {
         validPlaces.push(f);
       });
 
-      // Show max 15 places with spatial dispersion
       const selected = validPlaces.slice(0, 15);
-
       const placesLayer = L.geoJSON({ type: "FeatureCollection", features: selected }, {
         pane: "basemapVectorPane",
         pointToLayer: (feat, latlng) => {
@@ -647,11 +711,13 @@ async function updateOfflineBasemap(runId, data) {
           });
         }
       });
-      baseLayers.offline.addLayer(placesLayer);
+      baseLayers.offlineGroup.addLayer(placesLayer);
     }
   } catch (e) {
-    console.warn("Could not load places:", e);
+    console.warn("Could not load offline places:", e);
   }
+
+  baseLayers.offlineGroup.addTo(map);
 }
 
 // ==========================================================================
@@ -865,6 +931,11 @@ function updateSidePanel(data) {
   document.getElementById("conf-cloud-b").textContent = (b.unverified || 0).toLocaleString();
   document.getElementById("conf-cloud-br").textContent = (br.unverified || 0).toLocaleString();
   document.getElementById("conf-cloud-r").textContent = `${(r.unverified_km !== undefined ? r.unverified_km.toFixed(1) : "0.0")} km`;
+
+  const confOsmDateEl = document.getElementById("conf-osm-snapshot-date");
+  if (confOsmDateEl) {
+    confOsmDateEl.textContent = data.osm_snapshot_date || data.event_date || "2026-08-26";
+  }
 
   // Refresh Access list
   updateAccessList();

@@ -318,6 +318,35 @@ html, body {
   background-color: var(--bg-page);
 }
 
+/* OpenStreetMap Standard Raster Tiles - Muted Operational Cartography */
+.leaflet-pane.leaflet-osmTilePane-pane {
+  filter: grayscale(1) brightness(1.05) contrast(0.9);
+}
+
+/* Hillshade Terrain Overlay - Light multiply blend over OSM base */
+.leaflet-pane.leaflet-hillshadePane-pane {
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* Offline Basemap Fallback Banner */
+.offline-basemap-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 850;
+  background-color: #FEF3F2;
+  border: 1px solid #FECDCA;
+  color: #B42318;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
 /* Map Top-Right Controls: North Arrow + Zoom buttons */
 .map-north-arrow {
   position: absolute;

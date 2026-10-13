@@ -173,6 +173,11 @@
           <button id="btn-close-s2-slider" class="btn-outline" style="padding: 2px 6px; font-size: 11px;">✕</button>
         </div>
 
+        <!-- Offline Basemap Fallback Notice -->
+        <div id="offline-basemap-notice" class="offline-basemap-banner hidden">
+          <span>Offline mode: Live OpenStreetMap tiles unavailable. Switched to offline DEM terrain &amp; local OSM baseline.</span>
+        </div>
+
         <!-- Bottom Thin White Status Ribbon (24px) -->
         <footer class="map-status-bar" id="map-status-bar">
           <div class="status-bar-left">
@@ -421,6 +426,10 @@
 
               <div id="conf-flat-notice" class="note-box-grey hidden" style="margin-top: 0; margin-bottom: 12px;">
                 Flat-terrain method checked on EMSR692 Greece (F1 0.59) and EMSR659 Italy (F1 0.35); this run itself is not validated.
+              </div>
+
+              <div id="conf-osm-orientation-notice" class="note-box-grey" style="margin-top: 0; margin-bottom: 12px; font-size: 11.5px; line-height: 1.45;">
+                Basemap for orientation only (current OpenStreetMap). The analysis uses the pre-event OSM snapshot of <span id="conf-osm-snapshot-date">2026-08-26</span>.
               </div>
 
               <div class="section-subhead">Not verified because of cloud</div>

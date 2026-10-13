@@ -525,6 +525,20 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     has_repairs = (routing / "repair_packages.json").exists()
     has_s2_cache = (run_folder / "interim" / "s2_cache").exists()
 
+    # 7. Extract OSM Pre-event Snapshot Date
+    osm_snapshot_date = None
+    osm_summary_file = run_folder / "raw" / "osm" / "osm_summary.json"
+    if osm_summary_file.exists():
+        try:
+            osm_sum = json.loads(osm_summary_file.read_text())
+            raw_ts = osm_sum.get("snapshot_time")
+            if raw_ts:
+                osm_snapshot_date = raw_ts.split("T")[0]
+        except Exception:
+            pass
+    if not osm_snapshot_date:
+        osm_snapshot_date = event_date
+
     manifest = load_runs_manifest()
     is_verified_e2e = folder_name in manifest.get("verified_runs", {})
 
@@ -539,6 +553,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         "osm_label": human_label,
         "event_date": event_date,
         "event_year": event_year,
+        "osm_snapshot_date": osm_snapshot_date,
         "bbox": bbox,
         "regime": regime,
         "status": status,
@@ -1075,6 +1090,28 @@ def get_run_hillshade(run_id: str):
     if not png_path or not png_path.exists():
         raise HTTPException(status_code=404, detail="Hillshade could not be generated for this run")
     return FileResponse(png_path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/runs/{run_id}/basemap/tiles/{z}/{x}/{y}.png")
+def get_run_hillshade_tile(run_id: str, z: int, x: int, y: int):
+    """Serves Web Mercator DEM hillshade XYZ tile (z=9-15) for high-zoom overlay."""
+    run_folder = RUNS_DIR / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    tiles_root = run_folder / "processed" / "dem_tiles"
+    tile_file = tiles_root / str(z) / str(x) / f"{y}.png"
+
+    if not tile_file.exists() and not (tiles_root / ".complete").exists():
+        from src.dashboard.basemap_renderer import generate_run_hillshade_tiles
+        generate_run_hillshade_tiles(run_folder)
+
+    if tile_file.exists():
+        return FileResponse(tile_file, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+    # If tile is outside DEM extent or nodata, return a 1x1 transparent PNG
+    transparent_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    return Response(content=transparent_png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
 
 
 @app.get("/api/runs/{run_id}/basemap/meta")
