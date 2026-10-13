@@ -1464,7 +1464,7 @@ class CopilotAgent:
                         tools=openai_tools,
                         tool_choice="auto",
                         temperature=0.1,
-                        max_tokens=500,
+                        max_tokens=1000,
                     )
                     llm_calls += 1
                     call_prompt = getattr(completion.usage, "prompt_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0
@@ -1496,7 +1496,7 @@ class CopilotAgent:
                             tools=openai_tools,
                             tool_choice="auto",
                             temperature=0.2,
-                            max_tokens=650,
+                            max_tokens=1200,
                         )
                         llm_calls += 1
                         choice = completion.choices[0]
@@ -1537,7 +1537,7 @@ class CopilotAgent:
                             model=model_name,
                             messages=messages_copy,
                             temperature=0.1,
-                            max_tokens=400,
+                            max_tokens=1000,
                         )
                         llm_calls += 1
                         call2_prompt = getattr(completion.usage, "prompt_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0

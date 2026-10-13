@@ -1574,8 +1574,8 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "area": {"type": "string", "description": "Settlement name or lat/lon coordinates."},
-                    "radius_km": {"type": "number", "description": "Spatial radius in km (defaults to 1.0)."},
+                    "area": {"type": ["string", "null"], "description": "Settlement name or lat/lon coordinates."},
+                    "radius_km": {"type": ["number", "null"], "description": "Spatial radius in km (defaults to 1.0)."},
                 },
             },
         },
@@ -1585,8 +1585,8 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "network": {"type": "string", "enum": ["vehicle", "walking"]},
-                    "scenario": {"type": "string", "enum": ["optimistic", "pessimistic"]},
+                    "network": {"type": ["string", "null"], "enum": ["vehicle", "walking", None]},
+                    "scenario": {"type": ["string", "null"], "enum": ["optimistic", "pessimistic", None]},
                 },
             },
         },
@@ -1605,8 +1605,8 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "area": {"type": "string", "description": "Settlement name or lat/lon coordinates."},
-                    "radius_km": {"type": "number", "description": "Spatial radius in km."},
+                    "area": {"type": ["string", "null"], "description": "Settlement name or lat/lon coordinates."},
+                    "radius_km": {"type": ["number", "null"], "description": "Spatial radius in km."},
                 },
             },
         },
@@ -1616,10 +1616,10 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Road or highway name (e.g. primary arterial road or local highway name)."},
-                    "type": {"type": "string", "description": "Highway classification (e.g. 'primary')."},
-                    "area": {"type": "string", "description": "Optional local area or coordinates."},
-                    "radius_km": {"type": "number", "description": "Radius in km."},
+                    "name": {"type": ["string", "null"], "description": "Road or highway name (e.g. primary arterial road or local highway name)."},
+                    "type": {"type": ["string", "null"], "description": "Highway classification (e.g. 'primary')."},
+                    "area": {"type": ["string", "null"], "description": "Optional local area or coordinates."},
+                    "radius_km": {"type": ["number", "null"], "description": "Radius in km."},
                 },
             },
         },

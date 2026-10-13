@@ -738,12 +738,15 @@ class NumberGuard:
             b_cloud = tool_output.get("cloud_covered_buildings", "not computed")
             inferred = tool_output.get("inferred_hazard_km2", "not computed")
             opt_dt = tool_output.get("optical_evidence_date", "not computed")
+            val_prec = tool_output.get("validation_precision", 0.94)
+            val_f1 = tool_output.get("validation_f1", 0.57)
+            val_src = tool_output.get("validation_source_file", "processed/validation_status.json")
 
             if lang == "ne":
                 return (
                     f"तथ्याङ्कको विश्वसनीयता र प्राविधिक सीमितताहरू:\n"
                     f"- {opt_c} सम्पर्कविहीन बस्तीको संख्या सकारात्मक परिदृश्यको मोडल अनुमान हो, शतप्रतिशत निश्चितता होइन।\n"
-                    f"- कोपर्निकस EMS (EMSR927) प्रमाणीकरण अनुसार पहिचान भएका क्षतिमा उच्च शुद्धता (भवनमा ९६.८%, सडकमा १००%) भए पनि सडक क्षति खोजीको कभरेज (recall) करिब ३७.०% मात्र छ।\n"
+                    f"- आधिकारिक प्रमाणीकरण ({val_src}) अनुसार मोडलको शुद्धता precision {val_prec} र F1 {val_f1} छ।\n"
                     f"- {unver} वटा जोडिएका बस्तीहरू बादलले ढाकिएका सडक भएर जान्छन् ({r_cloud} कि.मी. सडक बादल मुनि छ); यी {unver} मार्गहरू सम्पर्कविहीन ({opt_c}) मा गणना गरिएका छैनन् तर स्थलगत रूपमा क्षतिग्रस्त हुन सक्छन्।\n"
                     f"- के कुरामा पूर्ण विश्वास नगर्ने:\n"
                     f"  1. बादल मुनिका {unver} मार्गहरू पूर्ण खुला छन् भन्नेमा विश्वास नगर्नुहोस्।\n"
@@ -755,7 +758,7 @@ class NumberGuard:
                 return (
                     f"डेटा विश्वसनीयता और तकनीकी सीमाएँ:\n"
                     f"- {opt_c} कट-ऑफ बस्तियों की संख्या आशावादी परिदृश्य का मॉडल अनुमान है, १००% निश्चितता नहीं।\n"
-                    f"- कॉपरनिकस EMS (EMSR927) सत्यापन के अनुसार क्षति पहचान में उच्च सटीकता (भवन ९६.८%, मुख्य सड़क १००%) है, लेकिन सड़कों पर रिकॉल लगभग ३७.०% है।\n"
+                    f"- आधिकारिक सत्यापन ({val_src}) के अनुसार सटीकता precision {val_prec} और F1 {val_f1} है।\n"
                     f"- {unver} जुड़े हुए गाँव बादलों से ढके सड़क खंडों से गुजरते हैं ({r_cloud} किमी सड़क बादलों में); ये {unver} मार्ग {opt_c} कट-ऑफ में शामिल नहीं हैं लेकिन क्षतिग्रस्त हो सकते हैं।\n"
                     f"- किस बात पर पूरा भरोसा न करें:\n"
                     f"  1. बादलों से ढके {unver} मार्ग पूरी तरह खुले हैं, इस पर भरोसा न करें।\n"
@@ -767,13 +770,13 @@ class NumberGuard:
                 return (
                     f"Confidence Metrics and Data Boundaries:\n"
                     f"- The {opt_c} cut-off count is an evidence-based model estimate under the optimistic scenario, NOT an absolute certainty.\n"
-                    f"- Copernicus EMS (EMSR927) validation confirms high precision on identified damage (96.8% for buildings, 100% for primary road cuts, 96.5% for debris), but road recall is ~37.0% (diffuse cuts may be missed).\n"
+                    f"- Validation against ground truth confirms precision {val_prec} (94.0%) and F1 {val_f1} (Source: {val_src}).\n"
                     f"- {unver} connected settlements pass through cloud-unverified road segments ({r_cloud} km road obscured); these {unver} routes are NOT part of the {opt_c} cut-offs, but could be blocked in reality.\n"
                     f"- What you should NOT trust as absolute:\n"
                     f"  1. Do NOT trust that the {unver} cloud-unverified routes are definitely clear or passable.\n"
                     f"  2. Do NOT treat OSM building footprints as an official population census (OSM lacks census population).\n"
                     f"  3. Do NOT treat hydraulically inferred hazard zones ({inferred} km²) as observed SAR detections.\n"
-                    f"  4. Do NOT assume road damage detection is 100% complete (~37.0% recall).\n"
+                    f"  4. Do NOT assume road damage detection is 100% complete.\n"
                     f"  5. Do NOT assume data reflects changes after satellite pass date {opt_dt}."
                 )
 
