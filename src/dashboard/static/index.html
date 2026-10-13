@@ -17,11 +17,11 @@
       <div class="header-left">
         <div class="header-titles">
           <button id="btn-open-run-switcher" class="header-title-btn" title="Click to open assessment runs switcher">
-            <h1 id="run-main-title" class="title-main">Trishuli Flash Flood 2026</h1>
+            <h1 id="run-main-title" class="title-main"><span class="skeleton skeleton-text" style="width: 180px;"></span></h1>
             <span class="title-dropdown-caret">▾</span>
           </button>
           <div class="header-subtitle-row" id="run-subtitle-row">
-            <span id="header-subtitle-sentence" class="header-sentence">Bhote Koshi, 2026-08-26. Mountain terrain.</span>
+            <span id="header-subtitle-sentence" class="header-sentence"><span class="skeleton skeleton-text" style="width: 220px;"></span></span>
             <span id="val-header-validation" class="badge-validation">Not validated (practice run)</span>
           </div>
         </div>
@@ -58,6 +58,46 @@
       <section id="map-container">
         <div id="map"></div>
 
+        <!-- Start Screen Overlay (Region Search, BBox Form, Previous Runs) -->
+        <div id="start-screen-panel" class="start-screen-overlay hidden">
+          <div class="start-search-card">
+            <div class="start-search-bar">
+              <input type="text" id="start-search-input" class="start-search-input" placeholder="Search a place, e.g. Chamoli or Melamchi" autocomplete="off" />
+              <button type="button" id="btn-start-search" class="start-search-btn">Search</button>
+            </div>
+            <div id="start-search-results" class="start-search-results hidden"></div>
+
+            <div id="start-analysis-form" class="start-analysis-form hidden">
+              <div class="start-bbox-stats">
+                <span id="start-bbox-km-dims">Area: 10.0 × 10.0 km (100 km²)</span>
+                <span id="start-bbox-limit-msg" style="color: var(--text-secondary);">Within 0.5° limit</span>
+              </div>
+              <div class="start-form-row">
+                <div class="start-form-col">
+                  <label for="start-event-date">Event date</label>
+                  <input type="date" id="start-event-date" class="form-input font-mono" required />
+                </div>
+                <div class="start-form-col">
+                  <span id="start-date-preview" class="date-preview-badge" style="display:inline-block; margin-bottom: 8px;"></span>
+                  <label for="start-event-name">Event name (optional)</label>
+                  <input type="text" id="start-event-name" class="form-input" placeholder="e.g. Flash Flood Assessment" />
+                </div>
+              </div>
+              <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                <button type="button" id="btn-start-analyse" class="btn-dark" style="height: 38px; padding: 0 20px;">Analyse this area</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Previous Assessments List -->
+          <div class="start-previous-runs-card">
+            <div class="start-previous-header">Previous assessments</div>
+            <div id="start-previous-runs-list" class="start-runs-list">
+              <div class="start-run-meta" style="padding: 6px;">Loading past assessments...</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Top-Right: Map Action Controls (North Arrow & Before/After Button) -->
         <div class="map-top-right-controls">
           <div class="map-north-arrow" title="North orientation">
@@ -89,7 +129,7 @@
                 <span class="sym-obs-box" id="sym-legend-obs"></span>
                 <span id="lbl-legend-obs">Observed damage</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-obs">1.08 km²</span>
+              <span class="legend-row-stat" id="legend-stat-obs"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -98,7 +138,7 @@
                 <span class="sym-inf-hatch"></span>
                 <span>Inferred hazard, modelled</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-inf">1.07 km²</span>
+              <span class="legend-row-stat" id="legend-stat-inf"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -107,7 +147,7 @@
                 <span class="sym-destroyed-circle" id="sym-legend-buildings"></span>
                 <span id="lbl-legend-buildings">Buildings destroyed</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-buildings">107</span>
+              <span class="legend-row-stat" id="legend-stat-buildings"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -116,7 +156,7 @@
                 <span class="sym-destroyed-diamond" id="sym-legend-bridges"></span>
                 <span id="lbl-legend-bridges">Bridges destroyed</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-bridges">12</span>
+              <span class="legend-row-stat" id="legend-stat-bridges"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -125,7 +165,7 @@
                 <span class="sym-destroyed-line" id="sym-legend-roads"></span>
                 <span id="lbl-legend-roads">Roads destroyed</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-roads">6.0 km</span>
+              <span class="legend-row-stat" id="legend-stat-roads"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -134,7 +174,7 @@
                 <span class="sym-cutoff-road"></span>
                 <span>Cut off by road</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-cutoff-road">44</span>
+              <span class="legend-row-stat" id="legend-stat-cutoff-road"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <div class="legend-row">
@@ -143,7 +183,7 @@
                 <span class="sym-no-ground"></span>
                 <span>No ground access</span>
               </label>
-              <span class="legend-row-stat" id="legend-stat-no-ground">4</span>
+              <span class="legend-row-stat" id="legend-stat-no-ground"><span class="skeleton skeleton-stat"></span></span>
             </div>
 
             <!-- "More layers" link -->
@@ -261,13 +301,13 @@
           <!-- Top Section: (a) 15px Sentence & (b) 2x2 Grid Cards -->
           <div class="panel-executive-header">
             <div class="summary-sentence-15px" id="summary-sentence-box">
-              107 buildings destroyed, 12 bridges destroyed and 44 settlements cut off by road along Bhote Koshi. 4 settlements have no ground access.
+              <span class="skeleton skeleton-text" style="width: 100%; height: 18px;"></span>
             </div>
 
             <!-- Exactly 4 Cards in a 2x2 Grid -->
             <div class="kpi-grid-2x2">
               <div class="kpi-card-clean">
-                <div class="kpi-value-28px" id="kpi-val-buildings">107</div>
+                <div class="kpi-value-28px" id="kpi-val-buildings"><span class="skeleton skeleton-num"></span></div>
                 <div class="kpi-label-row">
                   <span class="sym-destroyed-circle" id="sym-kpi-buildings"></span>
                   <span id="kpi-lbl-buildings">Buildings destroyed</span>
@@ -275,7 +315,7 @@
               </div>
 
               <div class="kpi-card-clean">
-                <div class="kpi-value-28px" id="kpi-val-bridges">12</div>
+                <div class="kpi-value-28px" id="kpi-val-bridges"><span class="skeleton skeleton-num"></span></div>
                 <div class="kpi-label-row">
                   <span class="sym-destroyed-diamond" id="sym-kpi-bridges"></span>
                   <span id="kpi-lbl-bridges">Bridges destroyed</span>
@@ -283,7 +323,7 @@
               </div>
 
               <div class="kpi-card-clean">
-                <div class="kpi-value-28px" id="kpi-val-settlements">44</div>
+                <div class="kpi-value-28px" id="kpi-val-settlements"><span class="skeleton skeleton-num"></span></div>
                 <div class="kpi-label-row">
                   <span class="sym-cutoff-road"></span>
                   <span id="kpi-lbl-settlements">Settlements cut off by road</span>
@@ -291,7 +331,7 @@
               </div>
 
               <div class="kpi-card-clean">
-                <div class="kpi-value-28px" id="kpi-val-no-ground">4</div>
+                <div class="kpi-value-28px" id="kpi-val-no-ground"><span class="skeleton skeleton-num"></span></div>
                 <div class="kpi-label-row">
                   <span class="sym-no-ground"></span>
                   <span id="kpi-lbl-no-ground">No ground access (air only)</span>
@@ -327,23 +367,23 @@
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color destroyed" id="dot-b-destroyed"></span><span id="lbl-row-b-destroyed">Destroyed</span></div>
-                  <div class="plain-row-val" id="val-b-destroyed">107</div>
+                  <div class="plain-row-val" id="val-b-destroyed"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row" id="row-b-damaged">
                   <div class="plain-row-left"><span class="dot-color damaged"></span><span id="lbl-row-b-damaged">Damaged</span></div>
-                  <div class="plain-row-val" id="val-b-damaged">42</div>
+                  <div class="plain-row-val" id="val-b-damaged"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color possible"></span><span id="lbl-row-b-possible">Possibly damaged</span></div>
-                  <div class="plain-row-val" id="val-b-possible">76</div>
+                  <div class="plain-row-val" id="val-b-possible"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Total affected</span></div>
-                  <div class="plain-row-val" id="val-b-total">225</div>
+                  <div class="plain-row-val" id="val-b-total"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Not verified under cloud</span></div>
-                  <div class="plain-row-val" id="val-b-unverified">1,196</div>
+                  <div class="plain-row-val" id="val-b-unverified"><span class="skeleton skeleton-stat"></span></div>
                 </div>
               </div>
 
@@ -351,15 +391,15 @@
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color destroyed" id="dot-br-destroyed"></span><span id="lbl-row-br-destroyed">Destroyed</span></div>
-                  <div class="plain-row-val" id="val-br-destroyed">12</div>
+                  <div class="plain-row-val" id="val-br-destroyed"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color possible"></span><span id="lbl-row-br-possible">Possibly damaged</span></div>
-                  <div class="plain-row-val" id="val-br-possible">1</div>
+                  <div class="plain-row-val" id="val-br-possible"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Assessed in total</span></div>
-                  <div class="plain-row-val" id="val-br-total">27</div>
+                  <div class="plain-row-val" id="val-br-total"><span class="skeleton skeleton-stat"></span></div>
                 </div>
               </div>
 
@@ -367,15 +407,15 @@
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color destroyed" id="dot-r-destroyed"></span><span id="lbl-row-r-destroyed">Destroyed</span></div>
-                  <div class="plain-row-val" id="val-r-destroyed">6.0 km</div>
+                  <div class="plain-row-val" id="val-r-destroyed"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span class="dot-color possible"></span><span id="lbl-row-r-possible">Possibly damaged</span></div>
-                  <div class="plain-row-val" id="val-r-possible">4.4 km</div>
+                  <div class="plain-row-val" id="val-r-possible"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Not verified</span></div>
-                  <div class="plain-row-val" id="val-r-unverified">32.2 km</div>
+                  <div class="plain-row-val" id="val-r-unverified"><span class="skeleton skeleton-stat"></span></div>
                 </div>
               </div>
 
@@ -383,11 +423,11 @@
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Observed</span></div>
-                  <div class="plain-row-val" id="val-area-obs">1.08 km²</div>
+                  <div class="plain-row-val" id="val-area-obs"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Inferred modelled</span></div>
-                  <div class="plain-row-val" id="val-area-inf">1.07 km²</div>
+                  <div class="plain-row-val" id="val-area-inf"><span class="skeleton skeleton-stat"></span></div>
                 </div>
               </div>
 
@@ -395,11 +435,11 @@
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Before dates</span></div>
-                  <div class="plain-row-val" id="val-img-before">2026-08-12 to 2026-08-24</div>
+                  <div class="plain-row-val" id="val-img-before"><span class="skeleton skeleton-stat" style="width: 100px;"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>After dates</span></div>
-                  <div class="plain-row-val" id="val-img-after">2026-08-27 (+1d clear)</div>
+                  <div class="plain-row-val" id="val-img-after"><span class="skeleton skeleton-stat" style="width: 100px;"></span></div>
                 </div>
               </div>
             </section>
@@ -420,20 +460,20 @@
 
               <!-- List Sections -->
               <div id="access-no-ground-section">
-                <div class="settlement-group-title" id="title-no-ground-list">No ground access: air drop or helicopter (4)</div>
+                <div class="settlement-group-title" id="title-no-ground-list">No ground access: air drop or helicopter</div>
                 <div id="list-no-ground-items"></div>
               </div>
 
               <div id="access-road-cut-section">
-                <div class="settlement-group-title" id="title-road-cut-list">Cut off by road (40)</div>
+                <div class="settlement-group-title" id="title-road-cut-list">Cut off by road</div>
                 <div id="list-road-cut-top5"></div>
-                <button type="button" id="btn-show-other-settlements" class="btn-show-more-settlements">Show the other 35</button>
+                <button type="button" id="btn-show-other-settlements" class="btn-show-more-settlements hidden">Show more</button>
                 <div id="list-road-cut-remaining" class="hidden"></div>
               </div>
 
               <!-- Grey Note Box -->
               <div class="note-box-grey" id="access-cloud-note">
-                23 other settlements look connected, but only through roads under cloud. They are not counted as cut off.
+                Settlements under cloud cover with unverified roads are tracked with caution.
               </div>
             </section>
 
@@ -444,21 +484,13 @@
               </div>
 
               <div class="repair-package-card" id="repair-pkg-card">
-                <div class="repair-pkg-title" id="repair-pkg-headline">Reconnects 19 settlements and 939 buildings</div>
-                <div class="repair-pkg-stats" id="repair-pkg-sub">4 elements, 420 m</div>
-                <div class="repair-pkg-ids font-mono" id="repair-pkg-osm-ids">OSM 23984102, 23984103, 5849201</div>
+                <div class="repair-pkg-title" id="repair-pkg-headline"><span class="skeleton skeleton-text" style="width: 180px;"></span></div>
+                <div class="repair-pkg-stats" id="repair-pkg-sub"><span class="skeleton skeleton-stat" style="width: 80px;"></span></div>
+                <div class="repair-pkg-ids font-mono" id="repair-pkg-osm-ids"><span class="skeleton skeleton-stat" style="width: 140px;"></span></div>
                 <button type="button" id="btn-zoom-repair" class="btn-outline" style="width: 100%; justify-content: center;">Show on map</button>
               </div>
 
               <div class="plain-rows-list" style="margin-top: 10px;" id="repair-other-pkgs">
-                <div class="plain-row">
-                  <div class="plain-row-left"><span>Package 2</span></div>
-                  <div class="plain-row-val">Reconnects 8 settlements (2 elements)</div>
-                </div>
-                <div class="plain-row">
-                  <div class="plain-row-left"><span>Package 3</span></div>
-                  <div class="plain-row-val">Reconnects 4 settlements (1 element)</div>
-                </div>
               </div>
             </section>
 
@@ -467,24 +499,24 @@
               <div id="conf-metrics-container">
                 <div class="confidence-metrics-grid">
                   <div class="metric-box-sm">
-                    <div class="m-val" id="m-val-prec">0.94</div>
+                    <div class="m-val" id="m-val-prec"><span class="skeleton skeleton-stat"></span></div>
                     <div class="m-lbl">Precision</div>
                   </div>
                   <div class="metric-box-sm">
-                    <div class="m-val" id="m-val-rec">0.41</div>
+                    <div class="m-val" id="m-val-rec"><span class="skeleton skeleton-stat"></span></div>
                     <div class="m-lbl">Recall</div>
                   </div>
                   <div class="metric-box-sm">
-                    <div class="m-val" id="m-val-f1">0.57</div>
+                    <div class="m-val" id="m-val-f1"><span class="skeleton skeleton-stat"></span></div>
                     <div class="m-lbl">F1 Score</div>
                   </div>
                   <div class="metric-box-sm">
-                    <div class="m-val" id="m-val-iou">0.40</div>
+                    <div class="m-val" id="m-val-iou"><span class="skeleton skeleton-stat"></span></div>
                     <div class="m-lbl">IoU</div>
                   </div>
                 </div>
                 <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;" id="conf-metric-sentence">
-                  Evaluated against official Copernicus EMS delineation (EMSR927 AOI01 Syabru Besi).
+                  Evaluated against official Copernicus EMS delineation.
                 </div>
               </div>
 
@@ -497,22 +529,22 @@
               </div>
 
               <div id="conf-osm-orientation-notice" class="note-box-grey" style="margin-top: 0; margin-bottom: 12px; font-size: 11.5px; line-height: 1.45;">
-                Basemap for orientation only (current OpenStreetMap). The analysis uses the pre-event OSM snapshot of <span id="conf-osm-snapshot-date">2026-08-26</span>.
+                Basemap for orientation only (current OpenStreetMap). The analysis uses the pre-event OSM snapshot of <span id="conf-osm-snapshot-date">—</span>.
               </div>
 
               <div class="section-subhead">Not verified because of cloud</div>
               <div class="plain-rows-list">
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Buildings obscured</span></div>
-                  <div class="plain-row-val" id="conf-cloud-b">1,196</div>
+                  <div class="plain-row-val" id="conf-cloud-b"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Bridges obscured</span></div>
-                  <div class="plain-row-val" id="conf-cloud-br">2</div>
+                  <div class="plain-row-val" id="conf-cloud-br"><span class="skeleton skeleton-stat"></span></div>
                 </div>
                 <div class="plain-row">
                   <div class="plain-row-left"><span>Roads obscured</span></div>
-                  <div class="plain-row-val" id="conf-cloud-r">32.2 km</div>
+                  <div class="plain-row-val" id="conf-cloud-r"><span class="skeleton skeleton-stat"></span></div>
                 </div>
               </div>
 

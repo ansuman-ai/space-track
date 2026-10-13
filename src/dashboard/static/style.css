@@ -1648,4 +1648,227 @@ body.projector-mode {
   border-radius: 3px;
 }
 
+/* ==========================================================================
+   Skeleton Shimmer Placeholders
+   ========================================================================== */
+.skeleton {
+  display: inline-block;
+  background: #E5E9E7;
+  background-image: linear-gradient(90deg, #E5E9E7 0px, #F0F3F2 40px, #E5E9E7 80px);
+  background-size: 300px 100%;
+  animation: skeleton-shimmer 1.5s infinite ease-out;
+  border-radius: 4px;
+  color: transparent !important;
+  user-select: none;
+  min-height: 1em;
+}
+
+.skeleton-text {
+  height: 14px;
+  width: 120px;
+  vertical-align: middle;
+}
+
+.skeleton-num {
+  height: 24px;
+  width: 48px;
+  vertical-align: middle;
+}
+
+.skeleton-stat {
+  height: 14px;
+  width: 40px;
+  vertical-align: middle;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -150px 0;
+  }
+  100% {
+    background-position: 150px 0;
+  }
+}
+
+/* ==========================================================================
+   Start Screen (Himalaya Region View, Search Bar, Editable BBox, Previous Runs)
+   ========================================================================== */
+.start-screen-overlay {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.start-screen-overlay * {
+  pointer-events: auto;
+}
+
+.start-search-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 14px 16px;
+}
+
+.start-search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.start-search-input {
+  flex: 1;
+  height: 40px;
+  font-size: 14px;
+  padding: 0 14px;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: var(--text-main);
+  outline: none;
+}
+
+.start-search-input:focus {
+  border-color: var(--border-dark);
+}
+
+.start-search-btn {
+  height: 40px;
+  padding: 0 18px;
+  background: #1B2326;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.start-search-results {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-line);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.start-search-item {
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-main);
+  background: #F6F7F5;
+  transition: background 0.15s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.start-search-item:hover {
+  background: #EAECEB;
+}
+
+.start-search-item-type {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: #E0E4E2;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.start-analysis-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-line);
+}
+
+.start-form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.start-form-col {
+  flex: 1;
+}
+
+.start-form-col label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.start-bbox-stats {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: #F0F2F1;
+  padding: 6px 10px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.start-previous-runs-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 12px 16px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.start-previous-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.start-runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.start-run-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 5px;
+  background: #F6F7F5;
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: background 0.15s;
+}
+
+.start-run-chip:hover {
+  background: #EAECEB;
+}
+
+.start-run-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+
 

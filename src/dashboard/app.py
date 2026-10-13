@@ -615,35 +615,85 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     }
 
 
-def generate_cloud_masked_median_composite(run_folder: Path, scene_type: str) -> Optional[bytes]:
-    """
-    Generates a cloud-masked median composite using the exact list of Sentinel-2 scenes
-    used by the pipeline (from run_summary.json). Remaining cloud is hatched in grey.
-    """
-    cache_key = f"{run_folder.name}_{scene_type}"
-    if cache_key in _COMPOSITE_CACHE:
-        return _COMPOSITE_CACHE[cache_key]
-
+def _find_best_s2_orbit(run_folder: Path) -> Optional[str]:
+    """Finds the primary relative orbit that has the highest coverage of clear observation in both pre and post."""
     s2_cache = run_folder / "interim" / "s2_cache"
     summary_file = run_folder / "run_summary.json"
-    if not s2_cache.exists() or not summary_file.exists():
+    if not s2_cache.exists():
         return None
 
-    try:
-        summary = json.loads(summary_file.read_text())
-    except Exception:
-        return None
+    scenes = []
+    if summary_file.exists():
+        try:
+            summary = json.loads(summary_file.read_text())
+            scenes = summary.get("s2_scenes_used", [])
+        except Exception:
+            pass
+    if not scenes:
+        scenes = [f for f in os.listdir(s2_cache) if f.endswith(".npz")]
 
-    scenes = [s for s in summary.get("s2_scenes_used", []) if s.startswith(f"{scene_type}_")]
+    orbits = set()
+    for s in scenes:
+        for p in s.split("_"):
+            if len(p) == 4 and p[0] == "R" and p[1:].isdigit():
+                orbits.add(p)
+
+    best_orbit = None
+    best_score = -1
+
+    for o in sorted(orbits):
+        pre_scenes = [s for s in scenes if s.startswith("pre_") and o in s]
+        post_scenes = [s for s in scenes if s.startswith("post_") and o in s]
+        if not pre_scenes or not post_scenes:
+            continue
+
+        def _count_clear(sc_list):
+            cnt = 0
+            for sc in sc_list:
+                p = s2_cache / sc
+                if p.exists():
+                    try:
+                        d = np.load(p)
+                        scl = d.get("SCL")
+                        if scl is not None:
+                            cnt += int(np.isin(scl, [4, 5, 6, 7]).sum())
+                    except Exception:
+                        pass
+            return cnt
+
+        c_pre = _count_clear(pre_scenes)
+        c_post = _count_clear(post_scenes)
+        # Prioritize orbit with robust observations in both pre and post
+        score = min(c_pre, c_post)
+        if score > best_score:
+            best_score = score
+            best_orbit = o
+
+    return best_orbit
+
+
+def _get_orbit_composite_array(run_folder: Path, scene_type: str, orbit: str) -> Tuple[Optional[np.ndarray], List[str]]:
+    """
+    Builds single-orbit clear-observation median composite array for scene_type ('pre' or 'post').
+    Returns (composite_float32, used_scene_names).
+    """
+    s2_cache = run_folder / "interim" / "s2_cache"
+    summary_file = run_folder / "run_summary.json"
+    scenes = []
+    if summary_file.exists():
+        try:
+            summary = json.loads(summary_file.read_text())
+            scenes = [s for s in summary.get("s2_scenes_used", []) if s.startswith(f"{scene_type}_") and orbit in s]
+        except Exception:
+            pass
     if not scenes:
-        # Fallback to files in s2_cache
-        scenes = [f for f in os.listdir(s2_cache) if f.startswith(f"{scene_type}_") and f.endswith(".npz")]
-        
+        scenes = [f for f in os.listdir(s2_cache) if f.startswith(f"{scene_type}_") and orbit in f and f.endswith(".npz")]
+
     if not scenes:
-        return None
+        return None, []
 
     visual_stack = []
-    cloud_mask_stack = []
+    used_scenes = []
 
     for s in scenes:
         spath = s2_cache / s
@@ -651,53 +701,108 @@ def generate_cloud_masked_median_composite(run_folder: Path, scene_type: str) ->
             continue
         try:
             d = np.load(spath)
-            vis = np.transpose(d["visual"], (1, 2, 0))  # (H, W, 3) uint8
+            vis = np.transpose(d["visual"], (1, 2, 0)).astype(np.float32)  # (H, W, 3)
             scl = d.get("SCL")
+
+            # Detect and mask edge-padded / stretched duplicate boundary columns
+            diff_next = np.pad(np.abs(vis[:, 1:, :] - vis[:, :-1, :]).sum(axis=-1), ((0, 0), (0, 1)))
+            diff_prev = np.pad(np.abs(vis[:, 1:, :] - vis[:, :-1, :]).sum(axis=-1), ((0, 0), (1, 0)))
+            col_dup = (diff_next == 0).all(axis=0) | (diff_prev == 0).all(axis=0)
+
+            is_all_255 = np.all(vis >= 254.0, axis=-1)
+            is_all_0 = np.all(vis <= 1.0, axis=-1)
+
+            # SCL valid clear surface: 4=veg, 5=non-veg, 6=water, 7=unclassified
+            # SCL invalid: 0=nodata, 1=defective, 2=dark, 3=shadow, 8=cloud_med, 9=cloud_high, 10=cirrus, 11=snow
             if scl is not None:
-                # SCL: 8, 9, 10 are clouds, 3 is shadow, 0 is nodata
-                is_cloud = np.isin(scl, [3, 8, 9, 10]) | np.all(vis == 0, axis=-1)
+                scl_invalid = np.isin(scl, [0, 1, 2, 3, 8, 9, 10, 11])
             else:
-                is_cloud = np.all(vis > 240, axis=-1) | np.all(vis == 0, axis=-1)
+                scl_invalid = False
+
+            invalid = scl_invalid | is_all_255 | is_all_0 | col_dup[None, :]
+            vis[invalid] = np.nan
 
             visual_stack.append(vis)
-            cloud_mask_stack.append(is_cloud)
+            used_scenes.append(s)
         except Exception as e:
             logger.debug(f"Error loading {s}: {e}")
 
     if not visual_stack:
+        return None, []
+
+    with np.errstate(all="ignore"):
+        composite = np.nanmedian(np.array(visual_stack), axis=0)
+
+    return composite, used_scenes
+
+
+def generate_cloud_masked_median_composite(run_folder: Path, scene_type: str) -> Optional[bytes]:
+    """
+    Generates a cloud-masked median composite for Sentinel-2 before/after comparison:
+    - Strictly selects scenes of ONE primary relative orbit for registration and radiometric consistency.
+    - Reprojected to common grid with proper nodata; per-pixel median of clear pixels only.
+    - SCL cloud/shadow/snow masked out.
+    - Pixels with no clear observation are transparent with a light grey diagonal hatch.
+    - Shared linear 2-98% percentile stretch between pre and post composites.
+    - Returns PNG image bytes.
+    """
+    cache_key = f"{run_folder.name}_{scene_type}"
+    if cache_key in _COMPOSITE_CACHE:
+        return _COMPOSITE_CACHE[cache_key]
+
+    orbit = _find_best_s2_orbit(run_folder)
+    if not orbit:
         return None
 
-    visual_stack = np.array(visual_stack, dtype=np.float32)
-    cloud_mask_stack = np.array(cloud_mask_stack)
+    # Compute both pre and post composites to calculate the shared 2-98% percentile stretch
+    pre_comp, _ = _get_orbit_composite_array(run_folder, "pre", orbit)
+    post_comp, _ = _get_orbit_composite_array(run_folder, "post", orbit)
 
-    # Mask cloud pixels with NaN
-    for i in range(len(visual_stack)):
-        visual_stack[i][cloud_mask_stack[i]] = np.nan
+    target_comp = pre_comp if scene_type == "pre" else post_comp
+    if target_comp is None:
+        return None
 
-    # Nanmedian composite across stack
-    with np.errstate(all="ignore"):
-        composite = np.nanmedian(visual_stack, axis=0)
+    valid_vals = []
+    if pre_comp is not None:
+        v_pre = pre_comp[~np.isnan(pre_comp)]
+        if len(v_pre) > 0:
+            valid_vals.append(v_pre)
+    if post_comp is not None:
+        v_post = post_comp[~np.isnan(post_comp)]
+        if len(v_post) > 0:
+            valid_vals.append(v_post)
 
-    # Check for remaining clouds (pixels that were cloudy in all scenes)
-    all_cloud = np.isnan(composite[..., 0])
+    if valid_vals:
+        all_valid = np.concatenate(valid_vals)
+        p2, p98 = np.percentile(all_valid, [2.0, 98.0])
+        if p98 <= p2:
+            p2, p98 = 0.0, 255.0
+    else:
+        p2, p98 = 0.0, 255.0
 
-    # Fill all-cloud pixels with diagonal hatched grey pattern
-    H, W = all_cloud.shape
+    # Apply shared 2-98% linear stretch
+    stretched = np.clip((target_comp - p2) / (p98 - p2 + 1e-5) * 255.0, 0, 255)
+
+    # Missing / cloudy pixels -> light grey diagonal hatch
+    nodata_mask = np.isnan(target_comp[..., 0])
+    H, W = nodata_mask.shape
     y_idx, x_idx = np.indices((H, W))
     hatch = ((x_idx + y_idx) % 8 < 3)
-    hatch_rgb = np.where(hatch[..., None], 90, 130).astype(np.float32)
+    # Light grey hatch lines (#DCE1DF and #F6F7F5)
+    hatch_rgb = np.where(hatch[..., None], 220, 240).astype(np.float32)
 
-    composite[all_cloud] = hatch_rgb[all_cloud]
-    composite = np.clip(composite, 0, 255).astype(np.uint8)
+    out_rgb = stretched.copy()
+    out_rgb[nodata_mask] = hatch_rgb[nodata_mask]
+    out_rgb = out_rgb.astype(np.uint8)
 
-    # Save to JPEG buffer
-    im = Image.fromarray(composite)
+    # Save to PNG buffer
+    im = Image.fromarray(out_rgb)
     buf = io.BytesIO()
-    im.save(buf, format="JPEG", quality=85)
-    jpeg_bytes = buf.getvalue()
+    im.save(buf, format="PNG")
+    png_bytes = buf.getvalue()
 
-    _COMPOSITE_CACHE[cache_key] = jpeg_bytes
-    return jpeg_bytes
+    _COMPOSITE_CACHE[cache_key] = png_bytes
+    return png_bytes
 
 
 class CreateRunRequest(BaseModel):
@@ -1268,9 +1373,14 @@ def get_s2_metadata(run_id: str):
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading summary")
 
+    orbit = _find_best_s2_orbit(run_folder)
     s2_scenes = summary.get("s2_scenes_used", [])
-    pre_scenes = [s for s in s2_scenes if s.startswith("pre_")]
-    post_scenes = [s for s in s2_scenes if s.startswith("post_")]
+    if orbit:
+        pre_scenes = [s for s in s2_scenes if s.startswith("pre_") and orbit in s]
+        post_scenes = [s for s in s2_scenes if s.startswith("post_") and orbit in s]
+    else:
+        pre_scenes = [s for s in s2_scenes if s.startswith("pre_")]
+        post_scenes = [s for s in s2_scenes if s.startswith("post_")]
 
     def extract_dates(scenes_list):
         dates = set()
@@ -1287,6 +1397,7 @@ def get_s2_metadata(run_id: str):
     return {
         "run_id": run_id,
         "bbox": meta["bbox"] if meta else [],
+        "orbit": orbit,
         "pre": {
             "scenes_count": len(pre_scenes),
             "date_range": f"{pre_dates[0]} to {pre_dates[-1]}" if pre_dates else "—",
@@ -1302,14 +1413,14 @@ def get_s2_metadata(run_id: str):
 
 @app.get("/api/runs/{run_id}/s2-image")
 def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$")):
-    """Generates read-only cloud-masked median composite Sentinel-2 JPEG from raw cache."""
+    """Generates read-only cloud-masked median composite Sentinel-2 PNG from raw cache."""
     run_folder = validate_run_id(run_id)
 
-    jpeg_bytes = generate_cloud_masked_median_composite(run_folder, type)
-    if not jpeg_bytes:
+    png_bytes = generate_cloud_masked_median_composite(run_folder, type)
+    if not png_bytes:
         raise HTTPException(status_code=404, detail=f"Could not generate {type} S2 composite")
 
-    return Response(content=jpeg_bytes, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    return Response(content=png_bytes, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/runs/{run_id}/basemap/hillshade")
@@ -1547,6 +1658,41 @@ def get_run_sitrep(run_id: str, lang: str = "en", format: str = "pdf"):
         filename=filename,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+
+_LAST_NOMINATIM_CALL: float = 0.0
+
+@app.get("/api/search/place")
+def search_place(q: str = Query(..., min_length=2)):
+    """
+    Queries OpenStreetMap Nominatim for places with 1s rate limit and standard headers.
+    """
+    global _LAST_NOMINATIM_CALL
+    now = time.time()
+    elapsed = now - _LAST_NOMINATIM_CALL
+    if elapsed < 1.0:
+        time.sleep(1.0 - elapsed)
+    _LAST_NOMINATIM_CALL = time.time()
+
+    import urllib.request
+    import urllib.parse
+    params = urllib.parse.urlencode({"q": q, "format": "json", "limit": 5})
+    url = f"https://nominatim.openstreetmap.org/search?{params}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "SpaceborneDisasterPlatform/1.1 (https://github.com/spaceborne/disaster-assessment)",
+            "Referer": "http://127.0.0.1:8000/"
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return JSONResponse(data)
+    except Exception as e:
+        logger.warning(f"Nominatim search failed: {e}")
+        return JSONResponse([])
 
 
 @app.get("/")

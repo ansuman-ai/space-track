@@ -38,6 +38,12 @@ let s2OverlayActive = false;
 let s2PreOverlay = null;
 let s2PostOverlay = null;
 
+// Start screen state
+let isStartScreenActive = false;
+let startBboxRect = null;
+let startBboxCornerMarkers = [];
+let startSearchThrottleTimer = null;
+
 function startDashboardApp() {
   initMap();
   initHeaderControls();
@@ -46,11 +52,13 @@ function startDashboardApp() {
   initAccessFilters();
   initCopilot();
   initModals();
+  initStartScreen();
   loadRunsList();
 }
 
+// Start application immediately
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", startDashboardApp);
+  document.addEventListener("DOMContentLoaded", () => startDashboardApp());
 } else {
   startDashboardApp();
 }
@@ -122,6 +130,17 @@ function initMap() {
   // 4. AOI Dimming Pane (z=200)
   map.createPane("aoiDimPane");
   map.getPane("aoiDimPane").style.zIndex = 200;
+
+  // 5. Sentinel-2 Comparison Imagery Pane (z=250, below vector overlays at z=400+)
+  map.createPane("s2Pane");
+  map.getPane("s2Pane").style.zIndex = 250;
+
+  // Add default OSM raster tiles to osmTilePane
+  baseLayers.osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    pane: "osmTilePane",
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  }).addTo(map);
 
   baseLayers.offlineGroup = L.layerGroup();
 }
@@ -349,58 +368,18 @@ function initAccessFilters() {
 }
 
 // ==========================================================================
-// Runs Discovery & Switcher
+// Start Screen & Region View (Item 3)
+// Map roughly 70-98 E, 5-37 N with Nominatim Search & 10x10km editable box
 // ==========================================================================
-async function loadRunsList() {
-  try {
-    const res = await fetch("/api/runs?show_all=true");
-    allRunsList = await res.json();
+function initStartScreen() {
+  const searchInput = document.getElementById("start-search-input");
+  const searchBtn = document.getElementById("btn-start-search");
+  const resultsDiv = document.getElementById("start-search-results");
+  const dateInput = document.getElementById("start-event-date");
+  const datePreview = document.getElementById("start-date-preview");
+  const analyseBtn = document.getElementById("btn-start-analyse");
 
-    const select = document.getElementById("modal-run-select");
-    select.innerHTML = "";
-    allRunsList.forEach(run => {
-      const opt = document.createElement("option");
-      opt.value = run.id;
-      opt.textContent = run.label;
-      select.appendChild(opt);
-    });
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetRun = urlParams.get("run");
-    const initialRunId = targetRun && allRunsList.some(r => r.id === targetRun) ? targetRun : allRunsList[0].id;
-
-    select.value = initialRunId;
-    loadRun(initialRunId);
-
-  } catch (err) {
-    console.error("Failed to load runs:", err);
-  }
-}
-
-function openRunSwitcherModal() {
-  const modal = document.getElementById("run-switcher-modal");
-  const select = document.getElementById("modal-run-select");
-  if (currentRunId) select.value = currentRunId;
-  modal.classList.remove("hidden");
-}
-
-function initModals() {
-  // Run Switcher Modal
-  const sModal = document.getElementById("run-switcher-modal");
-  document.getElementById("btn-close-switcher-modal").onclick = () => sModal.classList.add("hidden");
-  document.getElementById("btn-cancel-switcher").onclick = () => sModal.classList.add("hidden");
-  document.getElementById("btn-confirm-switcher").onclick = () => {
-    const select = document.getElementById("modal-run-select");
-    sModal.classList.add("hidden");
-    loadRun(select.value);
-  };
-
-  // New Analysis Modal
-  const nModal = document.getElementById("new-run-modal");
-  const dateInput = document.getElementById("input-event-date");
-  const datePreview = document.getElementById("date-format-preview");
-
-  function updateDatePreview() {
+  function updateStartDatePreview() {
     if (!dateInput.value) {
       datePreview.textContent = "";
       return;
@@ -413,24 +392,405 @@ function initModals() {
     }
   }
 
-  dateInput.addEventListener("input", updateDatePreview);
-  dateInput.addEventListener("change", updateDatePreview);
-
-  function openNewRunModal() {
-    nModal.classList.remove("hidden");
-    document.getElementById("new-run-error").classList.add("hidden");
-    // Pre-fill bounding box from current map view if fields are empty
-    if (map && !document.getElementById("input-bbox-w").value) {
-      const bounds = map.getBounds();
-      document.getElementById("input-bbox-w").value = bounds.getWest().toFixed(4);
-      document.getElementById("input-bbox-s").value = bounds.getSouth().toFixed(4);
-      document.getElementById("input-bbox-e").value = bounds.getEast().toFixed(4);
-      document.getElementById("input-bbox-n").value = bounds.getNorth().toFixed(4);
-    }
-    updateDatePreview();
+  if (dateInput) {
+    dateInput.addEventListener("input", updateStartDatePreview);
+    dateInput.addEventListener("change", updateStartDatePreview);
+    // Default date to today or 2026-08-26
+    dateInput.value = "2026-08-26";
+    updateStartDatePreview();
   }
 
-  document.getElementById("btn-new-run").onclick = openNewRunModal;
+  // Search only on Enter or click (no autocomplete)
+  if (searchBtn && searchInput) {
+    searchBtn.addEventListener("click", () => doNominatimSearch(searchInput.value.trim()));
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        doNominatimSearch(searchInput.value.trim());
+      }
+    });
+  }
+
+  if (analyseBtn) {
+    analyseBtn.addEventListener("click", async () => {
+      if (!startBboxRect) {
+        alert("Please search a place to select an area first.");
+        return;
+      }
+      const bounds = startBboxRect.getBounds();
+      const w = bounds.getWest();
+      const s = bounds.getSouth();
+      const e = bounds.getEast();
+      const n = bounds.getNorth();
+
+      const eventDate = document.getElementById("start-event-date").value.trim();
+      const eventName = document.getElementById("start-event-name").value.trim();
+      if (!eventDate) {
+        alert("Please choose an event date.");
+        return;
+      }
+
+      analyseBtn.disabled = true;
+      analyseBtn.textContent = "Starting assessment...";
+
+      try {
+        const resp = await fetch("/api/runs/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bbox: [w, s, e, n],
+            event_date: eventDate,
+            event_name: eventName || null
+          })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || "Failed to create assessment");
+        }
+        const data = await resp.json();
+        // Transition to live tracking
+        hideStartScreen();
+        await loadRunsList();
+        loadRun(data.run_id);
+      } catch (err) {
+        alert("Error launching assessment: " + err.message);
+      } finally {
+        analyseBtn.disabled = false;
+        analyseBtn.textContent = "Analyse this area";
+      }
+    });
+  }
+}
+
+async function doNominatimSearch(query) {
+  if (!query || query.length < 2) return;
+  const resultsDiv = document.getElementById("start-search-results");
+  if (!resultsDiv) return;
+
+  resultsDiv.innerHTML = '<div style="font-size: 11.5px; color: var(--text-secondary); padding: 4px;">Searching...</div>';
+  resultsDiv.classList.remove("hidden");
+
+  try {
+    const res = await fetch(`/api/search/place?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    resultsDiv.innerHTML = "";
+
+    if (!data || data.length === 0) {
+      resultsDiv.innerHTML = '<div style="font-size: 11.5px; color: var(--text-secondary); padding: 4px;">No places found. Try another place name.</div>';
+      return;
+    }
+
+    const items = data.slice(0, 5);
+    items.forEach(place => {
+      const itemEl = document.createElement("div");
+      itemEl.className = "start-search-item";
+      const cleanName = place.display_name.split(",").slice(0, 3).join(",");
+      const typeLabel = place.type || place.class || "place";
+      itemEl.innerHTML = `
+        <span>${escapeHtml(cleanName)}</span>
+        <span class="start-search-item-type">${escapeHtml(typeLabel)}</span>
+      `;
+      itemEl.addEventListener("click", () => {
+        selectSearchResultPlace(place);
+      });
+      resultsDiv.appendChild(itemEl);
+    });
+  } catch (err) {
+    resultsDiv.innerHTML = `<div style="font-size: 11.5px; color: var(--data-destroyed); padding: 4px;">Search failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function selectSearchResultPlace(place) {
+  const lat = parseFloat(place.lat);
+  const lon = parseFloat(place.lon);
+  if (isNaN(lat) || isNaN(lon)) return;
+
+  const resultsDiv = document.getElementById("start-search-results");
+  if (resultsDiv) resultsDiv.classList.add("hidden");
+
+  // Center map on place at zoom 12
+  map.setView([lat, lon], 12);
+
+  // Create editable ~10x10 km box centered at (lat, lon)
+  // At latitude `lat`, 10km is ~ 10/111 deg lat, and 10/(111*cos(lat)) deg lon
+  const latDelta = (10.0 / 111.0) / 2.0; // ~0.045 deg
+  const cosLat = Math.max(0.1, Math.cos((lat * Math.PI) / 180.0));
+  const lonDelta = (10.0 / (111.0 * cosLat)) / 2.0;
+
+  const south = lat - latDelta;
+  const north = lat + latDelta;
+  const west = lon - lonDelta;
+  const east = lon + lonDelta;
+
+  renderEditableBbox([west, south, east, north]);
+
+  const formEl = document.getElementById("start-analysis-form");
+  if (formEl) formEl.classList.remove("hidden");
+
+  // Auto-populate default event name if empty
+  const nameInput = document.getElementById("start-event-name");
+  if (nameInput && !nameInput.value) {
+    const pName = place.display_name.split(",")[0].trim();
+    nameInput.value = `${pName} Assessment`;
+  }
+}
+
+function renderEditableBbox(bbox) {
+  clearStartBbox();
+  const [w, s, e, n] = bbox;
+  const bounds = [[s, w], [n, e]];
+
+  startBboxRect = L.rectangle(bounds, {
+    color: "#B42318",
+    weight: 2,
+    dashArray: "4, 4",
+    fillColor: "#B42318",
+    fillOpacity: 0.12
+  }).addTo(map);
+
+  updateStartBboxStats();
+
+  // 4 Corner Drag Handles
+  const corners = [
+    { id: "sw", latlng: [s, w] },
+    { id: "nw", latlng: [n, w] },
+    { id: "ne", latlng: [n, e] },
+    { id: "se", latlng: [s, e] }
+  ];
+
+  corners.forEach(c => {
+    const marker = L.circleMarker(c.latlng, {
+      radius: 6,
+      color: "#B42318",
+      fillColor: "#FFFFFF",
+      fillOpacity: 1,
+      weight: 2,
+      draggable: true
+    }).addTo(map);
+
+    // Make interactive dragging
+    let isDragging = false;
+    marker.on("mousedown", (ev) => {
+      L.DomEvent.stopPropagation(ev);
+      isDragging = true;
+      map.dragging.disable();
+
+      const onMouseMove = (moveEv) => {
+        if (!isDragging) return;
+        const curB = startBboxRect.getBounds();
+        let curW = curB.getWest();
+        let curE = curB.getEast();
+        let curS = curB.getSouth();
+        let curN = curB.getNorth();
+
+        const pLat = moveEv.latlng.lat;
+        const pLng = moveEv.latlng.lng;
+
+        if (c.id === "sw") { curS = pLat; curW = pLng; }
+        else if (c.id === "nw") { curN = pLat; curW = pLng; }
+        else if (c.id === "ne") { curN = pLat; curE = pLng; }
+        else if (c.id === "se") { curS = pLat; curE = pLng; }
+
+        // Enforce 0.5 deg max limit per side
+        if (Math.abs(curE - curW) <= 0.5 && Math.abs(curN - curS) <= 0.5) {
+          const newB = [[Math.min(curS, curN), Math.min(curW, curE)], [Math.max(curS, curN), Math.max(curW, curE)]];
+          startBboxRect.setBounds(newB);
+          marker.setLatLng(moveEv.latlng);
+          updateStartBboxStats();
+        }
+      };
+
+      const onMouseUp = () => {
+        isDragging = false;
+        map.dragging.enable();
+        map.off("mousemove", onMouseMove);
+        map.off("mouseup", onMouseUp);
+        // Resync all 4 corner positions
+        const finB = startBboxRect.getBounds();
+        renderEditableBbox([finB.getWest(), finB.getSouth(), finB.getEast(), finB.getNorth()]);
+      };
+
+      map.on("mousemove", onMouseMove);
+      map.on("mouseup", onMouseUp);
+    });
+
+    startBboxCornerMarkers.push(marker);
+  });
+}
+
+function updateStartBboxStats() {
+  if (!startBboxRect) return;
+  const b = startBboxRect.getBounds();
+  const latDistKm = Math.abs(b.getNorth() - b.getSouth()) * 111.0;
+  const midLat = (b.getNorth() + b.getSouth()) / 2.0;
+  const lonDistKm = Math.abs(b.getEast() - b.getWest()) * 111.0 * Math.cos((midLat * Math.PI) / 180.0);
+  const areaKm2 = latDistKm * lonDistKm;
+
+  const latSpan = Math.abs(b.getNorth() - b.getSouth());
+  const lonSpan = Math.abs(b.getEast() - b.getWest());
+  const isOverLimit = latSpan > 0.5 || lonSpan > 0.5;
+
+  const dimsEl = document.getElementById("start-bbox-km-dims");
+  const limitEl = document.getElementById("start-bbox-limit-msg");
+
+  if (dimsEl) {
+    dimsEl.textContent = `Area: ${lonDistKm.toFixed(1)} × ${latDistKm.toFixed(1)} km (${Math.round(areaKm2)} km²)`;
+  }
+  if (limitEl) {
+    if (isOverLimit) {
+      limitEl.textContent = "Exceeds 0.5° maximum limit!";
+      limitEl.style.color = "var(--data-destroyed)";
+    } else {
+      limitEl.textContent = "Within 0.5° limit";
+      limitEl.style.color = "var(--text-secondary)";
+    }
+  }
+}
+
+function clearStartBbox() {
+  if (startBboxRect) {
+    map.removeLayer(startBboxRect);
+    startBboxRect = null;
+  }
+  startBboxCornerMarkers.forEach(m => map.removeLayer(m));
+  startBboxCornerMarkers = [];
+}
+
+function showStartScreen() {
+  isStartScreenActive = true;
+  currentRunId = null;
+  currentRunData = null;
+
+  // Clear URL run param
+  const url = new URL(window.location);
+  url.searchParams.delete("run");
+  window.history.replaceState({}, "", url);
+
+  // Show Start Screen overlay
+  const panel = document.getElementById("start-screen-panel");
+  if (panel) panel.classList.remove("hidden");
+
+  // Show full OSM basemap without AOI dimming
+  if (aoiDimLayer) { map.removeLayer(aoiDimLayer); aoiDimLayer = null; }
+  if (aoiDashedLine) { map.removeLayer(aoiDashedLine); aoiDashedLine = null; }
+  Object.keys(geojsonLayers).forEach(k => {
+    if (geojsonLayers[k]) {
+      map.removeLayer(geojsonLayers[k]);
+      geojsonLayers[k] = null;
+    }
+  });
+
+  // Ensure base OSM tiles are loaded
+  if (!baseLayers.osmTiles) {
+    baseLayers.osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      pane: "osmTilePane",
+      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors"
+    }).addTo(map);
+  }
+
+  // Himalayan / South Asia Regional View (~70–98 E, 5–37 N)
+  map.fitBounds([[5, 70], [37, 98]]);
+
+  // Populate Previous assessments
+  populatePreviousAssessments();
+}
+
+function hideStartScreen() {
+  isStartScreenActive = false;
+  clearStartBbox();
+  const panel = document.getElementById("start-screen-panel");
+  if (panel) panel.classList.add("hidden");
+}
+
+function populatePreviousAssessments() {
+  const listEl = document.getElementById("start-previous-runs-list");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+
+  if (!allRunsList || allRunsList.length === 0) {
+    listEl.innerHTML = '<div class="start-run-meta" style="padding: 6px;">No previous runs found.</div>';
+    return;
+  }
+
+  allRunsList.forEach(run => {
+    const chip = document.createElement("div");
+    chip.className = "start-run-chip";
+    chip.innerHTML = `
+      <span style="font-weight: 500;">${escapeHtml(run.label)}</span>
+      <span class="start-run-meta">${escapeHtml(run.event_date || "")}</span>
+    `;
+    chip.addEventListener("click", () => {
+      hideStartScreen();
+      loadRun(run.id);
+    });
+    listEl.appendChild(chip);
+  });
+}
+
+// ==========================================================================
+// Runs Discovery & Switcher
+// ==========================================================================
+async function loadRunsList() {
+  try {
+    const res = await fetch("/api/runs?show_all=true");
+    allRunsList = await res.json();
+
+    const select = document.getElementById("modal-run-select");
+    if (select) {
+      select.innerHTML = "";
+      allRunsList.forEach(run => {
+        const opt = document.createElement("option");
+        opt.value = run.id;
+        opt.textContent = run.label;
+        select.appendChild(opt);
+      });
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetRun = urlParams.get("run");
+
+    if (targetRun && allRunsList.some(r => r.id === targetRun)) {
+      hideStartScreen();
+      if (select) select.value = targetRun;
+      loadRun(targetRun);
+    } else {
+      // First open without ?run= -> Start screen mode!
+      showStartScreen();
+    }
+
+  } catch (err) {
+    console.error("Failed to load runs:", err);
+  }
+}
+
+function openRunSwitcherModal() {
+  const modal = document.getElementById("run-switcher-modal");
+  const select = document.getElementById("modal-run-select");
+  if (currentRunId && select) select.value = currentRunId;
+  modal.classList.remove("hidden");
+}
+
+function initModals() {
+  // Run Switcher Modal
+  const sModal = document.getElementById("run-switcher-modal");
+  document.getElementById("btn-close-switcher-modal").onclick = () => sModal.classList.add("hidden");
+  document.getElementById("btn-cancel-switcher").onclick = () => sModal.classList.add("hidden");
+  document.getElementById("btn-confirm-switcher").onclick = () => {
+    const select = document.getElementById("modal-run-select");
+    sModal.classList.add("hidden");
+    hideStartScreen();
+    loadRun(select.value);
+  };
+
+  // New Analysis button returns to Start Screen
+  document.getElementById("btn-new-run").onclick = () => {
+    showStartScreen();
+  };
+
+  const nModal = document.getElementById("new-run-modal");
+  const dateInput = document.getElementById("input-event-date");
+  const datePreview = document.getElementById("date-format-preview");
   document.getElementById("btn-close-new-modal").onclick = () => nModal.classList.add("hidden");
   document.getElementById("btn-cancel-new-run").onclick = () => nModal.classList.add("hidden");
 
@@ -551,6 +911,7 @@ function initModals() {
 // Load Specific Run
 // ==========================================================================
 async function loadRun(runId) {
+  hideStartScreen();
   if (currentRunId === runId && currentRunData) return;
   currentRunId = runId;
 
@@ -1577,12 +1938,12 @@ async function toggleS2Slider(activate) {
   // 2. Zoom to damaged area (or AOI if no damage)
   zoomToDamagedArea(currentRunData);
 
-  // 3. Attach S2 overlays above basemap and vectors
+  // 3. Attach S2 overlays above basemap and below vector data layers
   bar.classList.remove("hidden");
   range.value = 50;
 
-  s2PreOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=pre`, bounds, { zIndex: 400 }).addTo(map);
-  s2PostOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=post`, bounds, { zIndex: 410 }).addTo(map);
+  s2PreOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=pre`, bounds, { pane: "s2Pane", zIndex: 1 }).addTo(map);
+  s2PostOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=post`, bounds, { pane: "s2Pane", zIndex: 2 }).addTo(map);
 
   const applyClip = () => {
     if (!s2PostOverlay) return;
