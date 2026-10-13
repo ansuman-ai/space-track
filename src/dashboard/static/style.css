@@ -347,36 +347,75 @@ html, body {
   pointer-events: none;
 }
 
-/* Map Top-Right Controls: North Arrow + Zoom buttons */
-.map-north-arrow {
-  position: absolute;
+/* Adjust Leaflet zoom controls to sit nicely at top-right */
+.leaflet-top.leaflet-right {
   top: 14px;
   right: 14px;
-  z-index: 900;
-  background: #FFFFFF;
+}
+
+.leaflet-top.leaflet-right .leaflet-control-zoom {
+  margin: 0;
   border: 1px solid var(--border-line);
-  border-radius: 4px;
-  width: 30px;
-  height: 32px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-.north-icon {
-  width: 12px;
-  height: 12px;
+/* Map Top-Right Controls: North Arrow + Before/After Action Button (sits under zoom control) */
+.map-top-right-controls {
+  position: absolute;
+  top: 92px;
+  right: 14px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
-.map-north-arrow span {
-  font-size: 9px;
-  font-weight: 600;
+.map-north-arrow {
+  display: none; /* Keep map clean, or standard orientation */
+}
+
+.btn-map-action {
+  background: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-main);
-  line-height: 1;
-  margin-top: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-map-action:hover {
+  background: var(--bg-page);
+  border-color: var(--border-dark);
+}
+
+.btn-map-action.active {
+  background: var(--text-main);
+  border-color: var(--text-main);
+  color: #FFFFFF;
+}
+
+.map-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Position Leaflet scale control in bottom-left above status ribbon (bottom 30px) */
+.leaflet-bottom.leaflet-left {
+  bottom: 28px;
+  left: 14px;
+}
+
+.leaflet-bottom.leaflet-left .leaflet-control-scale {
+  margin: 0;
 }
 
 /* Bottom Map Status Ribbon (Thin white, 24px) */
@@ -1028,69 +1067,200 @@ html, body {
   margin-top: 2px;
 }
 
-/* Ask Tab */
+/* ==========================================================================
+   Floating Copilot Assistant
+   ========================================================================== */
+.floating-copilot-btn {
+  position: absolute;
+  bottom: 38px;
+  right: 18px;
+  z-index: 920;
+  height: 44px;
+  padding: 0 16px;
+  background-color: #1B2326;
+  color: #FFFFFF;
+  border: 1px solid #1B2326;
+  border-radius: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.floating-copilot-btn:hover {
+  background-color: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.floating-copilot-btn:active {
+  transform: translateY(0);
+}
+
+.copilot-btn-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.copilot-btn-text {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Floating Window: 380x520px anchored bottom-right */
+.copilot-window {
+  position: absolute;
+  bottom: 38px;
+  right: 18px;
+  width: 380px;
+  height: 520px;
+  max-width: calc(100% - 36px);
+  max-height: calc(100% - 60px);
+  background: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.copilot-window.hidden {
+  display: none !important;
+}
+
+.copilot-window-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-line);
+  background: #FAFAFA;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.copilot-header-title-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.copilot-dot-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16A34A;
+  flex-shrink: 0;
+}
+
+.copilot-title-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copilot-window-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.copilot-window-close-btn:hover {
+  background: var(--bg-page);
+  color: var(--text-main);
+}
+
+.copilot-window-body {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .copilot-chips-wrap {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 12px;
+  gap: 6px;
 }
 
 .copilot-chip {
   text-align: left;
   background: #FFFFFF;
   border: 1px solid var(--border-line);
-  border-radius: 4px;
-  padding: 6px 10px;
+  border-radius: 6px;
+  padding: 7px 10px;
   font-size: 12px;
   color: var(--text-main);
   cursor: pointer;
-  line-height: 1.3;
-  transition: all 0.1s ease;
+  line-height: 1.35;
+  transition: all 0.12s ease;
 }
 
 .copilot-chip:hover {
   background: var(--bg-page);
-  border-color: var(--border-medium);
-}
-
-.copilot-form {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.copilot-input {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--border-medium);
-  border-radius: 4px;
-  font-size: 12px;
-  outline: none;
-}
-
-.copilot-input:focus {
   border-color: var(--border-dark);
 }
 
-.copilot-answer-card {
-  border: 1px solid var(--border-line);
-  border-radius: 4px;
-  padding: 10px 12px;
+.copilot-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copilot-msg-user {
+  align-self: flex-end;
+  background: #1B2326;
+  color: #FFFFFF;
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  max-width: 85%;
+  word-break: break-word;
+}
+
+.copilot-msg-bot {
+  align-self: flex-start;
   background: var(--bg-page);
-  font-size: 12px;
+  border: 1px solid var(--border-line);
+  padding: 10px 12px;
+  border-radius: 12px 12px 12px 2px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: var(--text-main);
+  max-width: 95%;
+  word-break: break-word;
+}
+
+.copilot-msg-bot .answer-text {
   white-space: pre-wrap;
 }
 
-.copilot-answer-footer {
+.copilot-msg-meta {
   font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 8px;
+  color: var(--text-secondary);
+  margin-top: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .copilot-sources-btn {
@@ -1110,6 +1280,97 @@ html, body {
   border: 1px solid var(--border-line);
   border-radius: 4px;
   font-size: 11px;
+  line-height: 1.4;
+}
+
+.copilot-sources-accordion.hidden {
+  display: none !important;
+}
+
+.copilot-window-form {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-line);
+  background: #FFFFFF;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.copilot-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+
+.copilot-input:focus {
+  border-color: var(--border-dark);
+}
+
+/* S2 Slider Controls */
+.slider-bar-overlay {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 6px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 920;
+  font-size: 12px;
+}
+
+.s2-slider-label-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.s2-label-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.s2-date-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.btn-slider-close {
+  background: none;
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.btn-slider-close:hover {
+  background: var(--bg-page);
+  color: var(--text-main);
+}
+
+/* Narrow screens: Copilot window becomes a bottom sheet */
+@media (max-width: 640px) {
+  .copilot-window {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 70vh;
+    border-radius: 12px 12px 0 0;
+  }
 }
 
 /* ==========================================================================

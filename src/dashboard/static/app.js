@@ -38,7 +38,7 @@ let s2OverlayActive = false;
 let s2PreOverlay = null;
 let s2PostOverlay = null;
 
-document.addEventListener("DOMContentLoaded", () => {
+function startDashboardApp() {
   initMap();
   initHeaderControls();
   initTabs();
@@ -47,7 +47,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initCopilot();
   initModals();
   loadRunsList();
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startDashboardApp);
+} else {
+  startDashboardApp();
+}
 
 // ==========================================================================
 // Map Initialization
@@ -61,11 +67,11 @@ function initMap() {
     preferCanvas: true
   });
 
-  // Zoom control in bottom right
-  L.control.zoom({ position: "bottomright" }).addTo(map);
+  // Zoom control in top right (above map action controls)
+  L.control.zoom({ position: "topright" }).addTo(map);
 
-  // Scale bar in bottom right
-  L.control.scale({ position: "bottomright", metric: true, imperial: false }).addTo(map);
+  // Scale bar in bottom left (above status ribbon, clear of copilot button and legend)
+  L.control.scale({ position: "bottomleft", metric: true, imperial: false }).addTo(map);
 
   // Cursor and Center coordinates in status ribbon
   const updateCoords = (lat, lng) => {
@@ -158,6 +164,14 @@ function initHeaderControls() {
   const optSlider = document.getElementById("menu-opt-slider");
   if (optSlider) {
     optSlider.addEventListener("click", () => {
+      toggleS2Slider(!s2OverlayActive);
+    });
+  }
+
+  // Map Top-Right Before / after button
+  const btnMapS2 = document.getElementById("btn-toggle-s2-comparison");
+  if (btnMapS2) {
+    btnMapS2.addEventListener("click", () => {
       toggleS2Slider(!s2OverlayActive);
     });
   }
@@ -449,6 +463,9 @@ async function loadRun(runId) {
 
     // 2. Update Side Panel
     updateSidePanel(data);
+
+    // Reset Copilot assistant for this run
+    resetCopilotForNewRun(data);
 
     // 3. Clear existing layers
     Object.keys(geojsonLayers).forEach(k => {
@@ -1369,17 +1386,33 @@ async function loadRepairPackagesLayer(runId) {
 }
 
 // ==========================================================================
-// S2 Slider
+// S2 Slider: Before / After Sentinel-2 Comparison
 // ==========================================================================
-function toggleS2Slider(activate) {
+let preS2SavedBounds = null;
+
+async function toggleS2Slider(activate) {
   const bar = document.getElementById("s2-slider-bar");
   const range = document.getElementById("s2-range-slider");
+  const btnMapS2 = document.getElementById("btn-toggle-s2-comparison");
+  const lblPre = document.getElementById("s2-date-pre");
+  const lblPost = document.getElementById("s2-date-post");
   s2OverlayActive = activate;
+
+  if (btnMapS2) {
+    if (activate) btnMapS2.classList.add("active");
+    else btnMapS2.classList.remove("active");
+  }
 
   if (!activate) {
     bar.classList.add("hidden");
     if (s2PreOverlay) { map.removeLayer(s2PreOverlay); s2PreOverlay = null; }
     if (s2PostOverlay) { map.removeLayer(s2PostOverlay); s2PostOverlay = null; }
+
+    // Restore normal map view if previous bounds were saved
+    if (preS2SavedBounds) {
+      map.fitBounds(preS2SavedBounds, { padding: [20, 20], maxZoom: 15 });
+      preS2SavedBounds = null;
+    }
     return;
   }
 
@@ -1387,58 +1420,169 @@ function toggleS2Slider(activate) {
   const [w, s, e, n] = currentRunData.bbox;
   const bounds = [[s, w], [n, e]];
 
+  // Save previous map bounds to restore upon closing
+  preS2SavedBounds = map.getBounds();
+
+  // 1. Fetch S2 metadata to display composite date ranges
+  try {
+    const metaRes = await fetch(`/api/runs/${currentRunId}/s2-meta`);
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (lblPre) lblPre.textContent = meta.pre?.date_range || "—";
+      if (lblPost) lblPost.textContent = meta.post?.date_range || "—";
+    }
+  } catch (err) {
+    console.warn("Could not load s2-meta:", err);
+  }
+
+  // 2. Zoom to damaged area (or AOI if no damage)
+  zoomToDamagedArea(currentRunData);
+
+  // 3. Attach S2 overlays above basemap and vectors
   bar.classList.remove("hidden");
+  range.value = 50;
+
   s2PreOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=pre`, bounds, { zIndex: 400 }).addTo(map);
   s2PostOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=post`, bounds, { zIndex: 410 }).addTo(map);
 
-  range.oninput = () => {
+  const applyClip = () => {
     if (!s2PostOverlay) return;
     const el = s2PostOverlay.getElement();
     if (el) el.style.clipPath = `inset(0 0 0 ${range.value}%)`;
   };
 
+  s2PostOverlay.on("load", applyClip);
+  range.oninput = applyClip;
+  setTimeout(applyClip, 100);
+
   document.getElementById("btn-close-s2-slider").onclick = () => toggleS2Slider(false);
 }
 
 // ==========================================================================
-// Copilot (Item 5 Ask Tab)
+// Floating Copilot Assistant
 // ==========================================================================
-function initCopilot() {
-  const chips = document.querySelectorAll(".copilot-chip");
-  const form = document.getElementById("copilot-form");
-  const input = document.getElementById("copilot-input");
+let copilotLastFocusedEl = null;
 
+function initCopilot() {
+  const btnFloating = document.getElementById("btn-floating-copilot");
+  const win = document.getElementById("copilot-floating-window");
+  const btnClose = document.getElementById("btn-close-copilot-window");
+  const form = document.getElementById("copilot-window-form");
+  const input = document.getElementById("copilot-window-input");
+  const chips = document.querySelectorAll(".copilot-chip");
+
+  // Open / Close window
+  if (btnFloating && win) {
+    btnFloating.addEventListener("click", () => {
+      openCopilotWindow();
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener("click", () => {
+      closeCopilotWindow();
+    });
+  }
+
+  // Escape key closes copilot
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && win && !win.classList.contains("hidden")) {
+      closeCopilotWindow();
+    }
+  });
+
+  // Suggestion chips
   chips.forEach(c => {
     c.addEventListener("click", () => {
       const q = c.getAttribute("data-q");
-      if (input) input.value = q;
-      askCopilot(q);
+      if (q) askCopilot(q);
     });
   });
 
+  // Form submission
   if (form) {
     form.onsubmit = (e) => {
       e.preventDefault();
       const q = input.value.trim();
-      if (q) askCopilot(q);
+      if (q) {
+        input.value = "";
+        askCopilot(q);
+      }
     };
   }
+}
+
+function openCopilotWindow() {
+  const win = document.getElementById("copilot-floating-window");
+  const input = document.getElementById("copilot-window-input");
+  const titleEl = document.getElementById("copilot-window-title");
+
+  if (!win) return;
+  copilotLastFocusedEl = document.activeElement;
+
+  if (currentRunData) {
+    titleEl.textContent = `Copilot · ${currentRunData.main_title || currentRunData.label || "Assessment"}`;
+  }
+
+  win.classList.remove("hidden");
+  if (input) {
+    setTimeout(() => input.focus(), 50);
+  }
+}
+
+function closeCopilotWindow() {
+  const win = document.getElementById("copilot-floating-window");
+  if (!win) return;
+  win.classList.add("hidden");
+  if (copilotLastFocusedEl && typeof copilotLastFocusedEl.focus === "function") {
+    copilotLastFocusedEl.focus();
+  }
+}
+
+function resetCopilotForNewRun(data) {
+  const titleEl = document.getElementById("copilot-window-title");
+  const listEl = document.getElementById("copilot-messages-list");
+  const chipsEl = document.getElementById("copilot-chips-wrap");
+  const input = document.getElementById("copilot-window-input");
+
+  if (titleEl && data) {
+    titleEl.textContent = `Copilot · ${data.main_title || data.label || "Assessment"}`;
+  }
+  if (listEl) listEl.innerHTML = "";
+  if (chipsEl) chipsEl.classList.remove("hidden");
+  if (input) input.value = "";
 }
 
 async function askCopilot(question) {
   if (!currentRunId) return;
 
-  const box = document.getElementById("copilot-answer-box");
-  const meta = document.getElementById("copilot-runtime-tag");
-  const btnSources = document.getElementById("copilot-sources-btn");
-  const listSources = document.getElementById("copilot-sources-list");
-  const sendBtn = document.getElementById("copilot-send-btn");
+  const chipsEl = document.getElementById("copilot-chips-wrap");
+  const listEl = document.getElementById("copilot-messages-list");
+  const container = document.getElementById("copilot-messages-container");
+  const sendBtn = document.getElementById("copilot-window-send-btn");
 
-  sendBtn.disabled = true;
-  box.textContent = `Consulting copilot on "${question}"...`;
-  meta.textContent = "Processing query...";
-  btnSources.classList.add("hidden");
-  listSources.classList.add("hidden");
+  // Hide suggestion chips once a question has been asked
+  if (chipsEl) chipsEl.classList.add("hidden");
+
+  // 1. Render User Message
+  const userMsgEl = document.createElement("div");
+  userMsgEl.className = "copilot-msg-user";
+  userMsgEl.textContent = question;
+  listEl.appendChild(userMsgEl);
+
+  // 2. Render Bot Pending Message
+  const botMsgEl = document.createElement("div");
+  botMsgEl.className = "copilot-msg-bot";
+  botMsgEl.innerHTML = `
+    <div class="answer-text">Consulting copilot...</div>
+    <div class="copilot-msg-meta">
+      <span class="meta-tag">Processing query...</span>
+    </div>
+  `;
+  listEl.appendChild(botMsgEl);
+
+  if (container) container.scrollTop = container.scrollHeight;
+  if (sendBtn) sendBtn.disabled = true;
 
   const t0 = Date.now();
   try {
@@ -1450,35 +1594,63 @@ async function askCopilot(question) {
     const d = await res.json();
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-    box.textContent = d.answer || "No response received.";
-
-    if (d.provider === "offline" || (d.answer && d.answer.includes("[ANSWERED IN OFFLINE MODE]"))) {
-      meta.textContent = `Answered offline`;
-    } else {
-      meta.textContent = `Answered live by ${d.model || d.provider} in ${elapsed}s`;
-    }
+    const answer = d.answer || "No response received.";
+    const isOffline = d.provider === "offline" || answer.includes("[ANSWERED IN OFFLINE MODE]");
+    const metaTagText = isOffline
+      ? "Answered offline"
+      : `Answered live by ${d.model || d.provider} in ${elapsed}s`;
 
     const sources = d.sources || [];
-    if (sources.length > 0) {
-      btnSources.textContent = `Sources (${sources.length})`;
-      btnSources.classList.remove("hidden");
-      listSources.innerHTML = "";
-      sources.forEach(s => {
-        const item = document.createElement("div");
-        const valStr = s.value !== undefined ? ` = ${s.value}` : "";
-        item.textContent = `${s.file} [${s.field}]${valStr}`;
-        listSources.appendChild(item);
-      });
+    let sourcesBtnHtml = "";
+    let sourcesListHtml = "";
 
-      btnSources.onclick = () => {
-        listSources.classList.toggle("hidden");
-      };
+    if (sources.length > 0) {
+      sourcesBtnHtml = `<button type="button" class="copilot-sources-btn">Sources (${sources.length})</button>`;
+      const itemsHtml = sources.map(s => {
+        const valStr = s.value !== undefined ? ` = ${s.value}` : "";
+        return `<div>${escapeHtml(s.file)} [${escapeHtml(s.field)}]${escapeHtml(valStr)}</div>`;
+      }).join("");
+      sourcesListHtml = `<div class="copilot-sources-accordion hidden font-mono">${itemsHtml}</div>`;
     }
+
+    botMsgEl.innerHTML = `
+      <div class="answer-text">${escapeHtml(answer)}</div>
+      <div class="copilot-msg-meta">
+        <span class="meta-tag">${escapeHtml(metaTagText)}</span>
+        ${sourcesBtnHtml}
+      </div>
+      ${sourcesListHtml}
+    `;
+
+    // Bind sources toggle
+    const btnSrc = botMsgEl.querySelector(".copilot-sources-btn");
+    const listSrc = botMsgEl.querySelector(".copilot-sources-accordion");
+    if (btnSrc && listSrc) {
+      btnSrc.addEventListener("click", () => {
+        listSrc.classList.toggle("hidden");
+      });
+    }
+
   } catch (err) {
-    box.textContent = `Error querying copilot: ${err.message}`;
-    meta.textContent = "Answered offline";
+    botMsgEl.innerHTML = `
+      <div class="answer-text">Error querying copilot: ${escapeHtml(err.message)}</div>
+      <div class="copilot-msg-meta">
+        <span class="meta-tag">Answered offline</span>
+      </div>
+    `;
   } finally {
-    sendBtn.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (container) container.scrollTop = container.scrollHeight;
   }
+}
+
+function escapeHtml(str) {
+  if (typeof str !== "string") return String(str || "");
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 

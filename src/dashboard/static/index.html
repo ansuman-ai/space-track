@@ -58,12 +58,21 @@
       <section id="map-container">
         <div id="map"></div>
 
-        <!-- Top-Right: North Arrow -->
-        <div class="map-north-arrow" title="North orientation">
-          <svg class="north-icon" viewBox="0 0 24 24" fill="none" stroke="#1B2326" stroke-width="2">
-            <polygon points="12,2 18,20 12,15 6,20" fill="#1B2326" />
-          </svg>
-          <span>N</span>
+        <!-- Top-Right: Map Action Controls (North Arrow & Before/After Button) -->
+        <div class="map-top-right-controls">
+          <div class="map-north-arrow" title="North orientation">
+            <svg class="north-icon" viewBox="0 0 24 24" fill="none" stroke="#1B2326" stroke-width="2">
+              <polygon points="12,2 18,20 12,15 6,20" fill="#1B2326" />
+            </svg>
+            <span>N</span>
+          </div>
+          <button id="btn-toggle-s2-comparison" class="btn-map-action" title="Compare Sentinel-2 before and after imagery">
+            <svg class="map-action-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="2" width="12" height="12" rx="2" />
+              <line x1="8" y1="2" x2="8" y2="14" />
+            </svg>
+            <span>Before / after</span>
+          </button>
         </div>
 
         <!-- Bottom-Left: Collapsible Legend Card "Map layers" -->
@@ -167,10 +176,54 @@
 
         <!-- Before/After Slider Overlay Bar -->
         <div id="s2-slider-bar" class="slider-bar-overlay hidden">
-          <span>Pre-event</span>
-          <input type="range" id="s2-range-slider" min="0" max="100" value="50" style="width: 140px;" />
-          <span>Post-event</span>
-          <button id="btn-close-s2-slider" class="btn-outline" style="padding: 2px 6px; font-size: 11px;">✕</button>
+          <div class="s2-slider-label-block">
+            <span class="s2-label-title">Pre-event</span>
+            <span id="s2-date-pre" class="s2-date-sub font-mono">—</span>
+          </div>
+          <input type="range" id="s2-range-slider" min="0" max="100" value="50" style="width: 160px;" />
+          <div class="s2-slider-label-block">
+            <span class="s2-label-title">Post-event</span>
+            <span id="s2-date-post" class="s2-date-sub font-mono">—</span>
+          </div>
+          <button id="btn-close-s2-slider" class="btn-slider-close" title="Close before/after view">✕</button>
+        </div>
+
+        <!-- Floating Copilot Button (Bottom-Right, 44px, dark #1B2326) -->
+        <button id="btn-floating-copilot" class="floating-copilot-btn" title="Open copilot assistant">
+          <svg class="copilot-btn-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M18 10c0 3.866-3.582 7-8 7a9.2 9.2 0 0 1-3.2-.56L2 18l1.6-4.27A6.62 6.62 0 0 1 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7z" />
+          </svg>
+          <span class="copilot-btn-text">Ask copilot</span>
+        </button>
+
+        <!-- Floating Copilot Chat Window (~380x520px, anchored bottom-right) -->
+        <div id="copilot-floating-window" class="copilot-window hidden" role="dialog" aria-modal="true" aria-label="Copilot Assistant">
+          <div class="copilot-window-header">
+            <div class="copilot-header-title-block">
+              <span class="copilot-dot-status"></span>
+              <span id="copilot-window-title" class="copilot-title-text">Copilot · Disaster Assessment</span>
+            </div>
+            <button id="btn-close-copilot-window" class="copilot-window-close-btn" title="Close copilot (Esc)">✕</button>
+          </div>
+
+          <div class="copilot-window-body" id="copilot-messages-container">
+            <!-- 4 Suggestion Chips (when empty) -->
+            <div id="copilot-chips-wrap" class="copilot-chips-wrap">
+              <button class="copilot-chip" data-q="Which settlements need air access?">Which settlements need air access?</button>
+              <button class="copilot-chip" data-q="Which bridges should be inspected first?">Which bridges should be inspected first?</button>
+              <button class="copilot-chip" data-q="Is the main road open?">Is the main road open?</button>
+              <button class="copilot-chip" data-q="What should I not trust?">What should I not trust?</button>
+            </div>
+
+            <!-- Messages Stream -->
+            <div id="copilot-messages-list" class="copilot-messages-list"></div>
+          </div>
+
+          <!-- Input Footer -->
+          <form id="copilot-window-form" class="copilot-window-form">
+            <input type="text" id="copilot-window-input" class="copilot-input" placeholder="Ask an operational question..." autocomplete="off" />
+            <button type="submit" id="copilot-window-send-btn" class="btn-dark" style="padding: 6px 14px;">Ask</button>
+          </form>
         </div>
 
         <!-- Offline Basemap Fallback Notice -->
@@ -241,13 +294,12 @@
             </div>
           </div>
 
-          <!-- (c) Navigation Tabs: Impact | Access | Repair | Confidence | Ask -->
+          <!-- (c) Navigation Tabs: Impact | Access | Repair | Confidence -->
           <nav class="tabs-nav" role="tablist">
             <button class="tab-btn active" id="tab-btn-impact" data-tab="tab-panel-impact" role="tab">Impact</button>
             <button class="tab-btn" id="tab-btn-isolation" data-tab="tab-panel-isolation" role="tab">Access</button>
             <button class="tab-btn" id="tab-btn-repair" data-tab="tab-panel-repair" role="tab">Repair</button>
             <button class="tab-btn" id="tab-btn-validation" data-tab="tab-panel-validation" role="tab">Confidence</button>
-            <button class="tab-btn" id="tab-btn-ask" data-tab="tab-panel-ask" role="tab">Ask</button>
           </nav>
 
           <!-- Tab Content Scroll Area -->
@@ -455,32 +507,6 @@
                 <li>Steep topography causes radar layover actively masked by DEM look angle.</li>
                 <li>Building and bridge counts depend on pre-event OpenStreetMap inventory density.</li>
               </ul>
-            </section>
-
-            <!-- TAB 5: ASK -->
-            <section class="tab-panel" id="tab-panel-ask" role="tabpanel">
-              <div class="copilot-chips-wrap">
-                <button class="copilot-chip" data-q="Which settlements need air access?">Which settlements need air access?</button>
-                <button class="copilot-chip" data-q="Which bridges should be inspected first?">Which bridges should be inspected first?</button>
-                <button class="copilot-chip" data-q="Is the main road open?">Is the main road open?</button>
-                <button class="copilot-chip" data-q="What should I not trust?">What should I not trust?</button>
-              </div>
-
-              <form id="copilot-form" class="copilot-form">
-                <input type="text" id="copilot-input" class="copilot-input" placeholder="Ask a question..." autocomplete="off" />
-                <button type="submit" id="copilot-send-btn" class="btn-dark" style="padding: 6px 12px;">Ask</button>
-              </form>
-
-              <div id="copilot-response-container">
-                <div class="copilot-answer-card" id="copilot-answer-box">
-                  Select a suggested question above or type an operational inquiry.
-                </div>
-                <div class="copilot-answer-footer" id="copilot-footer-meta">
-                  <span id="copilot-runtime-tag">Ready</span>
-                  <button type="button" id="copilot-sources-btn" class="copilot-sources-btn hidden">Sources (0)</button>
-                </div>
-                <div id="copilot-sources-list" class="copilot-sources-accordion hidden font-mono"></div>
-              </div>
             </section>
 
           </div>
