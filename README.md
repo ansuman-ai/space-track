@@ -106,9 +106,9 @@ python3 -m src.dashboard.app
 ```
 or via uvicorn directly:
 ```bash
-uvicorn src.dashboard.app:app --host 0.0.0.0 --port 8000
+uvicorn src.dashboard.app:app --host 127.0.0.1 --port 8000
 ```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) (or [http://localhost:8000](http://localhost:8000)) in your browser.
 
 Features:
 - Dynamic discovery of historical runs (`runs/` directory)

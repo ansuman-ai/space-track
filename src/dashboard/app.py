@@ -720,9 +720,14 @@ def create_run(req: CreateRunRequest):
     if not (-180.0 <= min_lon < max_lon <= 180.0 and -90.0 <= min_lat < max_lat <= 90.0):
         raise HTTPException(status_code=400, detail="Invalid WGS84 bounding box coordinates: must satisfy -180 <= min_lon < max_lon <= 180 and -90 <= min_lat < max_lat <= 90")
 
-    # 2. Maximum area limit (prevent resource exhaustion: max 2.0 degrees width/height)
-    if (max_lon - min_lon) > 2.0 or (max_lat - min_lat) > 2.0:
-        raise HTTPException(status_code=400, detail="Bounding box exceeds maximum allowable area (max 2.0 degrees per dimension)")
+    # 2. Maximum area limit: 0.5 degrees per side (configured limit)
+    width_deg = max_lon - min_lon
+    height_deg = max_lat - min_lat
+    if width_deg > 0.5 or height_deg > 0.5:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bounding box exceeds maximum allowable area: {width_deg:.3f}° lon × {height_deg:.3f}° lat. Limit is 0.5° per side (approx 55 km × 55 km)."
+        )
 
     # 3. Event date range: Sentinel-2 era (2015-06-23) to today
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", req.event_date):
@@ -798,6 +803,7 @@ def create_run(req: CreateRunRequest):
     log_path = run_folder / "pipeline.log"
     log_file = open(log_path, "w", encoding="utf-8")
 
+    pid_path = run_folder / "proc.pid"
     try:
         proc = subprocess.Popen(
             cmd,
@@ -805,6 +811,9 @@ def create_run(req: CreateRunRequest):
             stdout=log_file,
             stderr=subprocess.STDOUT
         )
+        pid_path.write_text(str(proc.pid))
+        init_status["pid"] = proc.pid
+        status_file.write_text(json.dumps(init_status, indent=2))
     except Exception as e:
         logger.error(f"Failed to spawn pipeline: {e}")
         status_file.write_text(json.dumps({
@@ -822,6 +831,7 @@ def create_run(req: CreateRunRequest):
 
     ACTIVE_RUNS[run_id] = {
         "proc": proc,
+        "pid": proc.pid,
         "start_time": time.time(),
         "log_path": str(log_path),
         "run_folder": run_folder,
@@ -840,11 +850,32 @@ def create_run(req: CreateRunRequest):
     }
 
 
+def _extract_log_diagnostics(log_p: Path) -> Tuple[str, List[str]]:
+    """Extracts error message and last log lines from a pipeline log file."""
+    error_msg = "Pipeline process exited unexpectedly"
+    last_lines: List[str] = []
+    if log_p.exists():
+        try:
+            lines = [line.strip() for line in log_p.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+            last_lines = lines[-15:]
+            err_lines = [l for l in lines[-30:] if any(k in l for k in ["Error", "ERROR", "Exception", "FAILED", "No S1 scenes found", "no data", "cannot schedule"])]
+            if err_lines:
+                error_msg = err_lines[-1]
+            elif lines:
+                error_msg = lines[-1]
+        except Exception:
+            pass
+
+    if "no data" in error_msg.lower() or "no s1" in error_msg.lower() or "0 scenes" in error_msg.lower():
+        error_msg = f"No satellite data found for the selected bounding box and date: {error_msg}"
+    return error_msg, last_lines
+
+
 @app.get("/api/runs/{run_id}/status")
 def get_run_status(run_id: str):
     """
     Polls the live execution status of an assessment run, tracking step progression,
-    progressive layer outputs, timeouts (600s), and error diagnostics.
+    progressive layer outputs, timeouts (600s), dead process detection, and error diagnostics.
     """
     run_folder = validate_run_id(run_id)
 
@@ -883,24 +914,45 @@ def get_run_status(run_id: str):
         poll_res = proc.poll()
         if poll_res is not None:
             if poll_res != 0 and status_data.get("status") not in ["COMPLETED", "DEGRADED"]:
-                error_msg = "Pipeline process exited unexpectedly"
-                log_p = Path(active_info["log_path"])
-                if log_p.exists():
-                    lines = [line.strip() for line in log_p.read_text().splitlines() if line.strip()]
-                    err_lines = [l for l in lines[-20:] if "Error" in l or "ERROR" in l or "Exception" in l or "No S1 scenes found" in l or "no data" in l.lower()]
-                    if err_lines:
-                        error_msg = err_lines[-1]
-                    elif lines:
-                        error_msg = lines[-1]
-
-                if "no data" in error_msg.lower() or "no s1" in error_msg.lower() or "0 scenes" in error_msg.lower():
-                    error_msg = f"No satellite data found for the selected bounding box and date: {error_msg}"
-
+                error_msg, last_lines = _extract_log_diagnostics(Path(active_info["log_path"]))
                 status_data["status"] = "FAILED"
                 status_data["error"] = error_msg
+                status_data["last_log_lines"] = last_lines
                 status_data["current_step"] = f"Execution failed: {error_msg}"
                 status_file.write_text(json.dumps(status_data, indent=2))
                 return {**status_data, "run_id": run_id, "is_finished": True, "elapsed_seconds": elapsed}
+    else:
+        # Server restarted or process not in memory: check if recorded as RUNNING but process is dead
+        curr_st = status_data.get("status", "RUNNING")
+        if curr_st == "RUNNING" and not (run_folder / "run_summary.json").exists():
+            # Check if PID is alive
+            pid = status_data.get("pid")
+            if not pid and (run_folder / "proc.pid").exists():
+                try:
+                    pid = int((run_folder / "proc.pid").read_text().strip())
+                except Exception:
+                    pass
+            
+            is_alive = False
+            if pid:
+                try:
+                    import psutil
+                    is_alive = psutil.pid_exists(pid)
+                except Exception:
+                    try:
+                        os.kill(pid, 0)
+                        is_alive = True
+                    except OSError:
+                        is_alive = False
+
+            if not is_alive:
+                error_msg, last_lines = _extract_log_diagnostics(run_folder / "pipeline.log")
+                status_data["status"] = "FAILED"
+                status_data["error"] = error_msg or "Pipeline process terminated unexpectedly (e.g. server restart or killed)."
+                status_data["last_log_lines"] = last_lines
+                status_data["current_step"] = f"Execution halted: {status_data['error']}"
+                status_file.write_text(json.dumps(status_data, indent=2))
+                return {**status_data, "run_id": run_id, "is_finished": True}
 
     # Progressive stage and layer tracking while running
     proc_dir = run_folder / "processed"
@@ -966,6 +1018,7 @@ def get_run_status(run_id: str):
         "outputs": status_data.get("outputs", {}),
         "metrics": status_data.get("metrics", {}),
         "error": status_data.get("error"),
+        "last_log_lines": status_data.get("last_log_lines", []),
         "is_finished": is_finished
     }
 
@@ -985,7 +1038,9 @@ def list_runs(show_all: bool = Query(False)):
 
     runs = []
     for item in RUNS_DIR.iterdir():
-        if item.is_dir() and (item / "run_summary.json").exists():
+        if not item.is_dir():
+            continue
+        if (item / "run_summary.json").exists():
             meta = get_run_metadata(item)
             if not meta:
                 continue
@@ -996,6 +1051,22 @@ def list_runs(show_all: bool = Query(False)):
                     runs.append(meta)
             else:
                 runs.append(meta)
+        elif show_all and (item / "status.json").exists():
+            try:
+                st = json.loads((item / "status.json").read_text())
+                runs.append({
+                    "id": item.name,
+                    "label": st.get("event_name") or item.name,
+                    "main_title": st.get("event_name") or item.name,
+                    "subtitle": "Assessment run",
+                    "status": st.get("status", "FAILED"),
+                    "event_date": st.get("event_date", ""),
+                    "event_year": st.get("event_date", "").split("-")[0] if "-" in st.get("event_date", "") else "2026",
+                    "bbox": st.get("bbox", []),
+                    "regime": "steep_valley"
+                })
+            except Exception:
+                pass
 
     # Sort logically
     runs.sort(key=lambda r: (0 if "verify" in r["id"] or "practice" in r["id"] else 1, r["event_date"]), reverse=False)
@@ -1007,6 +1078,25 @@ def get_run_details(run_id: str, background_tasks: BackgroundTasks):
     """Returns detailed summary payload and layer stats for a specific run."""
     run_folder = validate_run_id(run_id)
     if not (run_folder / "run_summary.json").exists():
+        # Check if status.json exists for a failed or in-progress run
+        status_file = run_folder / "status.json"
+        if status_file.exists():
+            st_data = get_run_status(run_id)
+            if st_data.get("status") in ["FAILED", "RUNNING"]:
+                return {
+                    "id": run_id,
+                    "label": st_data.get("event_name") or run_id,
+                    "main_title": st_data.get("event_name") or run_id,
+                    "subtitle": "Assessment run",
+                    "status": st_data.get("status"),
+                    "error": st_data.get("error"),
+                    "last_log_lines": st_data.get("last_log_lines", []),
+                    "current_step": st_data.get("current_step", ""),
+                    "event_date": st_data.get("event_date", ""),
+                    "bbox": st_data.get("bbox", []),
+                    "layers_available": {},
+                    "metrics": {}
+                }
         raise HTTPException(status_code=404, detail="Run not found")
 
     # Pre-generate DEM XYZ tiles asynchronously in background if not already complete

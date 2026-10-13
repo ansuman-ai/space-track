@@ -226,6 +226,12 @@
           </form>
         </div>
 
+        <!-- Interactive Draw BBox Instructions Banner -->
+        <div id="draw-bbox-banner" class="draw-bbox-banner hidden">
+          <span>Click and drag on the map to define the assessment bounding box</span>
+          <button type="button" id="btn-cancel-draw-bbox" class="btn-secondary" style="padding: 2px 8px; font-size: 11px; margin-left: 12px;">Cancel</button>
+        </div>
+
         <!-- Offline Basemap Fallback Notice -->
         <div id="offline-basemap-notice" class="offline-basemap-banner hidden">
           <span>Offline mode: Live OpenStreetMap tiles unavailable. Switched to offline DEM terrain &amp; local OSM baseline.</span>
@@ -307,6 +313,16 @@
             
             <!-- TAB 1: IMPACT -->
             <section class="tab-panel active" id="tab-panel-impact" role="tabpanel">
+              <!-- Failed / Incomplete Run Alert -->
+              <div id="run-failed-banner" class="run-failed-banner hidden">
+                <div class="run-failed-title">Assessment Execution Failed</div>
+                <div class="run-failed-message" id="run-failed-error-text"></div>
+                <details class="run-failed-logs-details" id="run-failed-logs-details">
+                  <summary>Last pipeline log output</summary>
+                  <pre class="run-failed-logs-pre" id="run-failed-logs-content"></pre>
+                </details>
+              </div>
+
               <div class="section-subhead">Buildings</div>
               <div class="plain-rows-list">
                 <div class="plain-row">
@@ -557,27 +573,33 @@
           <input type="text" id="input-event-name" class="form-input" placeholder="e.g. Trishuli Monsoon Inundation" />
         </div>
         <div class="form-group">
-          <label for="input-event-date" class="form-label">Event date</label>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <label for="input-event-date" class="form-label">Event date</label>
+            <span id="date-format-preview" class="date-preview-badge" style="font-size: 11px; color: var(--text-secondary); font-weight: 500;"></span>
+          </div>
           <input type="date" id="input-event-date" class="form-input font-mono" required />
         </div>
         <div class="form-group">
-          <label class="form-label">Bounding box coordinates (WGS84)</label>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <label class="form-label">Bounding box coordinates (WGS84)</label>
+            <button type="button" id="btn-draw-bbox" class="btn-secondary" style="padding: 2px 8px; font-size: 11px; height: 22px;">Draw on map</button>
+          </div>
           <div class="bbox-grid">
             <div class="bbox-field">
               <label>West (Min lon)</label>
-              <input type="number" step="0.0001" id="input-bbox-w" class="form-input font-mono" placeholder="85.3000" required />
+              <input type="number" step="0.0001" id="input-bbox-w" class="form-input font-mono" placeholder="e.g. 85.3000" required />
             </div>
             <div class="bbox-field">
               <label>South (Min lat)</label>
-              <input type="number" step="0.0001" id="input-bbox-s" class="form-input font-mono" placeholder="28.1000" required />
+              <input type="number" step="0.0001" id="input-bbox-s" class="form-input font-mono" placeholder="e.g. 28.1000" required />
             </div>
             <div class="bbox-field">
               <label>East (Max lon)</label>
-              <input type="number" step="0.0001" id="input-bbox-e" class="form-input font-mono" placeholder="85.4200" required />
+              <input type="number" step="0.0001" id="input-bbox-e" class="form-input font-mono" placeholder="e.g. 85.4200" required />
             </div>
             <div class="bbox-field">
               <label>North (Max lat)</label>
-              <input type="number" step="0.0001" id="input-bbox-n" class="form-input font-mono" placeholder="28.2500" required />
+              <input type="number" step="0.0001" id="input-bbox-n" class="form-input font-mono" placeholder="e.g. 28.2500" required />
             </div>
           </div>
         </div>

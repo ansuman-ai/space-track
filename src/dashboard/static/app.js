@@ -397,9 +397,119 @@ function initModals() {
 
   // New Analysis Modal
   const nModal = document.getElementById("new-run-modal");
-  document.getElementById("btn-new-run").onclick = () => nModal.classList.remove("hidden");
+  const dateInput = document.getElementById("input-event-date");
+  const datePreview = document.getElementById("date-format-preview");
+
+  function updateDatePreview() {
+    if (!dateInput.value) {
+      datePreview.textContent = "";
+      return;
+    }
+    const [y, m, d] = dateInput.value.split("-").map(Number);
+    if (y && m && d) {
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      datePreview.textContent = `${dt.getUTCDate()} ${months[dt.getUTCMonth()]} ${dt.getUTCFullYear()}`;
+    }
+  }
+
+  dateInput.addEventListener("input", updateDatePreview);
+  dateInput.addEventListener("change", updateDatePreview);
+
+  function openNewRunModal() {
+    nModal.classList.remove("hidden");
+    document.getElementById("new-run-error").classList.add("hidden");
+    // Pre-fill bounding box from current map view if fields are empty
+    if (map && !document.getElementById("input-bbox-w").value) {
+      const bounds = map.getBounds();
+      document.getElementById("input-bbox-w").value = bounds.getWest().toFixed(4);
+      document.getElementById("input-bbox-s").value = bounds.getSouth().toFixed(4);
+      document.getElementById("input-bbox-e").value = bounds.getEast().toFixed(4);
+      document.getElementById("input-bbox-n").value = bounds.getNorth().toFixed(4);
+    }
+    updateDatePreview();
+  }
+
+  document.getElementById("btn-new-run").onclick = openNewRunModal;
   document.getElementById("btn-close-new-modal").onclick = () => nModal.classList.add("hidden");
   document.getElementById("btn-cancel-new-run").onclick = () => nModal.classList.add("hidden");
+
+  // Draw on map interaction
+  let isDrawingBbox = false;
+  let drawRect = null;
+  let startLatLng = null;
+
+  const drawBanner = document.getElementById("draw-bbox-banner");
+  const btnDrawBbox = document.getElementById("btn-draw-bbox");
+  const btnCancelDraw = document.getElementById("btn-cancel-draw-bbox");
+
+  function stopDrawingBbox() {
+    if (!isDrawingBbox) return;
+    isDrawingBbox = false;
+    map.dragging.enable();
+    map.getContainer().style.cursor = "";
+    if (drawRect) {
+      map.removeLayer(drawRect);
+      drawRect = null;
+    }
+    startLatLng = null;
+    drawBanner.classList.add("hidden");
+    map.off("mousedown", onDrawStart);
+    map.off("mousemove", onDrawMove);
+    map.off("mouseup", onDrawEnd);
+  }
+
+  function onDrawStart(e) {
+    if (!isDrawingBbox) return;
+    startLatLng = e.latlng;
+    if (drawRect) map.removeLayer(drawRect);
+    drawRect = L.rectangle([startLatLng, startLatLng], {
+      color: "#B42318",
+      weight: 2,
+      dashArray: "4, 4",
+      fillColor: "#B42318",
+      fillOpacity: 0.15
+    }).addTo(map);
+  }
+
+  function onDrawMove(e) {
+    if (!isDrawingBbox || !startLatLng || !drawRect) return;
+    drawRect.setBounds(L.latLngBounds(startLatLng, e.latlng));
+  }
+
+  function onDrawEnd(e) {
+    if (!isDrawingBbox || !startLatLng) return;
+    const endLatLng = e.latlng;
+    const b = L.latLngBounds(startLatLng, endLatLng);
+    document.getElementById("input-bbox-w").value = b.getWest().toFixed(4);
+    document.getElementById("input-bbox-s").value = b.getSouth().toFixed(4);
+    document.getElementById("input-bbox-e").value = b.getEast().toFixed(4);
+    document.getElementById("input-bbox-n").value = b.getNorth().toFixed(4);
+
+    stopDrawingBbox();
+    nModal.classList.remove("hidden");
+  }
+
+  if (btnDrawBbox) {
+    btnDrawBbox.onclick = () => {
+      nModal.classList.add("hidden");
+      isDrawingBbox = true;
+      map.dragging.disable();
+      map.getContainer().style.cursor = "crosshair";
+      drawBanner.classList.remove("hidden");
+
+      map.on("mousedown", onDrawStart);
+      map.on("mousemove", onDrawMove);
+      map.on("mouseup", onDrawEnd);
+    };
+  }
+
+  if (btnCancelDraw) {
+    btnCancelDraw.onclick = () => {
+      stopDrawingBbox();
+      nModal.classList.remove("hidden");
+    };
+  }
 
   const form = document.getElementById("new-run-form");
   form.onsubmit = async (e) => {
@@ -467,6 +577,27 @@ async function loadRun(runId) {
     // Reset Copilot assistant for this run
     resetCopilotForNewRun(data);
 
+    // If run is FAILED or has error, show the failed run banner
+    const failBanner = document.getElementById("run-failed-banner");
+    const failErrorText = document.getElementById("run-failed-error-text");
+    const failLogsPre = document.getElementById("run-failed-logs-content");
+    const failDetails = document.getElementById("run-failed-logs-details");
+
+    if (data.status === "FAILED" || data.error) {
+      if (failBanner) {
+        failBanner.classList.remove("hidden");
+        failErrorText.textContent = data.error || "The pipeline process terminated prematurely.";
+        if (data.last_log_lines && data.last_log_lines.length > 0) {
+          failLogsPre.textContent = data.last_log_lines.join("\n");
+          failDetails.classList.remove("hidden");
+        } else {
+          failDetails.classList.add("hidden");
+        }
+      }
+    } else {
+      if (failBanner) failBanner.classList.add("hidden");
+    }
+
     // 3. Clear existing layers
     Object.keys(geojsonLayers).forEach(k => {
       if (geojsonLayers[k]) {
@@ -475,18 +606,26 @@ async function loadRun(runId) {
       }
     });
 
+    if (data.status === "FAILED") {
+      // Just fit map to bbox if available
+      if (data.bbox && data.bbox.length === 4) {
+        map.fitBounds([[data.bbox[1], data.bbox[0]], [data.bbox[3], data.bbox[2]]]);
+      }
+      return;
+    }
+
     // 4. Concurrently load basemap, AOI dim mask, and vector layers
     const promises = [
       setupBasemap(runId, data),
       setupAoiDimMask(data)
     ];
 
-    if (data.layers_available.hazards) promises.push(loadHazardsLayer(runId));
-    if (data.layers_available.roads) promises.push(loadRoadsLayer(runId));
-    if (data.layers_available.bridges) promises.push(loadBridgesLayer(runId));
-    if (data.layers_available.buildings) promises.push(loadBuildingsLayer(runId));
-    if (data.layers_available.settlements) promises.push(loadSettlementsLayer(runId));
-    if (data.layers_available.repair_packages) promises.push(loadRepairPackagesLayer(runId));
+    if (data.layers_available && data.layers_available.hazards) promises.push(loadHazardsLayer(runId));
+    if (data.layers_available && data.layers_available.roads) promises.push(loadRoadsLayer(runId));
+    if (data.layers_available && data.layers_available.bridges) promises.push(loadBridgesLayer(runId));
+    if (data.layers_available && data.layers_available.buildings) promises.push(loadBuildingsLayer(runId));
+    if (data.layers_available && data.layers_available.settlements) promises.push(loadSettlementsLayer(runId));
+    if (data.layers_available && data.layers_available.repair_packages) promises.push(loadRepairPackagesLayer(runId));
 
     await Promise.all(promises);
 

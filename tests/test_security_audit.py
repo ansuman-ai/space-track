@@ -70,8 +70,8 @@ def test_create_run_bounding_box_validation():
     assert resp.status_code == 400
     assert "Invalid WGS84" in resp.json()["detail"]
 
-    # Excessive area (> 2.0 degrees)
-    resp = client.post("/api/runs/create", json={"bbox": [80.0, 25.0, 83.0, 28.0], "event_date": "2026-08-26"})
+    # Excessive area (> 0.5 degrees)
+    resp = client.post("/api/runs/create", json={"bbox": [80.0, 25.0, 81.0, 26.0], "event_date": "2026-08-26"})
     assert resp.status_code == 400
     assert "maximum allowable area" in resp.json()["detail"]
 
