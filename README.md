@@ -201,3 +201,18 @@ If `weights/best_segmentation.pt` is absent or checksum verification fails when 
 - *"© OpenStreetMap contributors."*
 - *Bountos et al., 2024 (Kuro Siwo)*
 - *Validation data credit: "European Union, Copernicus Emergency Management Service data (EMSR927)".*
+
+---
+
+## Known Issues and Security Considerations
+
+1. **Planetary Computer Range Response Retries**:
+   - Upstream Planetary Computer blob storage servers may return HTTP 206 responses that can cause GDAL HTTP range merge retry loops if HTTP/2 range multiplexing is enabled.
+   - **Resolution/Mitigation**: The system configures GDAL environment settings (`GDAL_HTTP_VERSION=1.1`, `GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=NO`) to ensure sequential, deterministic range reading without retries.
+2. **WeasyPrint Untrusted Resource Loading (CVE-2026-106443 / PYSEC-2026-3940)**:
+   - Untrusted image dispatch in older WeasyPrint builds can attempt external fetches or format dispatch.
+   - **Resolution/Mitigation**: The situation report PDF engine binds `safe_url_fetcher` which strictly forbids external and local URL requests (`ValueError`), while all Markdown inputs are sanitized with `html.escape`.
+3. **Local Road Corridor Segmentation**:
+   - In complex mountainous valley networks, intersecting arterial and feeder road segments share naming conventions. Local spatial queries clip geometries strictly to Euclidean circles and prioritize arterial classes (`primary`) over local access paths.
+4. **Offline Environment Deployment**:
+   - The dashboard and Copilot operate in complete isolation without external API dependencies. All UI fonts (IBM Plex Sans, IBM Plex Mono, IBM Plex Sans Devanagari) and map assets are bundled locally. In the absence of live LLM API keys or network access, Copilot automatically falls back to deterministic rule-grounded offline synthesis with explicit UI disclosure.

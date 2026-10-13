@@ -32,14 +32,49 @@ logger = logging.getLogger("dashboard")
 
 app = FastAPI(title="Spaceborne Rapid Disaster Assessment Dashboard", version="1.1.0")
 
-# Enable CORS and GZip compression for fast GeoJSON streaming
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# Restrict CORS to localhost and local loopback origins (no wildcard '*')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"]
+)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 RUNS_DIR = Path(os.environ.get("RUNS_DIR", BASE_DIR / "runs"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MANIFEST_FILE = Path(__file__).resolve().parent / "runs_manifest.json"
+
+RUN_ID_REGEX = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def validate_run_id(run_id: str) -> Path:
+    """
+    Validates run_id strictly against path traversal and pattern whitelist.
+    Ensures resolved path is strictly contained within RUNS_DIR.
+    """
+    if not run_id or not RUN_ID_REGEX.match(run_id) or ".." in run_id or "/" in run_id or "\\" in run_id:
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+    
+    run_folder = (RUNS_DIR / run_id).resolve()
+    runs_dir_resolved = RUNS_DIR.resolve()
+    
+    try:
+        run_folder.relative_to(runs_dir_resolved)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid path traversal detected")
+
+    if not run_folder.exists() or not run_folder.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return run_folder
 
 # In-memory image cache for S2 cloud-masked median composites
 _COMPOSITE_CACHE: Dict[str, bytes] = {}
@@ -680,24 +715,53 @@ def create_run(req: CreateRunRequest):
     """
     Triggers an end-to-end disaster impact assessment run (L0-L5) in background subprocess.
     """
-    if len(req.bbox) != 4:
-        raise HTTPException(status_code=400, detail="Bounding box must be [min_lon, min_lat, max_lon, max_lat]")
+    # 1. Coordinate range and ordering
     min_lon, min_lat, max_lon, max_lat = [float(x) for x in req.bbox]
     if not (-180.0 <= min_lon < max_lon <= 180.0 and -90.0 <= min_lat < max_lat <= 90.0):
-        raise HTTPException(status_code=400, detail="Invalid WGS84 bounding box coordinates")
+        raise HTTPException(status_code=400, detail="Invalid WGS84 bounding box coordinates: must satisfy -180 <= min_lon < max_lon <= 180 and -90 <= min_lat < max_lat <= 90")
 
+    # 2. Maximum area limit (prevent resource exhaustion: max 2.0 degrees width/height)
+    if (max_lon - min_lon) > 2.0 or (max_lat - min_lat) > 2.0:
+        raise HTTPException(status_code=400, detail="Bounding box exceeds maximum allowable area (max 2.0 degrees per dimension)")
+
+    # 3. Event date range: Sentinel-2 era (2015-06-23) to today
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", req.event_date):
         raise HTTPException(status_code=400, detail="Invalid event date format. Expected YYYY-MM-DD")
+    try:
+        e_date = datetime.strptime(req.event_date, "%Y-%m-%d").date()
+        s2_launch = datetime(2015, 6, 23).date()
+        today = datetime.now().date()
+        if e_date < s2_launch:
+            raise HTTPException(status_code=400, detail="Event date cannot be earlier than Sentinel-2 launch (2015-06-23)")
+        if e_date > today:
+            raise HTTPException(status_code=400, detail="Event date cannot be in the future")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Invalid event date: {ve}")
+
+    # 4. Limit concurrent active pipeline jobs (max 2)
+    active_running = [k for k, v in ACTIVE_RUNS.items() if v["proc"].poll() is None]
+    if len(active_running) >= 2:
+        raise HTTPException(status_code=429, detail="Maximum concurrent assessment jobs reached (limit: 2). Please wait for active runs to finish.")
+
+    # 5. Sanitize event name: allow letters, numbers, spaces, dashes, underscores (max 64 chars)
+    sanitized_event_name = None
+    if req.event_name:
+        raw_name = req.event_name.strip()
+        if len(raw_name) > 64:
+            raise HTTPException(status_code=400, detail="Event name exceeds maximum length of 64 characters")
+        if re.search(r"[;`$\|<>&]", raw_name):
+            raise HTTPException(status_code=400, detail="Event name contains forbidden shell or control characters")
+        sanitized_event_name = raw_name
 
     timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S")
-    clean_name = re.sub(r"[^a-zA-Z0-9_]+", "_", req.event_name.lower().strip()) if req.event_name else "analysis"
-    clean_name = clean_name.strip("_")[:24]
-    run_id = f"run_{timestamp_slug}_{clean_name}"
+    clean_slug = re.sub(r"[^a-zA-Z0-9_]+", "_", sanitized_event_name.lower()) if sanitized_event_name else "analysis"
+    clean_slug = clean_slug.strip("_")[:24]
+    run_id = f"run_{timestamp_slug}_{clean_slug}"
     run_folder = RUNS_DIR / run_id
     run_folder.mkdir(parents=True, exist_ok=True)
 
-    if req.event_name:
-        (run_folder / "event_name.txt").write_text(req.event_name.strip(), encoding="utf-8")
+    if sanitized_event_name:
+        (run_folder / "event_name.txt").write_text(sanitized_event_name, encoding="utf-8")
 
     status_file = run_folder / "status.json"
     init_status = {
@@ -782,9 +846,7 @@ def get_run_status(run_id: str):
     Polls the live execution status of an assessment run, tracking step progression,
     progressive layer outputs, timeouts (600s), and error diagnostics.
     """
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
 
     status_file = run_folder / "status.json"
     status_data = {}
@@ -943,8 +1005,8 @@ def list_runs(show_all: bool = Query(False)):
 @app.get("/api/runs/{run_id}")
 def get_run_details(run_id: str, background_tasks: BackgroundTasks):
     """Returns detailed summary payload and layer stats for a specific run."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists() or not (run_folder / "run_summary.json").exists():
+    run_folder = validate_run_id(run_id)
+    if not (run_folder / "run_summary.json").exists():
         raise HTTPException(status_code=404, detail="Run not found")
 
     # Pre-generate DEM XYZ tiles asynchronously in background if not already complete
@@ -1000,9 +1062,7 @@ def get_run_layer(
     Serves optimized GeoJSON layer for a specific run.
     Supports affected_only filtering (buildings, roads), geometry simplification, and run-level caching.
     """
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
 
     proc = run_folder / "processed"
     routing = proc / "routing"
@@ -1097,7 +1157,7 @@ def get_run_layer(
 @app.get("/api/runs/{run_id}/repair-packages")
 def get_repair_packages(run_id: str):
     """Serves repair packages analysis JSON for a specific run."""
-    run_folder = RUNS_DIR / run_id
+    run_folder = validate_run_id(run_id)
     pkg_file = run_folder / "processed" / "routing" / "repair_packages.json"
     if not pkg_file.exists():
         raise HTTPException(status_code=404, detail="Repair packages not found")
@@ -1107,9 +1167,7 @@ def get_repair_packages(run_id: str):
 @app.get("/api/runs/{run_id}/s2-meta")
 def get_s2_metadata(run_id: str):
     """Returns metadata for Sentinel-2 cloud-masked composite scenes matching run_summary."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
 
     summary_file = run_folder / "run_summary.json"
     if not summary_file.exists():
@@ -1155,9 +1213,7 @@ def get_s2_metadata(run_id: str):
 @app.get("/api/runs/{run_id}/s2-image")
 def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$")):
     """Generates read-only cloud-masked median composite Sentinel-2 JPEG from raw cache."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
 
     jpeg_bytes = generate_cloud_masked_median_composite(run_folder, type)
     if not jpeg_bytes:
@@ -1169,9 +1225,7 @@ def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$"))
 @app.get("/api/runs/{run_id}/basemap/hillshade")
 def get_run_hillshade(run_id: str):
     """Serves cached Copernicus DEM-30 topographic relief hillshade PNG for the run."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
     from src.dashboard.basemap_renderer import generate_run_hillshade
     png_path, _ = generate_run_hillshade(run_folder)
     if not png_path or not png_path.exists():
@@ -1182,11 +1236,18 @@ def get_run_hillshade(run_id: str):
 @app.get("/api/runs/{run_id}/basemap/tiles/{z}/{x}/{y}.png")
 def get_run_hillshade_tile(run_id: str, z: int, x: int, y: int):
     """Serves Web Mercator DEM hillshade XYZ tile (z=9-14) for high-zoom overlay."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
+    if not (0 <= z <= 22 and x >= 0 and y >= 0):
+        raise HTTPException(status_code=400, detail="Invalid tile coordinates")
+
     tiles_root = run_folder / "processed" / "dem_tiles"
-    tile_file = tiles_root / str(z) / str(x) / f"{y}.png"
+    tile_file = (tiles_root / str(z) / str(x) / f"{y}.png").resolve()
+
+    # Ensure resolved tile path is within tiles_root
+    try:
+        tile_file.relative_to(tiles_root.resolve())
+    except (ValueError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid tile path")
 
     if tile_file.exists():
         return FileResponse(tile_file, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
@@ -1196,13 +1257,10 @@ def get_run_hillshade_tile(run_id: str, z: int, x: int, y: int):
     return Response(content=transparent_png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
-
 @app.get("/api/runs/{run_id}/basemap/meta")
 def get_run_basemap_meta(run_id: str):
     """Serves hillshade bounds metadata."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
     from src.dashboard.basemap_renderer import generate_run_hillshade
     _, meta = generate_run_hillshade(run_folder)
     if not meta:
@@ -1213,7 +1271,7 @@ def get_run_basemap_meta(run_id: str):
 @app.get("/api/runs/{run_id}/basemap/waterways")
 def get_run_basemap_waterways(run_id: str):
     """Serves raw OSM rivers/waterways GeoJSON."""
-    run_folder = RUNS_DIR / run_id
+    run_folder = validate_run_id(run_id)
     target = run_folder / "raw" / "osm" / "osm_waterways.geojson"
     if not target.exists():
         target = BASE_DIR / "data" / "raw" / "osm" / "osm_waterways.geojson"
@@ -1225,7 +1283,7 @@ def get_run_basemap_waterways(run_id: str):
 @app.get("/api/runs/{run_id}/basemap/roads")
 def get_run_basemap_roads(run_id: str):
     """Serves raw OSM roads GeoJSON for baseline rendering."""
-    run_folder = RUNS_DIR / run_id
+    run_folder = validate_run_id(run_id)
     target = run_folder / "raw" / "osm" / "osm_roads.geojson"
     if not target.exists():
         target = BASE_DIR / "data" / "raw" / "osm" / "osm_roads.geojson"
@@ -1237,7 +1295,7 @@ def get_run_basemap_roads(run_id: str):
 @app.get("/api/runs/{run_id}/basemap/places")
 def get_run_basemap_places(run_id: str):
     """Serves raw OSM places GeoJSON with Latin and Devanagari labels."""
-    run_folder = RUNS_DIR / run_id
+    run_folder = validate_run_id(run_id)
     target = run_folder / "raw" / "osm" / "osm_places.geojson"
     if not target.exists():
         target = BASE_DIR / "data" / "raw" / "osm" / "osm_places.geojson"
@@ -1254,12 +1312,23 @@ if STATIC_DIR.exists():
 # ==========================================
 # PHASE 3: COPILOT & SITREP ENDPOINTS
 # ==========================================
+# Rate limiting tracker for copilot queries: IP -> list of timestamps
+_COPILOT_RATE_LIMIT: Dict[str, List[float]] = {}
+
+
 @app.post("/api/runs/{run_id}/copilot/ask")
 async def copilot_ask(run_id: str, request: Request):
     """Answers rescuer natural-language questions about the given run using CopilotAgent."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
+
+    # Rate limiting: max 20 requests per minute per IP
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    now_ts = time.time()
+    recent_ts = [t for t in _COPILOT_RATE_LIMIT.get(client_ip, []) if now_ts - t < 60.0]
+    if len(recent_ts) >= 20:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded: max 20 copilot inquiries per minute.")
+    recent_ts.append(now_ts)
+    _COPILOT_RATE_LIMIT[client_ip] = recent_ts
 
     try:
         body = await request.json()
@@ -1268,7 +1337,11 @@ async def copilot_ask(run_id: str, request: Request):
 
     question = (body.get("question") or body.get("query") or "").strip()
     if not question:
-        raise HTTPException(status_code=400, detail="Missing question")
+        raise HTTPException(status_code=400, detail="Missing question or empty inquiry")
+
+    # Input length cap (max 500 characters)
+    if len(question) > 500:
+        raise HTTPException(status_code=400, detail="Question exceeds maximum allowed length of 500 characters")
 
     provider = body.get("provider") or "auto"
 
@@ -1353,9 +1426,7 @@ async def copilot_ask(run_id: str, request: Request):
 @app.get("/api/runs/{run_id}/sitrep")
 def get_run_sitrep(run_id: str, lang: str = "en", format: str = "pdf"):
     """Generates and serves bilingual 1-page Situation Report (PDF or Markdown)."""
-    run_folder = RUNS_DIR / run_id
-    if not run_folder.exists():
-        raise HTTPException(status_code=404, detail="Run not found")
+    run_folder = validate_run_id(run_id)
 
     from src.copilot.facts import FactStore
     from src.copilot.sitrep import SitRepGenerator
@@ -1399,6 +1470,7 @@ def index():
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", 8000))
-    logger.info(f"Starting Disaster Dashboard server on http://0.0.0.0:{port}")
-    uvicorn.run("src.dashboard.app:app", host="0.0.0.0", port=port, reload=False)
+    logger.info(f"Starting Disaster Dashboard server on http://{host}:{port}")
+    uvicorn.run("src.dashboard.app:app", host=host, port=port, reload=False)

@@ -963,22 +963,32 @@ class CopilotTools:
             transformer = pyproj.Transformer.from_crs(wgs84, aeqd_crs, always_xy=True)
             circle = shapely.geometry.Point(0, 0).buffer(radius_m, quad_segs=64)
 
-            local_matched = []
-            clipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
-            unclipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
-
+            local_candidates = []
             for r in matched_roads:
                 pts = r.get("coordinates", [])
                 clip_m, unclip_m = clip_linestring_to_circle(pts, c_lon, c_lat, radius_km, transformer=transformer, circle_geom=circle)
                 if clip_m > 0.0:
-                    grade = r.get("damage_grade", "Not affected")
-                    clipped_by_grade[grade] = clipped_by_grade.get(grade, 0.0) + clip_m
-                    unclipped_by_grade[grade] = unclipped_by_grade.get(grade, 0.0) + unclip_m
+                    local_candidates.append((r, clip_m, unclip_m))
 
-                    r_copy = dict(r)
-                    r_copy["clipped_length_m"] = round(clip_m, 2)
-                    r_copy["unclipped_length_m"] = round(unclip_m, 2)
-                    local_matched.append(r_copy)
+            # When evaluating a named highway corridor locally, prefer the highest arterial highway class
+            # present within the query circle (e.g. primary arterial vs tertiary feeder segments)
+            if local_candidates and not type:
+                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r, _, _ in local_candidates), default=0)
+                local_candidates = [(r, c, u) for r, c, u in local_candidates if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
+
+            local_matched = []
+            clipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+            unclipped_by_grade = {"Destroyed": 0.0, "Possibly damaged": 0.0, "Not affected": 0.0, "Unknown (cloud)": 0.0}
+
+            for r, clip_m, unclip_m in local_candidates:
+                grade = r.get("damage_grade", "Not affected")
+                clipped_by_grade[grade] = clipped_by_grade.get(grade, 0.0) + clip_m
+                unclipped_by_grade[grade] = unclipped_by_grade.get(grade, 0.0) + unclip_m
+
+                r_copy = dict(r)
+                r_copy["clipped_length_m"] = round(clip_m, 2)
+                r_copy["unclipped_length_m"] = round(unclip_m, 2)
+                local_matched.append(r_copy)
 
             matched_roads = local_matched
             road_label += f" within {radius_km} km of {resolved_area}"

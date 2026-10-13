@@ -9,6 +9,7 @@ Generates strictly grounded situation reports:
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import re
@@ -277,6 +278,11 @@ strong {
 """
 
 
+def safe_url_fetcher(url, timeout=10, ssl_context=None):
+    """Strict security: SitRep is self-contained. Block all external network and local filesystem fetches."""
+    raise ValueError(f"External and local resource fetching is strictly disabled in SitRep PDF generator: {url}")
+
+
 class SitRepGenerator:
     """Generates bilingual Situation Reports with strict numeric grounding."""
 
@@ -385,25 +391,28 @@ class SitRepGenerator:
         out_path = Path(output_pdf_path).resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Convert simple markdown to HTML
+        # Convert simple markdown to HTML with proper escaping
         html_body = []
         for line in markdown_text.splitlines():
             line_str = line.strip()
             if not line_str:
                 continue
             if line_str.startswith("# "):
-                html_body.append(f"<h1>{line_str[2:]}</h1>")
+                escaped = html.escape(line_str[2:])
+                html_body.append(f"<h1>{escaped}</h1>")
             elif line_str.startswith("### "):
-                html_body.append(f"<h3>{line_str[4:]}</h3>")
+                escaped = html.escape(line_str[4:])
+                html_body.append(f"<h3>{escaped}</h3>")
             elif line_str.startswith("- "):
                 # bullet point
-                content = line_str[2:]
+                content = html.escape(line_str[2:])
                 content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", content)
                 html_body.append(f"<ul><li>{content}</li></ul>")
             elif line_str == "---":
                 html_body.append("<hr/>")
             else:
-                formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line_str)
+                escaped = html.escape(line_str)
+                formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
                 html_body.append(f"<p>{formatted}</p>")
 
         html_content = f"""<!DOCTYPE html>
@@ -418,7 +427,7 @@ class SitRepGenerator:
 </body>
 </html>"""
 
-        doc = weasyprint.HTML(string=html_content)
+        doc = weasyprint.HTML(string=html_content, url_fetcher=safe_url_fetcher)
         doc.write_pdf(str(out_path))
         logger.info("Generated SitRep PDF: %s", out_path)
         return out_path
