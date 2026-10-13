@@ -181,12 +181,16 @@ def verify_run(run_folder: Path) -> bool:
     val_file = proc / "validation_status.json"
     if val_file.exists():
         v_data = json.load(open(val_file))
-        expected_banner = v_data.get("validation_status", "")
+        expected_banner = v_data.get("validation_status", "not validated against an official map (practice run)")
         if val_status != expected_banner:
             errors.append(f"Validation status mismatch: API='{val_status}' vs JSON='{expected_banner}'")
-    elif "test_A_cold_verify" in run_id:
-        if "EMSR927" not in val_status:
-            errors.append(f"Trishuli must have EMSR927 banner, got: '{val_status}'")
+    else:
+        # Strict requirement: Only runs with their own validation output may show a validation claim; every other run shows practice run
+        expected_banner = "not validated against an official map (practice run)"
+        if val_status != expected_banner:
+            errors.append(f"Run without validation output must show '{expected_banner}', but API returned: '{val_status}'")
+        if "validated on" in val_status or "EMSR" in val_status:
+            errors.append(f"Illegal validation claim on run without validation output: '{val_status}'")
 
     # 6. Attribution Year verification
     expected_year = meta["event_date"].split("-")[0] if meta["event_date"] else "2026"

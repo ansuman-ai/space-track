@@ -297,8 +297,8 @@ def get_validation_metrics(run_folder: Path, summary: Optional[Dict[str, Any]] =
     if val_status_file.exists():
         try:
             val_meta = json.loads(val_status_file.read_text(encoding="utf-8"))
-            validation_status = val_meta.get("validation_status", "Standard Assessment")
-            official_benchmark = val_meta.get("official_benchmark", "Copernicus EMS")
+            validation_status = val_meta.get("validation_status", "not validated against an official map (practice run)")
+            official_benchmark = val_meta.get("official_benchmark", "Copernicus EMS" if "validated on" in validation_status else "none")
             metrics = val_meta.get("metrics", {})
             source_file = val_meta.get("source_file", "processed/validation_status.json")
             source_field = val_meta.get("source_field", "validation_status")
@@ -312,12 +312,11 @@ def get_validation_metrics(run_folder: Path, summary: Optional[Dict[str, Any]] =
         except Exception:
             pass
 
-    # Fallback to run_summary.json
-    val_status = summary.get("validation_status", "not validated against an official map (practice run)")
+    # Only runs with their own validation output may show a validation claim; every other run is a practice run
     return {
-        "validation_status": val_status,
+        "validation_status": "not validated against an official map (practice run)",
         "official_benchmark": "none",
-        "metrics": {"precision": 0.94 if "0.94" in val_status else None, "f1": 0.57 if "0.57" in val_status else None},
-        "source_file": "run_summary.json",
+        "metrics": {"precision": None, "f1": None},
+        "source_file": "processed/validation_status.json",
         "source_field": "validation_status",
     }

@@ -64,11 +64,11 @@ def generate_run_hillshade(run_folder: Path) -> Tuple[Optional[Path], Optional[D
         res_m = 30.0
         shade = ls.hillshade(dem_filled, dx=res_m, dy=res_m)
 
-        # Map to dark topographic relief aesthetic (slate/charcoal background)
-        # Background: RGB(15, 23, 42) -> Ridge illumination: RGB(71, 85, 105)
-        r = (shade * 56 + 15).astype(np.uint8)
-        g = (shade * 62 + 23).astype(np.uint8)
-        b = (shade * 75 + 38).astype(np.uint8)
+        # Map to light official map product relief aesthetic
+        # Neutral light background #F6F7F5 (RGB 246, 247, 245) with soft natural shading down to (RGB 200, 204, 202)
+        r = (shade * 46 + 200).astype(np.uint8)
+        g = (shade * 43 + 204).astype(np.uint8)
+        b = (shade * 43 + 202).astype(np.uint8)
         a = np.where(valid, 255, 0).astype(np.uint8)
 
         rgba = np.stack([r, g, b, a], axis=-1)

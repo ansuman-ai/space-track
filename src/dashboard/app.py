@@ -171,6 +171,42 @@ def derive_operational_run_label(run_folder: Path, summary: Dict[str, Any]) -> s
     return f"{prefix} — {date} ({regime_str})"
 
 
+def extract_primary_place(run_folder: Path) -> Optional[str]:
+    """Derives primary named place from unbuffered and buffered OSM places."""
+    summary_file = run_folder / "run_summary.json"
+    bbox = [0, 0, 0, 0]
+    if summary_file.exists():
+        try:
+            bbox = json.loads(summary_file.read_text()).get("bbox", [0, 0, 0, 0])
+        except Exception:
+            pass
+    if len(bbox) != 4:
+        return None
+    cx = (bbox[0] + bbox[2]) / 2.0
+    cy = (bbox[1] + bbox[3]) / 2.0
+    for pfile in [run_folder / "raw" / "osm" / "osm_places.geojson", run_folder / "raw" / "osm_buffered" / "osm_places.geojson"]:
+        if not pfile.exists():
+            continue
+        try:
+            d = json.loads(pfile.read_text())
+            candidates = []
+            for feat in d.get("features", []):
+                props = feat.get("properties", {})
+                raw_name = props.get("name:en") or props.get("name") or ""
+                clean = raw_name.split("(")[0].split(",")[0].strip()
+                if not clean or clean.startswith("Place node") or clean.startswith("Cluster") or clean == "None":
+                    continue
+                coords = feat.get("geometry", {}).get("coordinates", [cx, cy])
+                dist = math.hypot(coords[0] - cx, coords[1] - cy) * 111.0
+                candidates.append((dist, clean))
+            if candidates:
+                candidates.sort(key=lambda x: x[0])
+                return candidates[0][1]
+        except Exception:
+            pass
+    return None
+
+
 def extract_primary_river(run_folder: Path) -> Optional[str]:
     """Finds the named OSM waterway with the most overlap/proximity to class 2/3 hazard."""
     waterway_file = run_folder / "raw" / "osm" / "osm_waterways.geojson"
@@ -296,15 +332,16 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     if val_status_file.exists():
         try:
             val_meta = json.loads(val_status_file.read_text())
-            validation_status = val_meta.get("validation_status", "Standard Assessment")
+            validation_status = val_meta.get("validation_status", "not validated against an official map (practice run)")
             val_source_file = val_meta.get("source_file", "processed/validation_status.json")
             val_source_field = val_meta.get("source_field", "validation_status")
         except Exception:
-            validation_status = summary.get("validation_status", "not validated against an official map (practice run)")
-            val_source_file = "run_summary.json"
+            validation_status = "not validated against an official map (practice run)"
+            val_source_file = "processed/validation_status.json"
             val_source_field = "validation_status"
     else:
-        validation_status = summary.get("validation_status", "not validated against an official map (practice run)")
+        # Only runs with their own validation output may show a validation claim; every other run is a practice run
+        validation_status = "not validated against an official map (practice run)"
         val_source_file = "run_summary.json"
         val_source_field = "validation_status"
 
@@ -475,7 +512,8 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             "element_count": pkg1_element_count,
             "elements": pkg1_elements,
             "unconnectable_settlements_count": unconnectable_count
-        }
+        },
+        "validation_metrics": val_meta.get("metrics") if val_status_file.exists() else None
     }
 
     # Check layer availability
@@ -497,6 +535,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         "subtitle": subtitle,
         "event_name": event_name,
         "primary_river": primary_river,
+        "primary_place": extract_primary_place(run_folder),
         "osm_label": human_label,
         "event_date": event_date,
         "event_year": event_year,
