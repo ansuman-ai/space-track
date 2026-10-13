@@ -319,26 +319,26 @@ html, body {
 }
 
 /* OpenStreetMap Standard Raster Tiles - Muted Operational Cartography */
-.leaflet-pane.leaflet-osmTilePane-pane {
+/* Apply greyscale filter directly to tile images rather than whole pane to improve performance */
+.leaflet-pane.leaflet-osmTilePane-pane .leaflet-tile {
   filter: grayscale(1) brightness(1.05) contrast(0.9);
 }
 
-/* Hillshade Terrain Overlay - Light multiply blend over OSM base */
+/* Hillshade Terrain Overlay - Light overlay with plain opacity (no mix-blend-mode) */
 .leaflet-pane.leaflet-hillshadePane-pane {
-  mix-blend-mode: multiply;
   pointer-events: none;
 }
 
-/* Offline Basemap Fallback Banner */
+/* Offline Basemap Fallback Banner (Amber / Grey, not red) */
 .offline-basemap-banner {
   position: absolute;
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 850;
-  background-color: #FEF3F2;
-  border: 1px solid #FECDCA;
-  color: #B42318;
+  background-color: #FEFBE8;
+  border: 1px solid #FDE68A;
+  color: #92400E;
   padding: 6px 14px;
   border-radius: 4px;
   font-size: 12px;

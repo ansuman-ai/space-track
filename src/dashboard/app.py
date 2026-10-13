@@ -21,7 +21,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 from PIL import Image
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Query, Response, Request
+from fastapi import FastAPI, HTTPException, Query, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -941,11 +941,17 @@ def list_runs(show_all: bool = Query(False)):
 
 
 @app.get("/api/runs/{run_id}")
-def get_run_details(run_id: str):
+def get_run_details(run_id: str, background_tasks: BackgroundTasks):
     """Returns detailed summary payload and layer stats for a specific run."""
     run_folder = RUNS_DIR / run_id
     if not run_folder.exists() or not (run_folder / "run_summary.json").exists():
         raise HTTPException(status_code=404, detail="Run not found")
+
+    # Pre-generate DEM XYZ tiles asynchronously in background if not already complete
+    tiles_root = run_folder / "processed" / "dem_tiles"
+    if not (tiles_root / ".complete").exists():
+        from src.dashboard.basemap_renderer import generate_run_hillshade_tiles
+        background_tasks.add_task(generate_run_hillshade_tiles, run_folder)
 
     meta = get_run_metadata(run_folder)
     if not meta:
@@ -979,9 +985,21 @@ def get_run_details(run_id: str):
     return details
 
 
+# In-memory layer cache per run
+_LAYER_CACHE: Dict[str, bytes] = {}
+
+
 @app.get("/api/runs/{run_id}/layer/{layer_name}")
-def get_run_layer(run_id: str, layer_name: str):
-    """Serves GeoJSON layer for a specific run."""
+def get_run_layer(
+    run_id: str,
+    layer_name: str,
+    affected_only: bool = Query(False),
+    simplify_tol: float = Query(0.0)
+):
+    """
+    Serves optimized GeoJSON layer for a specific run.
+    Supports affected_only filtering (buildings, roads), geometry simplification, and run-level caching.
+    """
     run_folder = RUNS_DIR / run_id
     if not run_folder.exists():
         raise HTTPException(status_code=404, detail="Run not found")
@@ -1004,7 +1022,76 @@ def get_run_layer(run_id: str, layer_name: str):
     if not target_file.exists():
         raise HTTPException(status_code=404, detail=f"Layer {layer_name} not available for this run")
 
-    return FileResponse(target_file, media_type="application/geo+json")
+    cache_key = f"{run_id}_{layer_name}_{affected_only}_{simplify_tol}"
+    if cache_key in _LAYER_CACHE:
+        return Response(
+            content=_LAYER_CACHE[cache_key],
+            media_type="application/geo+json",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    # If no filtering or simplification requested, read raw bytes directly
+    if not affected_only and simplify_tol <= 0.0:
+        raw_bytes = target_file.read_bytes()
+        _LAYER_CACHE[cache_key] = raw_bytes
+        return Response(
+            content=raw_bytes,
+            media_type="application/geo+json",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    try:
+        data = json.loads(target_file.read_text(encoding="utf-8"))
+        features = data.get("features", [])
+
+        # Filter affected features if requested
+        if affected_only:
+            if layer_name == "buildings":
+                features = [
+                    f for f in features
+                    if f.get("properties", {}).get("damage_grade") not in ("Not affected", "Unknown (cloud)", None)
+                ]
+            elif layer_name == "roads":
+                features = [
+                    f for f in features
+                    if f.get("properties", {}).get("damage_grade") not in ("Not affected", "Unknown (cloud)", None)
+                ]
+
+        # Geometry simplification if requested
+        if simplify_tol > 0.0:
+            from shapely.geometry import shape, mapping
+            simplified_features = []
+            for f in features:
+                geom = f.get("geometry")
+                if geom:
+                    try:
+                        s_geom = shape(geom).simplify(simplify_tol, preserve_topology=True)
+                        simplified_features.append({
+                            "type": "Feature",
+                            "properties": f.get("properties", {}),
+                            "geometry": mapping(s_geom)
+                        })
+                    except Exception:
+                        simplified_features.append(f)
+                else:
+                    simplified_features.append(f)
+            features = simplified_features
+
+        out_data = {
+            "type": "FeatureCollection",
+            "features": features
+        }
+        res_bytes = json.dumps(out_data, separators=(",", ":")).encode("utf-8")
+        _LAYER_CACHE[cache_key] = res_bytes
+        return Response(
+            content=res_bytes,
+            media_type="application/geo+json",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    except Exception as e:
+        logger.error(f"Error processing layer {layer_name}: {e}")
+        return FileResponse(target_file, media_type="application/geo+json")
 
 
 @app.get("/api/runs/{run_id}/repair-packages")
@@ -1094,21 +1181,17 @@ def get_run_hillshade(run_id: str):
 
 @app.get("/api/runs/{run_id}/basemap/tiles/{z}/{x}/{y}.png")
 def get_run_hillshade_tile(run_id: str, z: int, x: int, y: int):
-    """Serves Web Mercator DEM hillshade XYZ tile (z=9-15) for high-zoom overlay."""
+    """Serves Web Mercator DEM hillshade XYZ tile (z=9-14) for high-zoom overlay."""
     run_folder = RUNS_DIR / run_id
     if not run_folder.exists():
         raise HTTPException(status_code=404, detail="Run not found")
     tiles_root = run_folder / "processed" / "dem_tiles"
     tile_file = tiles_root / str(z) / str(x) / f"{y}.png"
 
-    if not tile_file.exists() and not (tiles_root / ".complete").exists():
-        from src.dashboard.basemap_renderer import generate_run_hillshade_tiles
-        generate_run_hillshade_tiles(run_folder)
-
     if tile_file.exists():
         return FileResponse(tile_file, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
-    # If tile is outside DEM extent or nodata, return a 1x1 transparent PNG
+    # If tile is outside DEM extent, still generating, or nodata, return 1x1 transparent PNG immediately
     transparent_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
     return Response(content=transparent_png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 

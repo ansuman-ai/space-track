@@ -57,7 +57,8 @@ function initMap() {
     center: [28.15, 85.35],
     zoom: 12,
     zoomControl: false,
-    attributionControl: false
+    attributionControl: false,
+    preferCanvas: true
   });
 
   // Zoom control in bottom right
@@ -76,8 +77,14 @@ function initMap() {
     }
   };
 
+  // Throttle mousemove coordinate updates using requestAnimationFrame
+  let mouseMoveRaf = null;
   map.on("mousemove", (e) => {
-    updateCoords(e.latlng.lat, e.latlng.lng);
+    if (mouseMoveRaf) return;
+    mouseMoveRaf = requestAnimationFrame(() => {
+      updateCoords(e.latlng.lat, e.latlng.lng);
+      mouseMoveRaf = null;
+    });
   });
 
   const showCenterCoords = () => {
@@ -95,7 +102,7 @@ function initMap() {
   map.createPane("osmTilePane");
   map.getPane("osmTilePane").style.zIndex = 100;
 
-  // 2. Terrain Overlay Pane (z=150) - mix-blend-mode: multiply over OSM base
+  // 2. Terrain Overlay Pane (z=150) - Plain opacity overlay over OSM base
   map.createPane("hillshadePane");
   map.getPane("hillshadePane").style.zIndex = 150;
 
@@ -600,13 +607,13 @@ async function setupBasemap(runId, data) {
 
   baseLayers.osmTiles.addTo(map);
 
-  // 2. Terrain Overlay: DEM Hillshade XYZ Tiles (z=9-15)
-  // mix-blend-mode: multiply over the OSM base in pane 'hillshadePane'
+  // 2. Terrain Overlay: DEM Hillshade XYZ Tiles (z=9-14)
+  // Plain opacity ~0.25 (no mix-blend-mode) over the OSM base in pane 'hillshadePane'
   baseLayers.hillshadeTiles = L.tileLayer(`/api/runs/${runId}/basemap/tiles/{z}/{x}/{y}.png`, {
     pane: "hillshadePane",
     minZoom: 9,
-    maxZoom: 15,
-    opacity: 0.35,
+    maxZoom: 14,
+    opacity: 0.25,
     tileSize: 256
   });
   baseLayers.hillshadeTiles.addTo(map);
@@ -1093,7 +1100,7 @@ function openSettlementPopup(feat) {
 // ==========================================================================
 async function loadHazardsLayer(runId) {
   try {
-    const res = await fetch(`/api/runs/${runId}/layer/hazards`);
+    const res = await fetch(`/api/runs/${runId}/layer/hazards?simplify_tol=0.0001`);
     const geojson = await res.json();
     const isFlat = currentRunData && currentRunData.regime === "flat_floodplain";
 
@@ -1127,10 +1134,17 @@ async function loadHazardsLayer(runId) {
 
 async function loadBuildingsLayer(runId) {
   try {
-    const res = await fetch(`/api/runs/${runId}/layer/buildings`);
-    const geojson = await res.json();
     const showIntact = document.getElementById("layer-intact-buildings").checked;
+    const url = showIntact
+      ? `/api/runs/${runId}/layer/buildings`
+      : `/api/runs/${runId}/layer/buildings?affected_only=true`;
+    const res = await fetch(url);
+    const geojson = await res.json();
     const isFlat = currentRunData && currentRunData.regime === "flat_floodplain";
+
+    if (geojsonLayers.buildings && map.hasLayer(geojsonLayers.buildings)) {
+      map.removeLayer(geojsonLayers.buildings);
+    }
 
     geojsonLayers.buildings = L.geoJSON(geojson, {
       filter: (feature) => {
@@ -1190,7 +1204,7 @@ async function loadBuildingsLayer(runId) {
 
 async function loadRoadsLayer(runId) {
   try {
-    const res = await fetch(`/api/runs/${runId}/layer/roads`);
+    const res = await fetch(`/api/runs/${runId}/layer/roads?affected_only=true&simplify_tol=0.0001`);
     const geojson = await res.json();
 
     geojsonLayers.roads = L.geoJSON(geojson, {

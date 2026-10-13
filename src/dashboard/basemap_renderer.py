@@ -122,12 +122,12 @@ def generate_run_hillshade(run_folder: Path) -> Tuple[Optional[Path], Optional[D
         return None, None
 
 
-def generate_run_hillshade_tiles(run_folder: Path, min_zoom: int = 9, max_zoom: int = 15) -> Path:
+def generate_run_hillshade_tiles(run_folder: Path, min_zoom: int = 9, max_zoom: int = 14) -> Path:
     """
-    Generates and caches Web Mercator XYZ tiles (z=9-15) from Copernicus DEM-30
+    Generates and caches Web Mercator XYZ tiles (z=9-14) from Copernicus DEM-30
     under processed/dem_tiles/{z}/{x}/{y}.png.
     Uses natural greyscale shading (0=shadow, 255=highlight, transparent outside DEM)
-    designed specifically for mix-blend-mode: multiply over OSM base tiles.
+    for terrain overlay over OSM base tiles.
     """
     tiles_root = run_folder / "processed" / "dem_tiles"
     complete_flag = tiles_root / ".complete"
