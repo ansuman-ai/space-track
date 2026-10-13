@@ -229,8 +229,10 @@ class FactStore:
             self.add_fact("damage.roads.destroyed_km", r_grades.get("Destroyed", 0.0), "km", src, "observed", optical_date, "Destroyed road km")
             self.add_fact("damage.roads.possibly_damaged_km", r_grades.get("Possibly damaged", 0.0), "km", src, "observed", optical_date, "Possibly damaged road km")
             self.add_fact("damage.roads.not_affected_km", r_grades.get("Not affected", 0.0), "km", src, "observed", optical_date, "Not affected road km")
-            self.add_fact("damage.roads.unknown_cloud_km", r_grades.get("Unknown (cloud)", 0.0), "km", src, "cloud-unverified", optical_date, "Road km under cloud cover")
-            self.add_fact("damage.roads.drivable_km", 66.64, "km", src, "osm_baseline", "pre-event", "Classified drivable road network length (primary, tertiary, residential, track) within AOI bbox")
+            # Dynamically compute classified drivable road network length in bbox
+            road_types = cov.get("road_km_by_type", {})
+            drivable_km = round(sum(v for k, v in road_types.items() if k in ["primary", "secondary", "tertiary", "residential", "track"]), 2)
+            self.add_fact("damage.roads.drivable_km", drivable_km, "km", src, "osm_baseline", "pre-event", "Classified drivable road network length (primary, secondary, tertiary, residential, track) within AOI bbox")
 
             # Bridges
             br_data = damage_summary.get("bridges", {})

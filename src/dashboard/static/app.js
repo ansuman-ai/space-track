@@ -2215,8 +2215,26 @@ async function askCopilot(question) {
       sourcesListHtml = `<div class="copilot-sources-accordion hidden font-mono">${itemsHtml}</div>`;
     }
 
+    let processedAnswer = escapeHtml(answer);
+    let sitrepDownloadHtml = "";
+    const sitrepMatch = answer.match(/\[DOWNLOAD_SITREP:([^\]]+)\]/);
+    if (sitrepMatch) {
+      const sRunId = sitrepMatch[1].trim();
+      processedAnswer = processedAnswer.replace(/\[DOWNLOAD_SITREP:[^\]]+\]/, "");
+      sitrepDownloadHtml = `
+        <div style="margin-top: 8px; display: flex; gap: 8px;">
+          <a href="/api/runs/${encodeURIComponent(sRunId)}/sitrep?lang=en&format=pdf" target="_blank" class="btn-dark" style="padding: 4px 10px; font-size: 11px; text-decoration: none; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+            <span>Download SitRep (EN)</span>
+          </a>
+          <a href="/api/runs/${encodeURIComponent(sRunId)}/sitrep?lang=ne&format=pdf" target="_blank" class="btn-outline" style="padding: 4px 10px; font-size: 11px; text-decoration: none; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+            <span>डाउनलोड स्थिति प्रतिवेदन (NE)</span>
+          </a>
+        </div>
+      `;
+    }
+
     botMsgEl.innerHTML = `
-      <div class="answer-text">${escapeHtml(answer)}</div>
+      <div class="answer-text">${processedAnswer}${sitrepDownloadHtml}</div>
       <div class="copilot-msg-meta">
         <span class="meta-tag">${escapeHtml(metaTagText)}</span>
         ${sourcesBtnHtml}

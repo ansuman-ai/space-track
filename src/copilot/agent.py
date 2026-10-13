@@ -630,6 +630,53 @@ class CopilotAgent:
                 language=lang,
             )
 
+        # 1f. Sitrep / Situation report query
+        if _has_kw(["sitrep", "situation report", "report do", "रिपोर्ट", "स्थिति प्रतिवेदन", "प्रतिवेदन", "डाउनलोड"]):
+            out = self.tools.event_summary()
+            self.conversation_tool_outputs.append(out)
+            m = out.get("metrics", {})
+            b_aff = m.get("buildings_affected_total", "not computed")
+            b_dest = m.get("buildings_destroyed", "not computed")
+            br_dest = m.get("bridges_destroyed", "not computed")
+            cut_c = m.get("cut_off_settlements", "not computed")
+            ev_date = out.get("event_date", "not computed")
+            obs_area = m.get("affected_km2_observed", "not computed")
+            run_name = Path(self.store.run_dir).name
+
+            if lang == "ne":
+                text = (
+                    f"यस प्रकोप क्षेत्रको संक्षिप्त स्थिति प्रतिवेदन ({ev_date}):\n"
+                    f"• प्रत्यक्ष बाढी/क्षति क्षेत्र: {obs_area} वर्ग कि.मी.\n"
+                    f"• भौतिक क्षति: कुल {b_aff} भवन प्रभावित ({b_dest} पूर्ण नष्ट), र {br_dest} मुख्य पुल नष्ट।\n"
+                    f"• पहुँच विच्छेद: {cut_c} बस्तीहरू कुनै पनि सहर वा अस्पतालबाट विच्छेद छन्।\n\n"
+                    f"[DOWNLOAD_SITREP:{run_name}]"
+                )
+            elif lang == "hi":
+                text = (
+                    f"आपदा स्थिति प्रतिवेदन संक्षेप ({ev_date}):\n"
+                    f"• प्रत्यक्ष प्रभावित क्षेत्र: {obs_area} वर्ग किमी।\n"
+                    f"• बुनियादी ढांचा क्षति: {b_aff} कुल प्रभावित भवन ({b_dest} नष्ट), {br_dest} पुल नष्ट।\n"
+                    f"• संपर्क विच्छेद: {cut_c} बस्तियां सड़क संपर्क से कटी हुई हैं।\n\n"
+                    f"[DOWNLOAD_SITREP:{run_name}]"
+                )
+            else:
+                text = (
+                    f"Situation Report Summary ({ev_date}):\n"
+                    f"• Directly observed hazard: {obs_area} km².\n"
+                    f"• Infrastructure impact: {b_aff} affected buildings ({b_dest} destroyed), {br_dest} destroyed bridges.\n"
+                    f"• Isolation: {cut_c} settlements cut off from any town or hospital by road.\n\n"
+                    f"[DOWNLOAD_SITREP:{run_name}]"
+                )
+            return AgentResponse(
+                text=text,
+                tools_called=["event_summary"],
+                tool_outputs=[out],
+                guard_passed=True,
+                guard_retried=False,
+                language=lang,
+                answer_path="offline",
+            )
+
         # 2. Event summary intent (affected area, overview)
         if _has_kw(["affected area", "square km", "km2", "वर्ग किलोमिटर", "वर्ग किमी", "प्रत्यक्ष प्रभावित", "विस्तृत अवस्था", "overview", "what happened"]):
             out = self.tools.event_summary()

@@ -1656,7 +1656,7 @@ def get_run_sitrep(run_id: str, lang: str = "en", format: str = "pdf"):
     # Generate PDF
     pdf_path = cache_dir / f"sitrep_{target_lang}.pdf"
     md_text = gen.generate_markdown(lang=target_lang)
-    gen.generate_pdf(md_text, pdf_path)
+    gen.generate_pdf(md_text, pdf_path, lang=target_lang)
 
     if not pdf_path.exists():
         raise HTTPException(status_code=500, detail="Failed to generate SitRep PDF")
