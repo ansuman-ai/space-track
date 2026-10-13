@@ -62,17 +62,29 @@ function initMap() {
   // Scale bar in bottom right
   L.control.scale({ position: "bottomright", metric: true, imperial: false }).addTo(map);
 
-  // Cursor coordinates in status ribbon
-  map.on("mousemove", (e) => {
-    const lat = e.latlng.lat;
-    const lng = e.latlng.lng;
+  // Cursor and Center coordinates in status ribbon
+  const updateCoords = (lat, lng) => {
     const latDir = lat >= 0 ? "N" : "S";
     const lngDir = lng >= 0 ? "E" : "W";
     const el = document.getElementById("status-cursor-coords");
     if (el) {
       el.textContent = `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
     }
+  };
+
+  map.on("mousemove", (e) => {
+    updateCoords(e.latlng.lat, e.latlng.lng);
   });
+
+  const showCenterCoords = () => {
+    const center = map.getCenter();
+    updateCoords(center.lat, center.lng);
+  };
+
+  map.on("mouseout", showCenterCoords);
+  map.on("moveend", showCenterCoords);
+  // Initial center coordinates
+  showCenterCoords();
 
   // Custom Panes to maintain visual stacking
   map.createPane("basemapImagePane");
@@ -466,9 +478,9 @@ function updateHeader(data) {
   const regimeStr = data.regime === "flat_floodplain" ? "Flat terrain" : "Mountain terrain";
   subtitleEl.textContent = `${placeOrRiver}, ${data.event_date}. ${regimeStr}.`;
 
-  // Validation Pill
+  // Validation Pill: Only Trishuli (EMSR927) is validated; all others are practice runs
   const valStatus = data.validation_status || "not validated against an official map (practice run)";
-  if (valStatus.includes("validated on") || valStatus.includes("EMSR")) {
+  if (valStatus.includes("EMSR927")) {
     valPillEl.textContent = "Validated against Copernicus EMSR927";
     valPillEl.className = "badge-validation verified";
   } else {
@@ -545,6 +557,23 @@ async function updateOfflineBasemap(runId, data) {
           pane: "basemapImagePane"
         });
         baseLayers.offline.addLayer(hillshade);
+
+        // Constrain panning to buffered DEM extent with a small safety margin
+        // so users never pan into empty space
+        const [[s, w], [n, e]] = meta.bounds;
+        const latBuf = (n - s) * 0.15;
+        const lngBuf = (e - w) * 0.15;
+        const bufferedExtent = [
+          [s - latBuf, w - lngBuf],
+          [n + latBuf, e + lngBuf]
+        ];
+        map.setMaxBounds(bufferedExtent);
+
+        // Compute minZoom so user cannot zoom out past DEM coverage
+        const demSpan = Math.max(n - s, e - w);
+        // A span of ~0.3 deg fits well at zoom 10 or 11
+        const calculatedMinZoom = demSpan > 1.0 ? 8 : (demSpan > 0.4 ? 9 : 10);
+        map.setMinZoom(calculatedMinZoom);
       }
     }
   } catch (e) {
@@ -652,11 +681,25 @@ function zoomToDamagedArea(data) {
     });
   }
 
+  // Fit to damaged area or AOI, occupying ~85% of viewport (padding ~8% on each side)
+  const mapSize = map.getSize();
+  const padX = Math.round(mapSize.x * 0.08);
+  const padY = Math.round(mapSize.y * 0.08);
+
   if (damagedGroup.getLayers().length > 0) {
-    map.fitBounds(damagedGroup.getBounds(), { padding: [35, 35], maxZoom: 15 });
+    map.fitBounds(damagedGroup.getBounds(), { padding: [padY, padX], maxZoom: 15 });
   } else if (data.bbox && data.bbox.length === 4) {
     const [w, s, e, n] = data.bbox;
-    map.fitBounds([[s, w], [n, e]], { padding: [35, 35], maxZoom: 14 });
+    map.fitBounds([[s, w], [n, e]], { padding: [padY, padX], maxZoom: 14 });
+  }
+
+  // Update status ribbon coordinates to current center
+  const center = map.getCenter();
+  const latDir = center.lat >= 0 ? "N" : "S";
+  const lngDir = center.lng >= 0 ? "E" : "W";
+  const el = document.getElementById("status-cursor-coords");
+  if (el) {
+    el.textContent = `${Math.abs(center.lat).toFixed(4)}° ${latDir}, ${Math.abs(center.lng).toFixed(4)}° ${lngDir}`;
   }
 }
 
@@ -699,6 +742,24 @@ function updateSidePanel(data) {
   document.getElementById("kpi-val-no-ground").textContent = noGround;
   document.getElementById("kpi-lbl-no-ground").textContent = isFlat ? "No ground access (boat/air)" : "No ground access (air only)";
 
+  // Update KPI and Legend Symbology for flat vs mountain runs
+  const symKpiBld = document.getElementById("sym-kpi-buildings");
+  if (symKpiBld) symKpiBld.className = isFlat ? "sym-flooded-circle" : "sym-destroyed-circle";
+  const symKpiBr = document.getElementById("sym-kpi-bridges");
+  if (symKpiBr) symKpiBr.className = isFlat ? "sym-flooded-diamond" : "sym-destroyed-diamond";
+
+  const symLegObs = document.getElementById("sym-legend-obs");
+  if (symLegObs) symLegObs.className = isFlat ? "sym-flood-obs-box" : "sym-obs-box";
+  const lblLegObs = document.getElementById("lbl-legend-obs");
+  if (lblLegObs) lblLegObs.textContent = isFlat ? "Flood water (observed)" : "Observed damage";
+
+  const symLegBld = document.getElementById("sym-legend-buildings");
+  if (symLegBld) symLegBld.className = isFlat ? "sym-flooded-circle" : "sym-destroyed-circle";
+  const symLegBr = document.getElementById("sym-legend-bridges");
+  if (symLegBr) symLegBr.className = isFlat ? "sym-flooded-diamond" : "sym-destroyed-diamond";
+  const symLegR = document.getElementById("sym-legend-roads");
+  if (symLegR) symLegR.className = isFlat ? "sym-flooded-line" : "sym-destroyed-line";
+
   // Update Legend Labels & Stats (7 standard rows)
   document.getElementById("legend-stat-obs").textContent = `${(areas.observed_km2 !== undefined ? areas.observed_km2.toFixed(2) : "0.00")} km²`;
   document.getElementById("legend-stat-inf").textContent = `${(areas.inferred_km2 !== undefined ? areas.inferred_km2.toFixed(2) : "0.00")} km²`;
@@ -713,22 +774,39 @@ function updateSidePanel(data) {
   document.getElementById("lbl-legend-roads").textContent = isFlat ? "Roads impassable" : "Roads destroyed";
 
   // TAB 1: IMPACT
+  // Buildings: flat runs use Flooded, Possibly flooded; no "Damaged" row; no "Flooded / impassable" for buildings
   document.getElementById("val-b-destroyed").textContent = (isFlat ? (b.flooded || b.total_affected || 0) : (b.destroyed || 0)).toLocaleString();
-  document.getElementById("lbl-row-b-destroyed").textContent = isFlat ? "Flooded / impassable" : "Destroyed";
+  document.getElementById("lbl-row-b-destroyed").textContent = isFlat ? "Flooded" : "Destroyed";
+  const dotBDest = document.getElementById("dot-b-destroyed");
+  if (dotBDest) dotBDest.className = isFlat ? "dot-color flooded" : "dot-color destroyed";
+
+  const rowBDamaged = document.getElementById("row-b-damaged");
+  if (rowBDamaged) {
+    if (isFlat) rowBDamaged.classList.add("hidden");
+    else rowBDamaged.classList.remove("hidden");
+  }
   document.getElementById("val-b-damaged").textContent = (b.damaged || 0).toLocaleString();
+
   document.getElementById("val-b-possible").textContent = (isFlat ? (b.possibly_flooded || 0) : (b.possibly_damaged || 0)).toLocaleString();
   document.getElementById("lbl-row-b-possible").textContent = isFlat ? "Possibly flooded" : "Possibly damaged";
   document.getElementById("val-b-total").textContent = (b.total_affected || 0).toLocaleString();
   document.getElementById("val-b-unverified").textContent = (b.unverified || 0).toLocaleString();
 
+  // Bridges & Roads: flat runs use "Flooded / impassable" and "Possibly flooded"
   document.getElementById("val-br-destroyed").textContent = (isFlat ? (br.flooded || 0) : (br.destroyed || 0)).toLocaleString();
   document.getElementById("lbl-row-br-destroyed").textContent = isFlat ? "Flooded / impassable" : "Destroyed";
+  const dotBrDest = document.getElementById("dot-br-destroyed");
+  if (dotBrDest) dotBrDest.className = isFlat ? "dot-color flooded" : "dot-color destroyed";
+
   document.getElementById("val-br-possible").textContent = (isFlat ? (br.possibly_flooded || 0) : (br.possibly_damaged || 0)).toLocaleString();
   document.getElementById("lbl-row-br-possible").textContent = isFlat ? "Possibly flooded" : "Possibly damaged";
   document.getElementById("val-br-total").textContent = (br.total_assessed || 27).toLocaleString();
 
   document.getElementById("val-r-destroyed").textContent = `${(r.destroyed_km !== undefined ? r.destroyed_km.toFixed(1) : "0.0")} km`;
   document.getElementById("lbl-row-r-destroyed").textContent = isFlat ? "Flooded / impassable" : "Destroyed";
+  const dotRDest = document.getElementById("dot-r-destroyed");
+  if (dotRDest) dotRDest.className = isFlat ? "dot-color flooded" : "dot-color destroyed";
+
   document.getElementById("val-r-possible").textContent = `${(r.possibly_damaged_km !== undefined ? r.possibly_damaged_km.toFixed(1) : "0.0")} km`;
   document.getElementById("lbl-row-r-possible").textContent = isFlat ? "Possibly flooded" : "Possibly damaged";
   document.getElementById("val-r-unverified").textContent = `${(r.unverified_km !== undefined ? r.unverified_km.toFixed(1) : "0.0")} km`;
@@ -763,17 +841,25 @@ function updateSidePanel(data) {
   const valMetrics = m.validation_metrics;
   const confMetricsContainer = document.getElementById("conf-metrics-container");
   const confUnvalidatedNotice = document.getElementById("conf-unvalidated-notice");
+  const confFlatNotice = document.getElementById("conf-flat-notice");
 
-  if (valMetrics && (data.validation_status.includes("validated on") || data.validation_status.includes("EMSR"))) {
+  if (valMetrics && data.validation_status.includes("EMSR927")) {
     confMetricsContainer.classList.remove("hidden");
     confUnvalidatedNotice.classList.add("hidden");
+    if (confFlatNotice) confFlatNotice.classList.add("hidden");
     document.getElementById("m-val-prec").textContent = valMetrics.precision !== undefined ? valMetrics.precision.toFixed(2) : "—";
     document.getElementById("m-val-rec").textContent = valMetrics.recall !== undefined ? valMetrics.recall.toFixed(2) : "—";
     document.getElementById("m-val-f1").textContent = valMetrics.f1 !== undefined ? valMetrics.f1.toFixed(2) : "—";
     document.getElementById("m-val-iou").textContent = valMetrics.iou !== undefined ? valMetrics.iou.toFixed(2) : "—";
   } else {
     confMetricsContainer.classList.add("hidden");
-    confUnvalidatedNotice.classList.remove("hidden");
+    if (isFlat) {
+      confUnvalidatedNotice.classList.add("hidden");
+      if (confFlatNotice) confFlatNotice.classList.remove("hidden");
+    } else {
+      confUnvalidatedNotice.classList.remove("hidden");
+      if (confFlatNotice) confFlatNotice.classList.add("hidden");
+    }
   }
 
   document.getElementById("conf-cloud-b").textContent = (b.unverified || 0).toLocaleString();
@@ -938,6 +1024,7 @@ async function loadHazardsLayer(runId) {
   try {
     const res = await fetch(`/api/runs/${runId}/layer/hazards`);
     const geojson = await res.json();
+    const isFlat = currentRunData && currentRunData.regime === "flat_floodplain";
 
     geojsonLayers.hazards = L.geoJSON(geojson, {
       style: (feature) => {
@@ -945,6 +1032,10 @@ async function loadHazardsLayer(runId) {
         if (cls === 1) {
           return { color: "#6B8BAA", fillColor: "#8DAFD0", fillOpacity: 0.6, weight: 1 };
         } else if (cls === 2) {
+          if (isFlat) {
+            // Flat flood extent: BLUE (fill #2F6DB5 at 45%, outline #1F5FA8)
+            return { color: "#1F5FA8", fillColor: "#2F6DB5", fillOpacity: 0.45, weight: 1.5 };
+          }
           // Observed damage: #D9534A fill 55% + #B42318 outline
           return { color: "#B42318", fillColor: "rgba(217, 83, 74, 0.55)", fillOpacity: 0.55, weight: 1.5 };
         } else if (cls === 3) {
@@ -968,10 +1059,7 @@ async function loadBuildingsLayer(runId) {
     const res = await fetch(`/api/runs/${runId}/layer/buildings`);
     const geojson = await res.json();
     const showIntact = document.getElementById("layer-intact-buildings").checked;
-
-    if (geojsonLayers.buildings) {
-      map.removeLayer(geojsonLayers.buildings);
-    }
+    const isFlat = currentRunData && currentRunData.regime === "flat_floodplain";
 
     geojsonLayers.buildings = L.geoJSON(geojson, {
       filter: (feature) => {
@@ -981,7 +1069,9 @@ async function loadBuildingsLayer(runId) {
       },
       style: (feature) => {
         const grade = feature.properties.damage_grade || "Not affected";
-        if (grade === "Destroyed" || grade === "Flooded / impassable") {
+        if (grade === "Flooded" || (isFlat && (grade === "Destroyed" || grade === "Flooded / impassable"))) {
+          return { color: "#1F5FA8", fillColor: "#2F6DB5", fillOpacity: 0.9, weight: 1.5 };
+        } else if (grade === "Destroyed" || grade === "Flooded / impassable") {
           return { color: "#B42318", fillColor: "#B42318", fillOpacity: 0.9, weight: 1.5 };
         } else if (grade === "Damaged") {
           return { color: "#C2570C", fillColor: "#C2570C", fillOpacity: 0.85, weight: 1.5 };
@@ -994,9 +1084,19 @@ async function loadBuildingsLayer(runId) {
         const grade = feature.properties.damage_grade || "Not affected";
         let color = "#B6C0C4";
         let r = 3;
-        if (grade === "Destroyed" || grade === "Flooded / impassable") { color = "#B42318"; r = 5.5; }
-        else if (grade === "Damaged") { color = "#C2570C"; r = 4.5; }
-        else if (grade === "Possibly damaged" || grade === "Possibly flooded") { color = "#E0A31C"; r = 4; }
+        if (grade === "Flooded" || (isFlat && (grade === "Destroyed" || grade === "Flooded / impassable"))) {
+          color = "#2F6DB5";
+          r = 5.5;
+        } else if (grade === "Destroyed" || grade === "Flooded / impassable") {
+          color = "#B42318";
+          r = 5.5;
+        } else if (grade === "Damaged") {
+          color = "#C2570C";
+          r = 4.5;
+        } else if (grade === "Possibly damaged" || grade === "Possibly flooded") {
+          color = "#E0A31C";
+          r = 4;
+        }
 
         return L.circleMarker(latlng, {
           radius: r,
