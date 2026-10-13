@@ -179,6 +179,8 @@ def run_layer5(
     vehicle_hwys = r_cfg.get("vehicle_highways")
     walking_extra = r_cfg.get("walking_highways_extra")
 
+    include_towns = bool(r_cfg.get("include_towns", True))
+
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     ctrl_out_path = Path(control_out_dir)
@@ -202,12 +204,14 @@ def run_layer5(
     logger.info(f"Identified {len(settlements_gdf)} settlements in study area.")
 
     # 2. Destinations Extraction
-    logger.info("Extracting target destinations (health facilities)...")
+    logger.info("Extracting target destinations (health facilities + towns)...")
     hospitals_path = os.path.join(buffered_osm_dir, "osm_hospitals.geojson")
     destinations_gdf = extract_destinations(
         hospitals_path=hospitals_path,
         places_path=places_path,
-        utm_crs=utm_crs
+        utm_crs=utm_crs,
+        bbox=bbox,
+        include_towns=include_towns
     )
     logger.info(f"Loaded {len(destinations_gdf)} destinations.")
 

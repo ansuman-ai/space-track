@@ -54,6 +54,7 @@ damage_grading:
 
 routing:
   buffer_km: 30.0
+  include_towns: true
   max_snap_distance_m: 500.0
   dbscan_eps_m: 65.0
   dbscan_min_samples: 5

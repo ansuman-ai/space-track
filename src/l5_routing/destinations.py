@@ -16,11 +16,14 @@ def extract_destinations(
     hospitals_path: str = "data/raw/osm_buffered/osm_hospitals.geojson",
     places_path: str = "data/raw/osm_buffered/osm_places.geojson",
     utm_crs: Optional[str] = None,
-    bbox: Optional[List[float]] = None
+    bbox: Optional[List[float]] = None,
+    include_towns: bool = True
 ) -> gpd.GeoDataFrame:
     """
     Extracts target destinations in the buffered area.
-    Prefers OSM hospitals / health facilities; if none found, falls back to place=town/city.
+    Extracts health facilities / hospitals. When include_towns=True (default),
+    also includes place=town/city destinations in addition to health facilities.
+    If no health facilities exist, falls back to place=town/city.
     """
     h_gdf = gpd.read_file(hospitals_path)
     records = []
@@ -58,21 +61,30 @@ def extract_destinations(
                 "facility_type": str(facility_type),
                 "geometry": Point(pt.x, pt.y)
             })
-    else:
-        logger.warning("No health facilities found in buffered area; falling back to place=town/city...")
-        p_gdf = gpd.read_file(places_path)
+
+    # Include OSM place=town/city inside buffered area
+    p_gdf = gpd.read_file(places_path)
+    if "place" in p_gdf.columns:
         p_towns = p_gdf[p_gdf["place"].isin(["city", "town"])].to_crs(utm_crs)
-        for idx, row in p_towns.iterrows():
-            pt = row.geometry.centroid
-            oid = row.get("@osmId", f"place_{idx}")
-            name = row.get("name", f"Town ({oid})")
-            records.append({
-                "destination_id": str(oid),
-                "name": str(name),
-                "category": "town_fallback",
-                "facility_type": str(row.get("place", "town")),
-                "geometry": Point(pt.x, pt.y)
-            })
+        if len(p_towns) > 0:
+            if include_towns or len(records) == 0:
+                cat = "town" if len(records) > 0 else "town_fallback"
+                for idx, row in p_towns.iterrows():
+                    geom = row.geometry
+                    if geom is None or geom.is_empty:
+                        continue
+                    pt = geom.centroid
+                    oid = row.get("@osmId", f"place_{idx}")
+                    name = row.get("name")
+                    if name is None or str(name) == "nan":
+                        name = f"Town ({oid})"
+                    records.append({
+                        "destination_id": str(oid),
+                        "name": str(name),
+                        "category": cat,
+                        "facility_type": str(row.get("place", "town")),
+                        "geometry": Point(pt.x, pt.y)
+                    })
 
     dest_gdf = gpd.GeoDataFrame(records, crs=utm_crs)
 

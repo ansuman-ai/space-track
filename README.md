@@ -1,5 +1,7 @@
 # Spaceborne Rapid Flood & Debris Damage Assessment
 
+> **Educational prototype, not an operational tool.**
+
 A dynamic, reproducible geospatial pipeline to detect flood extent, identify debris flows, grade infrastructure damage from pre-event OpenStreetMap vectors, and isolate cut-off mountain settlements from raw satellite and elevation data.
 
 ---
@@ -194,13 +196,18 @@ If `weights/best_segmentation.pt` is absent or checksum verification fails when 
 
 ---
 
-## Required Data Attribution
+## Data Sources & Attributions
 
-- *"Contains modified Copernicus Sentinel data 2026."*
-- *"Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved."*
-- *"© OpenStreetMap contributors."*
-- *Bountos et al., 2024 (Kuro Siwo)*
-- *Validation data credit: "European Union, Copernicus Emergency Management Service data (EMSR927)".*
+- **Sentinel Imagery (S1 SAR & S2 MSI)**: Ingested dynamically from Microsoft Planetary Computer STAC API (`planetarycomputer.microsoft.com`). *"Contains modified Copernicus Sentinel data 2026."*
+- **Digital Elevation Model**: Copernicus WorldDEM-30 ingested via AWS Open Data Registry (`copernicus-dem-30m.s3.amazonaws.com`). *"Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved."*
+- **Vector Baseline Infrastructure**: Historical pre-event snapshot query via ohsome API / HeiGIT (`api.ohsome.org`) pinned to the event date to prevent post-event OSM editing artifacts.
+- **Orientation Basemap**: Current OpenStreetMap standard raster tiles used strictly for cartographic orientation under the Open Database License (ODbL). *"© OpenStreetMap contributors."*
+- **Copernicus EMS Validation**: Official vector delineation/grading packages for EMSR927, EMSR692, and EMSR659. *"European Union, Copernicus Emergency Management Service data (EMSR927, EMSR692, EMSR659)."*
+- **Citation**: Bountos et al., 2024 (*Kuro Siwo*).
+- **Disclaimer**: *Educational prototype, not an operational tool.*
+
+> [!NOTE]
+> The flat-terrain detector was tuned on European events (EMSR692 Greece, EMSR659 Italy) and should be confirmed on local flood data when applying to new regions.
 
 ---
 
