@@ -320,6 +320,152 @@ def run_layer1(
     }
 
 
+def run_layer1_dem_only(
+    bbox: List[float],
+    utm_crs: str,
+    dem_path: str,
+    out_dir: str = "data/interim",
+    pixel_size_m: float = 10.0,
+    drainage_threshold: int = 1000,
+    look_angle_deg: float = 38.0,
+    orbit_heading_deg: float = 350.0,
+    dem_buffer_km: float = 10.0,
+    max_threads: int = 2
+) -> Dict[str, Any]:
+    """
+    Run Layer 1 Preprocessing using DEM only on target UTM bounding box grid.
+    Used when Sentinel-1 is unavailable, producing terrain and masking rasters
+    for downstream optical (Sentinel-2) detection and impact grading.
+    """
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    logger.info("=== LAYER 1: PREPROCESSING DEM-ONLY GRID (S1 UNAVAILABLE) ===")
+
+    from rasterio.warp import transform_bounds, reproject, Resampling
+    from rasterio.transform import from_bounds as tf_bounds
+
+    # Transform WGS84 bbox [min_lon, min_lat, max_lon, max_lat] to target UTM CRS
+    min_lon, min_lat, max_lon, max_lat = bbox
+    left, bottom, right, top = transform_bounds("EPSG:4326", utm_crs, min_lon, min_lat, max_lon, max_lat)
+    dx = float(pixel_size_m)
+    dy = float(pixel_size_m)
+    w = max(1, int(round((right - left) / dx)))
+    h = max(1, int(round((top - bottom) / dy)))
+    transform = tf_bounds(left, bottom, right, top, w, h)
+
+    ref_profile = {
+        "driver": "GTiff",
+        "dtype": "float32",
+        "nodata": np.nan,
+        "width": w,
+        "height": h,
+        "count": 1,
+        "crs": rasterio.crs.CRS.from_string(utm_crs),
+        "transform": transform
+    }
+
+    buffered_dem_file = Path(dem_path).parent / "dem_buffered.tif"
+    actual_dem_to_use = str(buffered_dem_file) if (dem_buffer_km > 0 and buffered_dem_file.exists()) else dem_path
+
+    with rasterio.open(actual_dem_to_use) as src_dem_buf:
+        if dem_buffer_km > 0:
+            buf_m = dem_buffer_km * 1000.0
+            buf_bounds = (left - buf_m, bottom - buf_m, right + buf_m, top + buf_m)
+            buf_w = int(round((buf_bounds[2] - buf_bounds[0]) / dx))
+            buf_h = int(round((buf_bounds[3] - buf_bounds[1]) / dy))
+            buf_transform = tf_bounds(*buf_bounds, buf_w, buf_h)
+
+            dem_utm_buf = np.empty((buf_h, buf_w), dtype=np.float32)
+            reproject(
+                source=rasterio.band(src_dem_buf, 1),
+                destination=dem_utm_buf,
+                src_transform=src_dem_buf.transform,
+                src_crs=src_dem_buf.crs,
+                dst_transform=buf_transform,
+                dst_crs=utm_crs,
+                resampling=Resampling.bilinear
+            )
+
+            logger.info(f"Computing HAND on buffered DEM ({buf_w}x{buf_h} cells, drainage_threshold={drainage_threshold})...")
+            hand_buf, stream_buf, hand_stats = compute_hand(
+                elevation=dem_utm_buf,
+                dx=dx,
+                dy=dy,
+                drainage_threshold=drainage_threshold
+            )
+
+            r_start = int(round((buf_bounds[3] - top) / dy))
+            r_end = r_start + h
+            c_start = int(round((left - buf_bounds[0]) / dx))
+            c_end = c_start + w
+
+            hand = hand_buf[r_start:r_end, c_start:c_end]
+            stream_mask = stream_buf[r_start:r_end, c_start:c_end]
+            dem_aligned = dem_utm_buf[r_start:r_end, c_start:c_end]
+            del dem_utm_buf, hand_buf, stream_buf
+        else:
+            dem_aligned = np.empty((h, w), dtype=np.float32)
+            reproject(
+                source=rasterio.band(src_dem_buf, 1),
+                destination=dem_aligned,
+                src_transform=src_dem_buf.transform,
+                src_crs=src_dem_buf.crs,
+                dst_transform=transform,
+                dst_crs=utm_crs,
+                resampling=Resampling.bilinear
+            )
+            hand, stream_mask, hand_stats = compute_hand(
+                elevation=dem_aligned,
+                dx=dx,
+                dy=dy,
+                drainage_threshold=drainage_threshold
+            )
+
+    slope_deg, aspect_deg = compute_slope_aspect(dem_aligned, dx=dx, dy=dy)
+    shadow_layover_mask, shadow_stats = compute_shadow_layover_mask(
+        slope_deg=slope_deg,
+        aspect_deg=aspect_deg,
+        look_angle_deg=look_angle_deg,
+        orbit_heading_deg=orbit_heading_deg
+    )
+
+    nodata_mask = (~np.isfinite(dem_aligned) | (dem_aligned <= -9999.0)).astype(np.uint8)
+    dummy_sar = np.full((h, w), -12.0, dtype=np.float32)
+
+    save_specs = [
+        ("pre_vv", dummy_sar, "float32", np.nan),
+        ("pre_vh", dummy_sar, "float32", np.nan),
+        ("post_vv", dummy_sar, "float32", np.nan),
+        ("post_vh", dummy_sar, "float32", np.nan),
+        ("log_ratio_vv", np.zeros((h, w), dtype=np.float32), "float32", np.nan),
+        ("log_ratio_vh", np.zeros((h, w), dtype=np.float32), "float32", np.nan),
+        ("slope", slope_deg, "float32", np.nan),
+        ("hand", hand, "float32", np.nan),
+        ("stream_mask", stream_mask, "uint8", 0),
+        ("shadow_layover_mask", shadow_layover_mask, "uint8", 255),
+        ("nodata_mask", nodata_mask, "uint8", 255),
+    ]
+
+    output_paths = {}
+    for name, arr, dtype, nd in save_specs:
+        out_f = str(out_path / f"{name}.tif")
+        save_single_band_geotiff(out_f, arr, ref_profile, dtype=dtype, nodata=nd)
+        output_paths[name] = out_f
+
+    return {
+        "status": "COMPLETED",
+        "input_paths": {"dem": dem_path},
+        "shape": (h, w),
+        "grid_str": f"{w}x{h}",
+        "dates": {"pre": "", "post": "", "orbit": None, "pass": ""},
+        "db_stats": {},
+        "shadow_layover_stats": shadow_stats,
+        "hand_stats": hand_stats,
+        "pct_nodata": float(np.sum(nodata_mask) / nodata_mask.size * 100.0),
+        "output_paths": output_paths
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Layer 1 Preprocessing")
     parser.add_argument("--pre", default="data/raw/s1/pre.tif", help="Path to pre S1 tif")

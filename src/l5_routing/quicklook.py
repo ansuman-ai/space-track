@@ -133,27 +133,29 @@ def render_l5_overview(
     )
 
     # 3. Road Network
-    r_box = r_graded.cx[xmin:xmax, ymin:ymax]
-    r_dest = r_box[r_box["damage_grade"] == "Destroyed"]
-    r_poss = r_box[r_box["damage_grade"] == "Possibly damaged"]
-    r_clear = r_box[r_box["damage_grade"].isin(["Not affected", "Unknown (cloud)"])]
+    r_box = r_graded.cx[xmin:xmax, ymin:ymax] if len(r_graded) > 0 else r_graded
+    if len(r_box) > 0 and "damage_grade" in r_box.columns:
+        r_dest = r_box[r_box["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
+        r_poss = r_box[r_box["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
+        r_clear = r_box[r_box["damage_grade"].isin(["Not affected", "Unknown (cloud)"])]
 
-    if len(r_clear) > 0:
-        r_clear.plot(ax=ax, color="#777777", linewidth=0.9, alpha=0.5, zorder=3)
-    if len(r_poss) > 0:
-        r_poss.plot(ax=ax, color="#ff9900", linewidth=2.0, linestyle="--", zorder=5)
-    if len(r_dest) > 0:
-        r_dest.plot(ax=ax, color="#ff0033", linewidth=2.8, zorder=6)
+        if len(r_clear) > 0:
+            r_clear.plot(ax=ax, color="#777777", linewidth=0.9, alpha=0.5, zorder=3)
+        if len(r_poss) > 0:
+            r_poss.plot(ax=ax, color="#ff9900", linewidth=2.0, linestyle="--", zorder=5)
+        if len(r_dest) > 0:
+            r_dest.plot(ax=ax, color="#ff0033", linewidth=2.8, zorder=6)
 
     # 4. Bridges
-    br_box = br_graded.cx[xmin:xmax, ymin:ymax]
-    br_dest = br_box[br_box["damage_grade"] == "Destroyed"]
-    br_poss = br_box[br_box["damage_grade"] == "Possibly damaged"]
+    br_box = br_graded.cx[xmin:xmax, ymin:ymax] if len(br_graded) > 0 else br_graded
+    if len(br_box) > 0 and "damage_grade" in br_box.columns:
+        br_dest = br_box[br_box["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
+        br_poss = br_box[br_box["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
 
-    if len(br_poss) > 0:
-        br_poss.plot(ax=ax, color="#ff9900", linewidth=3.5, zorder=7)
-    if len(br_dest) > 0:
-        br_dest.plot(ax=ax, color="#ff0033", linewidth=4.5, zorder=8)
+        if len(br_poss) > 0:
+            br_poss.plot(ax=ax, color="#ff9900", linewidth=3.5, zorder=7)
+        if len(br_dest) > 0:
+            br_dest.plot(ax=ax, color="#ff0033", linewidth=4.5, zorder=8)
 
     # 5. Target Destinations inside/near view
     d_view = dest_utm.cx[xmin:xmax, ymin:ymax]

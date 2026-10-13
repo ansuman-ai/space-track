@@ -71,15 +71,15 @@ def query_dem_stac(bbox: List[float]) -> List[Dict[str, Any]]:
         resp = http_client.post(PC_STAC_URL, json=body, headers=headers, timeout=20)
     except requests.exceptions.RequestException as e:
         logger.error(f"Network error querying Copernicus DEM STAC: {e}")
-        sys.exit(f"FAILED: Network error querying Copernicus DEM STAC: {e}")
+        raise RuntimeError(f"Network error querying Copernicus DEM STAC: {e}")
 
     if resp.status_code == 403:
         logger.error("HTTP 403 Forbidden: Sandbox or network environment blocked access to Copernicus DEM STAC.")
-        sys.exit("FAILED: HTTP 403 Forbidden when accessing Copernicus DEM STAC API.")
+        raise RuntimeError("HTTP 403 Forbidden when accessing Copernicus DEM STAC API.")
 
     if resp.status_code != 200:
         logger.error(f"DEM STAC search returned HTTP {resp.status_code}: {resp.text}")
-        sys.exit(f"FAILED: DEM STAC search returned HTTP {resp.status_code}: {resp.text}")
+        raise RuntimeError(f"DEM STAC search returned HTTP {resp.status_code}: {resp.text}")
 
     features = resp.json().get("features", [])
     return features
@@ -148,7 +148,7 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
     for fetch_attempt in range(3):
         opened_datasets = []
         try:
-            with get_shared_gdal_env(AWS_NO_SIGN_REQUEST='YES'):
+            with get_shared_gdal_env(tag="DEM", AWS_NO_SIGN_REQUEST='YES'):
                 for lat in range(lat_min_int, lat_max_int + 1):
                     for lon in range(lon_min_int, lon_max_int + 1):
                         aws_url = get_aws_dem_tile_url(lat, lon)
@@ -213,7 +213,7 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
             logger.warning(f"Attempt {fetch_attempt + 1}/3 fetching Copernicus DEM failed: {e}")
             if fetch_attempt == 2:
                 logger.error(f"Error fetching/clipping Copernicus DEM after 3 attempts: {e}")
-                sys.exit(f"FAILED: Could not download and clip Copernicus DEM: {e}")
+                raise RuntimeError(f"Could not download and clip Copernicus DEM: {e}")
             time.sleep(2)
         finally:
             for ds in opened_datasets:

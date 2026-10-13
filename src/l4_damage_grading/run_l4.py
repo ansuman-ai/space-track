@@ -78,8 +78,14 @@ def run_layer4(
         raise FileNotFoundError(f"Missing hazard polygons file: {hazard_polygons_path}")
 
     hazard_gdf = gpd.read_file(hazard_polygons_path)
-    c2_count = len(hazard_gdf[hazard_gdf["class"] == 2])
-    c3_count = len(hazard_gdf[hazard_gdf["class"] == 3])
+    if not hazard_gdf.empty and "class" in hazard_gdf.columns:
+        c2_count = len(hazard_gdf[hazard_gdf["class"] == 2])
+        c3_count = len(hazard_gdf[hazard_gdf["class"] == 3])
+    else:
+        c2_count = 0
+        c3_count = 0
+        if "class" not in hazard_gdf.columns:
+            hazard_gdf["class"] = []
     logger.info(f"Loaded hazard polygons: {c2_count} Class 2 (Observed), {c3_count} Class 3 (Inferred)")
 
     # 3. Load Optical Validity / Cloud / NoData Mask
@@ -185,10 +191,10 @@ def run_layer4(
     # Road km summary
     r_km_by_grade = (
         r_graded.groupby("damage_grade")["length_km"].sum().round(2).to_dict()
-        if len(r_graded) > 0 else {}
+        if len(r_graded) > 0 and "damage_grade" in r_graded.columns else {}
     )
     r_km_by_type_grade = {}
-    if len(r_graded) > 0:
+    if len(r_graded) > 0 and "highway" in r_graded.columns:
         for (hwy, grp) in r_graded.groupby("highway"):
             r_km_by_type_grade[str(hwy)] = (
                 grp.groupby("damage_grade")["length_km"].sum().round(2).to_dict()

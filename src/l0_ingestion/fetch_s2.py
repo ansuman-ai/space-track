@@ -317,7 +317,7 @@ def fetch_s2(
 
     # Token retrieval
     token = get_s2_sas_token()
-    env = get_shared_gdal_env()
+    env = get_shared_gdal_env(tag="Sentinel-2")
 
     # Determine reference bounds and shape from bbox in UTM
     from rasterio.warp import transform_bounds
@@ -329,6 +329,7 @@ def fetch_s2(
     import concurrent.futures
 
     def _fetch_scene_bands(item_tuple):
+        nonlocal token
         prefix, feat = item_tuple
         scene_id = feat.get("id", "")
         props = feat.get("properties", {})
@@ -345,13 +346,18 @@ def fetch_s2(
         band_names = ['B02', 'B03', 'B04', 'B08', 'B11', 'B12', 'SCL', 'visual']
 
         def _read_band(b_name):
+            nonlocal token
             b_src = 'B11' if b_name == 'B12' and 'B12' not in assets and 'B11' in assets else b_name
             if b_src not in assets:
                 return None, None
-            url = assets[b_src]['href']
-            if token and "?" not in url:
-                url = f"{url}?{token}"
-            for attempt in range(4):
+            raw_href = assets[b_src]['href']
+            for attempt in range(5):
+                # Apply current token or re-sign on retry
+                if "?" in raw_href:
+                    base_url = raw_href.split("?")[0]
+                else:
+                    base_url = raw_href
+                url = f"{base_url}?{token}" if token else raw_href
                 with env:
                     try:
                         with rasterio.open(url) as s:
@@ -363,10 +369,15 @@ def fetch_s2(
                                 arr = arr[0]
                             return b_name, arr
                     except Exception as e:
-                        if attempt < 3:
+                        if attempt < 4:
+                            # Re-sign with fresh SAS token on failure
+                            logger.warning(f"Error reading S2 band {b_name} for {scene_id} ({e}); refreshing SAS token and retrying attempt {attempt+2}/5...")
+                            fresh_token = get_s2_sas_token()
+                            if fresh_token:
+                                token = fresh_token
                             time.sleep(1.5 * (attempt + 1))
                             continue
-                        logger.warning(f"Error reading band {b_name} for {scene_id}: {e}")
+                        logger.warning(f"Failed reading band {b_name} for {scene_id} after 5 attempts: {e}")
                         return None, None
 
         bands = {

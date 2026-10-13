@@ -271,3 +271,60 @@ hallucination_questions:
   - id: H20
     must_contain: ["not available"]
     must_not_contain: ["3 months", "6 months", "1 year"]
+
+copilot_test_set:
+  - id: T01_hii
+    query: "hii"
+    expected_answer_path: "rules"
+    expected_model: "rules"
+    must_contain: ["assist", "disaster"]
+    must_not_contain: ["Multiple matching locations", "Near Melamchi", "buildings", "cut off"]
+
+  - id: T02_hello
+    query: "hello"
+    expected_answer_path: "rules"
+    expected_model: "rules"
+    must_contain: ["assist", "disaster"]
+    must_not_contain: ["Multiple matching locations", "buildings"]
+
+  - id: T03_namaste
+    query: "नमस्ते"
+    expected_answer_path: "rules"
+    expected_model: "rules"
+    must_contain: ["म सहयोग गर्न सक्छु"]
+    must_not_contain: ["Multiple matching locations", "Near Melamchi"]
+
+  - id: T04_thanks
+    query: "thanks"
+    expected_answer_path: "rules"
+    expected_model: "rules"
+    must_contain: ["welcome"]
+    must_not_contain: ["Multiple matching locations"]
+
+  - id: T05_asdf
+    query: "asdf"
+    expected_answer_path: "rules"
+    expected_model: "rules"
+    must_contain: ["disaster", "copilot"]
+    must_not_contain: ["Multiple matching locations", "Near Melamchi"]
+
+  - id: T06_bridge_q
+    query: "bridge?"
+    expected_answer_path: "live"
+    must_contain: ["bridge"]
+    must_not_contain: ["Multiple matching locations"]
+
+  - id: T07_melamchi
+    query: "Melamchi"
+    expected_answer_path: "live"
+    must_contain: ["Melamchi"]
+
+  - id: T08_melamchii
+    query: "Melamchii"
+    must_contain: ["Melamchi"]
+
+  - id: T09_xyz_village
+    query: "xyz village"
+    must_contain: ["could not find", "xyz"]
+    must_not_contain: ["Multiple matching locations", "Near Melamchi"]
+

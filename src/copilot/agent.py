@@ -91,7 +91,7 @@ def detect_query_language(text: str, last_lang: Optional[str] = None) -> str:
     tokens = set(re.findall(r"[a-z0-9]+", clean_low))
     hi_rom = {"aur", "unme", "sabse", "bada", "kaunsa", "kaun", "kise", "kis", "ko", "se", "mein", "me", "ke", "liye", "bhejna", "padega", "kahin", "kab", "aaya", "aayi", "gaya", "gaye", "hua", "hue", "kitne", "kitna", "kitni", "makan", "basteeya", "sadak", "hai", "hain", "wahan", "kya", "paani", "gaon", "kate"}
     ne_rom = {"kati", "ghar", "basti", "basty", "bhatkie", "sadak", "chha", "cha", "chhan", "tyaha", "pul", "avastha", "sthiti", "kasari", "kasto", "barema", "kun", "bhaneko", "bhannuhos", "hunchha", "haina"}
-    en_words = {"the", "is", "are", "which", "what", "how", "many", "villages", "hospital", "car", "by", "right", "now", "open", "give", "me", "summary", "for", "district", "officer", "sure", "about", "estimate", "number", "of", "people", "affected", "roughly", "per", "house", "fine", "happened", "can", "reach", "cant", "bridges", "destroyed", "near", "damage", "confluence"}
+    en_words = {"the", "is", "are", "which", "what", "how", "many", "villages", "hospital", "car", "by", "right", "now", "open", "give", "me", "summary", "for", "district", "officer", "sure", "about", "estimate", "number", "of", "people", "affected", "roughly", "per", "house", "fine", "happened", "can", "reach", "cant", "bridges", "destroyed", "near", "damage", "confluence", "hi", "hii", "hello", "hey", "thanks", "thank", "you", "asdf", "ok", "okay", "help", "who"}
 
     en_score = len(tokens & en_words)
     hi_score = len(tokens & hi_rom)
@@ -308,6 +308,75 @@ class CopilotAgent:
         # Append to message history
         self.messages.append({"role": "user", "content": user_query})
 
+        # Small talk / non-question interceptor (never run place resolution on these)
+        clean_norm = re.sub(r"[^a-zA-Z\u0900-\u097F\s]", "", user_query.strip().lower()).strip()
+        small_talk_exact = {
+            "hi", "hii", "hiii", "hello", "hey", "namaste", "नमस्ते", "namaskar", "नमस्कार",
+            "thanks", "thank you", "dhanyabad", "dhanyavad", "dhanyabaad", "धन्यवाद",
+            "help", "मद्दत", "मदद", "who are you", "who r u", "who are u", "तपाईं को हो", "तुम कौन हो",
+            "ok", "okay", "k", "asdf", "asdfg", "test", "testing"
+        }
+        is_small_talk = clean_norm in small_talk_exact or (len(clean_norm.split()) <= 2 and clean_norm in small_talk_exact)
+
+        if is_small_talk:
+            suggestions = [
+                "Which villages are cut off from vehicle access?",
+                "How many bridges are destroyed and where?",
+                "Is the main highway corridor open?",
+                "Give me a 3-line situation summary."
+            ]
+            chips_text_en = "\n\nYou can ask:\n" + "\n".join(f"• {s}" for s in suggestions)
+            chips_text_ne = "\n\nतपाईंले सोध्न सक्नुहुन्छ:\n" + "\n".join(f"• {s}" for s in [
+                "कुन बस्तीहरू सवारी सम्पर्कबाट विच्छेद भएका छन्?",
+                "कतिवटा पुलहरू नष्ट भएका छन् र कहाँ?",
+                "मुख्य राजमार्ग खुला छ कि बन्द?",
+                "विपद्को संक्षिप्त ३-लाइन सारांश दिनुहोस्।"
+            ])
+            chips_text_hi = "\n\nआप पूछ सकते हैं:\n" + "\n".join(f"• {s}" for s in [
+                "कौन से गाँव सड़क संपर्क से कटे हुए हैं?",
+                "कितने पुल नष्ट हुए हैं और कहाँ?",
+                "क्या मुख्य राजमार्ग खुला है?",
+                "आपदा का 3-लाइन संक्षिप्त सारांश दें।"
+            ])
+
+            if any(w in clean_norm for w in ["thanks", "thank you", "dhanyabad", "dhanyavad", "धन्यवाद"]):
+                if lang == "ne":
+                    st_text = f"तपाईंलाई स्वागत छ! म यस प्रकोप क्षेत्रको विपद् आकलन सहकर्मी हुँ। म भौतिक क्षति, सडक र पुलको अवस्था, तथा बस्ती पहुँचको विश्लेषणमा सहयोग गर्न सक्छु।{chips_text_ne}"
+                elif lang == "hi":
+                    st_text = f"आपका स्वागत है! मैं इस आपदा क्षेत्र का सिटरेप कॉपायलट हूँ। मैं भवन क्षति, सड़क और पुलों की स्थिति तथा बस्ती पहुँच की जानकारी दे सकता हूँ।{chips_text_hi}"
+                else:
+                    st_text = f"You are welcome! I am the disaster impact assessment copilot for this run. I can assist with infrastructure damage, road & bridge status, and cut-off settlements.{chips_text_en}"
+            elif any(w in clean_norm for w in ["who are you", "who r u", "who are u", "तपाईं को हो", "तुम कौन हो"]):
+                if lang == "ne":
+                    st_text = f"म यस प्रकोप क्षेत्रको आधिकारिक सिटरेप (SitRep) कॉपायलट हुँ। म भूउपग्रह (Sentinel-1/2) र ओपनस्ट्रीटम्याप विश्लेषणका आधारमा भवन, सडक, पुल क्षति तथा बस्ती पहुँचको सटीक जानकारी दिन्छु।{chips_text_ne}"
+                elif lang == "hi":
+                    st_text = f"मैं इस आपदा क्षेत्र का आधिकारिक सिटरेप कॉपायलट हूँ। मैं उपग्रह डेटा और ओपनस्ट्रीटमैप विश्लेषण के आधार पर भवन क्षति, पुल, सड़क स्थिति और संपर्क विच्छेद बस्तियों की सटीक जानकारी देता हूँ।{chips_text_hi}"
+                else:
+                    st_text = f"I am the automated SitRep Copilot for this disaster assessment run. I provide verified facts on damaged buildings, destroyed bridges, road status, and cut-off settlements using satellite and OSM data.{chips_text_en}"
+            else:
+                if lang == "ne":
+                    st_text = f"नमस्ते! म यस प्रकोप क्षेत्रको विपद् आकलन कॉपायलट हुँ। म तपाईंलाई क्षतिग्रस्त भवन, सडक, पुल तथा पहुँच विच्छेद बस्तीहरूको आधिकारिक विवरण दिन सक्छु।{chips_text_ne}"
+                elif lang == "hi":
+                    st_text = f"नमस्ते! मैं इस आपदा क्षेत्र का सिटरेप कॉपायलट हूँ। मैं प्रभावित भवनों, टूटे हुए पुलों, सड़क स्थिति और संपर्क विच्छेद बस्तियों का डेटा प्रदान कर सकता हूँ।{chips_text_hi}"
+                else:
+                    st_text = f"Hello! I am the disaster impact assessment copilot for this run. I can answer questions about damaged buildings, bridge status, impassable roads, and cut-off settlements.{chips_text_en}"
+
+            resp = AgentResponse(
+                text=st_text,
+                tools_called=[],
+                tool_outputs=[],
+                guard_passed=True,
+                guard_retried=False,
+                language=lang,
+                provider="rules",
+                model="rules",
+                answer_path="rules",
+            )
+            prefix = f"[{self._turn_run_label}]"
+            resp.text = f"{prefix}\n\n{resp.text}"
+            self.messages.append({"role": "assistant", "content": resp.text})
+            return resp
+
         if self.provider == "offline":
             resp = self._offline_answer(user_query, lang)
             resp.text = f"[ANSWERED IN OFFLINE MODE]\n{resp.text}"
@@ -412,7 +481,8 @@ class CopilotAgent:
             )
 
         # 1b. Cross-event & Run switching intent
-        if _has_kw(["melamchi", "मेलम्ची"]) and "grid_0.55_b" not in str(self.store.run_dir).lower() and "melamchi" not in str(self.store.run_dir).lower():
+        is_current_melamchi = "melamchi" in str(self.store.run_dir).lower() or "melamchi" in self._get_run_label(self.store).lower()
+        if _has_kw(["melamchi", "मेलम्ची"]) and not is_current_melamchi:
             load_out = self.tools.load_run("melamchi")
             self._turn_run_label = load_out.get("label", "Melamchi / Indrawati river (2021-06-15)")
             self.resolver = self.tools.resolver
@@ -930,6 +1000,23 @@ class CopilotAgent:
                     language=lang,
                     clarification_needed=True,
                 )
+            elif not target_place and ambig_prompt:
+                # Place query detected but place not found in this run
+                return AgentResponse(
+                    text=ambig_prompt,
+                    tools_called=["settlement_status"],
+                    tool_outputs=[{
+                        "tool": "settlement_status",
+                        "status": "not_found",
+                        "query": query,
+                        "clarification_prompt": ambig_prompt,
+                        "fact_ids": [],
+                    }],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    clarification_needed=False,
+                )
 
         # 11. If a target settlement is active/found
         if target_place:
@@ -1025,6 +1112,8 @@ class CopilotAgent:
                 return None, True, res.clarification_prompt, res.candidates
             if res.status in ["exact", "fuzzy"] and res.match and res.score >= 0.80:
                 return res.match.get("name"), False, "", []
+            if res.status == "not_found" and any(k in clean.lower() for k in ["village", "गाउँ", "basti", "बस्ती", "place", "ठाउँ", "city", "town"]):
+                return None, False, f"I could not find a place called '{clean}' in this run.", []
 
         return None, False, "", []
 
@@ -1134,7 +1223,8 @@ class CopilotAgent:
         from openai import OpenAI
 
         clean_q = query.strip()
-        if len(clean_q.split()) <= 2:
+        non_place_short_words = {"bridge", "bridge?", "bridges", "bridges?", "road", "roads", "dam", "flood", "help", "who", "why", "when", "how", "what", "where", "पुल", "पुल?", "सडक", "बाढी"}
+        if len(clean_q.split()) <= 2 and clean_q.lower() not in non_place_short_words:
             res_ambig = self.resolver.resolve(clean_q)
             if res_ambig.status == "ambiguous":
                 return AgentResponse(
@@ -1145,8 +1235,22 @@ class CopilotAgent:
                     guard_retried=False,
                     language=lang,
                     clarification_needed=True,
-                    provider="key_pool",
-                    model=self.model or "ambiguity_resolver",
+                    provider="rules",
+                    model="rules",
+                    answer_path="rules",
+                )
+            elif res_ambig.status == "not_found" and any(k in clean_q.lower() for k in ["village", "गाउँ", "basti", "बस्ती", "place", "ठाउँ", "city", "town"]):
+                return AgentResponse(
+                    text=f"I could not find a place called '{clean_q}' in this run.",
+                    tools_called=["names.resolve"],
+                    tool_outputs=[res_ambig.to_dict()],
+                    guard_passed=True,
+                    guard_retried=False,
+                    language=lang,
+                    clarification_needed=False,
+                    provider="rules",
+                    model="rules",
+                    answer_path="rules",
                 )
 
         endpoints = list(self.config.get("priority_endpoints") or [
@@ -1683,7 +1787,8 @@ class CopilotAgent:
 
         # Ambiguous place name check for short queries (e.g. "syabru")
         clean_q = query.strip()
-        if len(clean_q.split()) <= 2:
+        non_place_short_words = {"bridge", "bridge?", "bridges", "bridges?", "road", "roads", "dam", "flood", "help", "who", "why", "when", "how", "what", "where", "पुल", "पुल?", "सडक", "बाढी"}
+        if len(clean_q.split()) <= 2 and clean_q.lower() not in non_place_short_words:
             res_ambig = self.resolver.resolve(clean_q)
             if res_ambig.status == "ambiguous":
                 return AgentResponse(
@@ -1694,8 +1799,9 @@ class CopilotAgent:
                     guard_retried=False,
                     language=lang,
                     clarification_needed=True,
-                    provider="openai_compatible",
-                    model=self.model or (self.config.get("models", ["default"])[0] if self.config.get("models") else "default"),
+                    provider="rules",
+                    model="rules",
+                    answer_path="rules",
                 )
 
         base_url = self.config.get("base_url", "https://openrouter.ai/api/v1")

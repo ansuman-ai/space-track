@@ -64,10 +64,10 @@ def grade_buildings(
             raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     b_utm = buildings_gdf.to_crs(utm_crs).copy()
-    haz_utm = hazard_gdf.to_crs(utm_crs)
+    haz_utm = hazard_gdf.to_crs(utm_crs) if len(hazard_gdf) > 0 else hazard_gdf
 
-    c2_polys = haz_utm[haz_utm["class"] == 2]
-    c3_polys = haz_utm[haz_utm["class"] == 3]
+    c2_polys = haz_utm[haz_utm["class"] == 2] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
+    c3_polys = haz_utm[haz_utm["class"] == 3] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
 
     c2_union = c2_polys.union_all() if len(c2_polys) > 0 else None
     c3_union = c3_polys.union_all() if len(c3_polys) > 0 else None
@@ -159,7 +159,11 @@ def grade_roads(
     - Otherwise: Not affected (or Unknown (cloud) if cloud-covered in steep valleys; graded from S1 in flat floodplains).
     """
     if len(roads_gdf) == 0:
-        return roads_gdf.copy()
+        res = roads_gdf.copy()
+        for col in ["segment_id", "damage_grade", "evidence", "length_m", "length_km"]:
+            if col not in res.columns:
+                res[col] = []
+        return res
 
     if utm_crs is None or utm_crs == "auto":
         from src.common.crs_utils import auto_utm_crs
@@ -173,10 +177,10 @@ def grade_roads(
             raise ValueError("utm_crs must be provided when geodataframes are empty.")
 
     r_utm = roads_gdf.to_crs(utm_crs).copy()
-    haz_utm = hazard_gdf.to_crs(utm_crs)
+    haz_utm = hazard_gdf.to_crs(utm_crs) if len(hazard_gdf) > 0 else hazard_gdf
 
-    c2_polys = haz_utm[haz_utm["class"] == 2]
-    c3_polys = haz_utm[haz_utm["class"] == 3]
+    c2_polys = haz_utm[haz_utm["class"] == 2] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
+    c3_polys = haz_utm[haz_utm["class"] == 3] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
 
     c2_union = c2_polys.union_all() if len(c2_polys) > 0 else None
     c3_union = c3_polys.union_all() if len(c3_polys) > 0 else None
@@ -282,7 +286,11 @@ def grade_bridges(
        - 'distance_m': distance to triggering hazard or along reach
     """
     if len(bridges_gdf) == 0:
-        return bridges_gdf.copy()
+        res = bridges_gdf.copy()
+        for col in ["damage_grade", "evidence", "rule", "distance_m"]:
+            if col not in res.columns:
+                res[col] = []
+        return res
 
     if utm_crs is None or utm_crs == "auto":
         from src.common.crs_utils import auto_utm_crs
@@ -300,10 +308,10 @@ def grade_bridges(
         pass
 
     br_utm = bridges_gdf.to_crs(utm_crs).copy()
-    haz_utm = hazard_gdf.to_crs(utm_crs)
+    haz_utm = hazard_gdf.to_crs(utm_crs) if len(hazard_gdf) > 0 else hazard_gdf
 
-    c2_polys = haz_utm[haz_utm["class"] == 2]
-    c3_polys = haz_utm[haz_utm["class"] == 3]
+    c2_polys = haz_utm[haz_utm["class"] == 2] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
+    c3_polys = haz_utm[haz_utm["class"] == 3] if ("class" in haz_utm.columns and len(haz_utm) > 0) else gpd.GeoDataFrame([], crs=utm_crs)
 
     c2_union = c2_polys.union_all() if len(c2_polys) > 0 else None
     c3_union = c3_polys.union_all() if len(c3_polys) > 0 else None

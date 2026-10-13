@@ -196,20 +196,20 @@ def build_routing_networks(
     r_graded = gpd.read_file(hazard_roads_path).to_crs(utm_crs)
     br_graded = gpd.read_file(hazard_bridges_path).to_crs(utm_crs)
 
-    r_dest = r_graded[r_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
-    br_dest = br_graded[br_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])]
-    dest_union = r_dest.union_all()
+    r_dest = r_graded[r_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])] if "damage_grade" in r_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    br_dest = br_graded[br_graded["damage_grade"].isin(["Destroyed", "Flooded / impassable"])] if "damage_grade" in br_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    dest_union = r_dest.union_all() if len(r_dest) > 0 else None
     if len(br_dest) > 0:
         dest_union = dest_union.union(br_dest.union_all()) if dest_union is not None and not dest_union.is_empty else br_dest.union_all()
 
-    r_poss = r_graded[r_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
-    br_poss = br_graded[br_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])]
-    poss_union = r_poss.union_all()
+    r_poss = r_graded[r_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])] if "damage_grade" in r_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    br_poss = br_graded[br_graded["damage_grade"].isin(["Possibly damaged", "Possibly flooded"])] if "damage_grade" in br_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    poss_union = r_poss.union_all() if len(r_poss) > 0 else None
     if len(br_poss) > 0:
         poss_union = poss_union.union(br_poss.union_all()) if poss_union is not None and not poss_union.is_empty else br_poss.union_all()
 
-    r_cloud = r_graded[r_graded["damage_grade"] == "Unknown (cloud)"]
-    br_cloud = br_graded[br_graded["damage_grade"] == "Unknown (cloud)"]
+    r_cloud = r_graded[r_graded["damage_grade"] == "Unknown (cloud)"] if "damage_grade" in r_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
+    br_cloud = br_graded[br_graded["damage_grade"] == "Unknown (cloud)"] if "damage_grade" in br_graded.columns else gpd.GeoDataFrame(geometry=[], crs=utm_crs)
     cloud_union = r_cloud.union_all() if len(r_cloud) > 0 else None
     if len(br_cloud) > 0:
         cloud_union = cloud_union.union(br_cloud.union_all()) if cloud_union is not None and not cloud_union.is_empty else br_cloud.union_all()

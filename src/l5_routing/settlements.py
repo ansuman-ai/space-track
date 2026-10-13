@@ -17,6 +17,10 @@ def dbscan_clustering(
     min_samples: int = 5
 ) -> np.ndarray:
     """Fast cKDTree-based DBSCAN clustering."""
+    if points is None or len(points) == 0:
+        return np.array([], dtype=int)
+    if points.ndim == 1:
+        points = points.reshape(-1, 2)
     tree = cKDTree(points)
     n = len(points)
     labels = np.full(n, -1, dtype=int)
@@ -136,16 +140,19 @@ def extract_settlements(
         pop_str = str(pop) if pop is not None and str(pop) != "nan" and str(pop).strip() != "" else "not available"
 
         # Associate building count
-        dists = np.hypot(b_pts[:, 0] - p_x, b_pts[:, 1] - p_y)
-        close_mask = dists <= 150.0
-        c_ids = labels[close_mask]
-        c_ids_valid = c_ids[c_ids >= 0]
-        if len(c_ids_valid) > 0:
-            main_c = int(np.bincount(c_ids_valid).argmax())
-            matched_clusters.add(main_c)
-            b_count = int(np.sum(labels == main_c))
+        if len(b_pts) > 0:
+            dists = np.hypot(b_pts[:, 0] - p_x, b_pts[:, 1] - p_y)
+            close_mask = dists <= 150.0
+            c_ids = labels[close_mask]
+            c_ids_valid = c_ids[c_ids >= 0]
+            if len(c_ids_valid) > 0:
+                main_c = int(np.bincount(c_ids_valid).argmax())
+                matched_clusters.add(main_c)
+                b_count = int(np.sum(labels == main_c))
+            else:
+                b_count = int(np.sum(close_mask))
         else:
-            b_count = int(np.sum(close_mask))
+            b_count = 0
 
         settlements_records.append({
             "settlement_id": str(oid),
@@ -204,5 +211,8 @@ def extract_settlements(
             "geometry": Point(float(cx), float(cy))
         })
 
-    settlements_gdf = gpd.GeoDataFrame(settlements_records, crs=utm_crs)
+    if len(settlements_records) > 0:
+        settlements_gdf = gpd.GeoDataFrame(settlements_records, crs=utm_crs)
+    else:
+        settlements_gdf = gpd.GeoDataFrame(columns=["settlement_id", "name", "type", "building_count", "population", "geometry"], geometry="geometry", crs=utm_crs)
     return settlements_gdf

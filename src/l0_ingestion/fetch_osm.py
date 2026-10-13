@@ -94,10 +94,10 @@ def query_ohsome_layer(
                 continue
             else:
                 logger.error(f"elementsFullHistory/geometry failed: {resp.status_code} - {resp.text[:200]}")
-                sys.exit(f"FAILED: ohsome geometry query failed: {resp.status_code}")
+                raise RuntimeError(f"ohsome geometry query failed: {resp.status_code}")
         except requests.exceptions.RequestException as e:
             if attempt == 2:
-                sys.exit(f"FAILED: ohsome network error: {e}")
+                raise RuntimeError(f"ohsome network error: {e}")
             time.sleep(2)
 
 

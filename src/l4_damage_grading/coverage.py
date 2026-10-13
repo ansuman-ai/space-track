@@ -95,12 +95,16 @@ def compute_osm_coverage(
                 lens_km.append(0.0)
         r_utm["centerline_km"] = lens_km
 
-        for hwy, grp in r_utm.groupby("highway"):
-            road_km_by_type[str(hwy)] = round(float(grp["centerline_km"].sum()), 2)
-            road_perimeter_km_by_type[str(hwy)] = round(float(grp["perimeter_km"].sum()), 2)
+        if not r_utm.empty and "highway" in r_utm.columns:
+            for hwy, grp in r_utm.groupby("highway"):
+                road_km_by_type[str(hwy)] = round(float(grp["centerline_km"].sum()), 2)
+                road_perimeter_km_by_type[str(hwy)] = round(float(grp["perimeter_km"].sum()), 2)
 
-        total_road_km = round(float(r_utm["centerline_km"].sum()), 2)
-        total_road_perimeter_km = round(float(r_utm["perimeter_km"].sum()), 2)
+            total_road_km = round(float(r_utm["centerline_km"].sum()), 2)
+            total_road_perimeter_km = round(float(r_utm["perimeter_km"].sum()), 2)
+        else:
+            total_road_km = 0.0
+            total_road_perimeter_km = 0.0
 
     coverage_summary = {
         "buildings_count": total_buildings,

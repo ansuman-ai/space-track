@@ -620,19 +620,33 @@ class PlaceNameResolver:
         if is_close_multi or is_weak_match:
             candidate_list = []
             for c in unique_contenders[:5]:
+                raw_s = c["raw_settlement"]
+                base_name = format_settlement_name(raw_s, include_coords=False, include_access=False)
+                bld = raw_s.get("building_count", 0)
+                v_opt = str(raw_s.get("vehicle_status_opt", "")).lower()
+                w_opt = str(raw_s.get("walking_status_opt", "")).lower()
+                if v_opt in ["cut_off", "no_network_access"] and w_opt in ["cut_off", "no_network_access"]:
+                    access_desc = "severed from all ground access"
+                elif v_opt in ["cut_off", "no_network_access"]:
+                    access_desc = "cut off by road"
+                elif "cloud" in v_opt:
+                    access_desc = "connected via cloud-unverified road"
+                else:
+                    access_desc = "connected"
+                label_text = f"{base_name}, {bld} buildings, {access_desc}"
+
                 candidate_list.append({
                     "settlement_id": c["settlement_id"],
-                    "name": format_settlement_label(c["raw_settlement"]),
-                    "building_count": c["raw_settlement"].get("building_count", 0),
-                    "vehicle_status": c["raw_settlement"].get("vehicle_status_opt", "unknown"),
+                    "name": label_text,
+                    "building_count": bld,
+                    "vehicle_status": raw_s.get("vehicle_status_opt", "unknown"),
                 })
             options_text = "; ".join(f"{idx+1}. {c['name']}" for idx, c in enumerate(candidate_list))
 
             if is_weak_match and not is_close_multi:
                 prompt = (
-                    f"No settlement named exactly '{query}' was found. "
-                    f"Nearest candidate is: {candidate_list[0]['name']}. "
-                    f"Did you mean this location?"
+                    f"I could not find a place called '{query}' in this run. "
+                    f"Did you mean: {candidate_list[0]['name']}?"
                 )
             else:
                 prompt = (

@@ -30,7 +30,7 @@ from src.l0_ingestion.fetch_dem import fetch_dem
 from src.l0_ingestion.fetch_s1 import fetch_pair
 from src.l0_ingestion.fetch_s2 import fetch_s2
 from src.l5_routing.fetch_data import fetch_buffered_osm
-from src.l1_preprocessing.run_l1 import run_layer1
+from src.l1_preprocessing.run_l1 import run_layer1, run_layer1_dem_only
 from src.l2_detection.run_l2 import run_layer2
 from src.l4_damage_grading.run_l4 import run_layer4
 from src.l5_routing.run_l5 import run_layer5
@@ -231,14 +231,29 @@ def run_pipeline(
     l0_notes = []
     l0_sources = {}
 
+    s1_available = True
+    s1_error = None
+    s2_available = True
+    s2_error = None
+
     def _task_s1():
+        nonlocal s1_available, s1_error
         t0_src = time.time()
         s_before = get_dir_size_mb(raw_dir / "s1") + get_dir_size_mb(ctrl_raw_dir)
-        if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
-            logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
-            fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
-        else:
-            logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+        try:
+            if no_cache or not (s1_pre_path.exists() and s1_post_path.exists() and s1_meta_path.exists()):
+                logger.info("Fetching Sentinel-1 RTC event and control pairs via STAC...")
+                fetch_pair(bbox, event_date, str(raw_dir / "s1"), control_out_dir=str(ctrl_raw_dir), force=no_cache)
+            else:
+                logger.info(f"Using verified existing Sentinel-1 data in {raw_dir / 's1'}")
+        except Exception as e:
+            logger.warning(f"Sentinel-1 fetch failed: {e}")
+            s1_available = False
+            s1_error = str(e)
+            l0_notes.append(f"Sentinel-1 unavailable: {e}")
+            dur = round(time.time() - t0_src, 2)
+            l0_sources["s1"] = {"duration_s": dur, "downloaded_mb": 0.0, "error": str(e)}
+            return
         dur = round(time.time() - t0_src, 2)
         s_after = get_dir_size_mb(raw_dir / "s1") + get_dir_size_mb(ctrl_raw_dir)
         l0_sources["s1"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
@@ -282,32 +297,48 @@ def run_pipeline(
         l0_sources["osm_buffered"] = {"duration_s": dur, "downloaded_mb": round(max(0.0, s_after - s_before), 2)}
 
     def _task_s2():
+        nonlocal s2_available, s2_error
         t0_src = time.time()
         s_before = get_dir_size_mb(s2_cache_path)
         logger.info("Fetching Sentinel-2 optical scenes...")
-        s2_res = fetch_s2(
-            bbox=bbox,
-            event_date=event_date,
-            out_dir=str(s2_cache_path),
-            utm_crs=utm_crs,
-            s2_pre_days=det_cfg.get("s2_pre_days", 15),
-            s2_post_days=det_cfg.get("s2_post_days", 15),
-            s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
-            s2_max_scenes=det_cfg.get("s2_max_scenes", 15),
-            s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
-            s2_scene_timeout_s=det_cfg.get("s2_scene_timeout_s", 40.0),
-            s2_total_budget_s=det_cfg.get("s2_total_budget_s", None),
-            force=no_cache
-        )
-        dur = round(time.time() - t0_src, 2)
-        s_after = get_dir_size_mb(s2_cache_path)
-        l0_sources["s2"] = {
-            "duration_s": dur,
-            "downloaded_mb": round(max(0.0, s_after - s_before), 2),
-            "scenes_used": s2_res.get("scenes", []),
-            "scenes_skipped": s2_res.get("skipped_scenes", []),
-            "budget_exceeded": s2_res.get("budget_exceeded", False)
-        }
+        try:
+            s2_res = fetch_s2(
+                bbox=bbox,
+                event_date=event_date,
+                out_dir=str(s2_cache_path),
+                utm_crs=utm_crs,
+                s2_pre_days=det_cfg.get("s2_pre_days", 15),
+                s2_post_days=det_cfg.get("s2_post_days", 15),
+                s2_post_max_days=det_cfg.get("s2_post_max_days", 45),
+                s2_max_scenes=det_cfg.get("s2_max_scenes", 15),
+                s2_search_timeout_s=det_cfg.get("s2_search_timeout_s", 60.0),
+                s2_scene_timeout_s=det_cfg.get("s2_scene_timeout_s", 40.0),
+                s2_total_budget_s=det_cfg.get("s2_total_budget_s", None),
+                force=no_cache
+            )
+            dur = round(time.time() - t0_src, 2)
+            s_after = get_dir_size_mb(s2_cache_path)
+            l0_sources["s2"] = {
+                "duration_s": dur,
+                "downloaded_mb": round(max(0.0, s_after - s_before), 2),
+                "scenes_used": s2_res.get("scenes", []),
+                "scenes_skipped": s2_res.get("skipped_scenes", []),
+                "budget_exceeded": s2_res.get("budget_exceeded", False)
+            }
+        except Exception as e:
+            logger.warning(f"Sentinel-2 fetch failed: {e}")
+            s2_available = False
+            s2_error = str(e)
+            l0_notes.append(f"Sentinel-2 unavailable: {e}")
+            dur = round(time.time() - t0_src, 2)
+            l0_sources["s2"] = {
+                "duration_s": dur,
+                "downloaded_mb": 0.0,
+                "scenes_used": [],
+                "scenes_skipped": [],
+                "budget_exceeded": False,
+                "error": str(e)
+            }
 
     try:
         l0_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -317,16 +348,31 @@ def run_pipeline(
         f_osm_buf = l0_executor.submit(_task_osm_buf)
         f_s2 = l0_executor.submit(_task_s2)
 
-        # 1. Wait ONLY for S1 and DEM so L1 Preprocessing can start immediately!
-        f_s1.result()
+        # 1. Wait for DEM
         f_dem.result()
+        # 2. Wait for S1 (can succeed or set s1_available = False)
+        f_s1.result()
     except Exception as e:
         logger.error(f"[ERROR] Layer 0 ingestion failed: {e}")
         l0_notes.append(f"Ingestion error: {e}")
         raise e
 
     dem_file = next((p for p in dem_cands if p.exists()), raw_dir / "dem" / "dem_buffered.tif")
-    logger.info("[PROGRESS] S1 and DEM ready! Starting L1 Preprocessing immediately...")
+
+    # If S1 failed, verify S2 status before deciding to fail
+    if not s1_available:
+        logger.info("[S1_FALLBACK] Sentinel-1 unavailable, waiting for Sentinel-2 download to determine optical evidence...")
+        f_s2.result()
+        # Check if S2 has downloaded scenes
+        has_s2_scenes = s2_cache_path.exists() and len(list(s2_cache_path.glob("*.npz"))) > 0
+        if not s2_available or not has_s2_scenes:
+            raise RuntimeError(
+                f"Neither sensor available: Sentinel-1 failed ({s1_error}) and Sentinel-2 failed ({s2_error or 'no clear scenes'}). "
+                "Cannot continue analysis."
+            )
+        logger.info(f"[DEGRADED_MODE] Sentinel-1 unavailable ({s1_error}); continuing with Sentinel-2 optical only.")
+
+    logger.info("[PROGRESS] DEM and sensor baseline ready! Starting L1 Preprocessing...")
 
     # ==================================================================
     # LAYER 1: PREPROCESSING (EVENT & CONTROL IN PARALLEL)
@@ -339,30 +385,15 @@ def run_pipeline(
     ctrl_post = ctrl_raw_dir / "post.tif"
     ctrl_meta = ctrl_raw_dir / "meta.json"
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as l1_pool:
-        f_ev = l1_pool.submit(
-            run_layer1,
-            pre_path=str(s1_pre_path),
-            post_path=str(s1_post_path),
-            dem_path=str(dem_file),
-            meta_path=str(s1_meta_path),
-            out_dir=str(interim_dir),
-            window_size=prep_cfg.get("filter_window_size", 5),
-            drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
-            look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
-            orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
-            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0),
-            enable_quicklooks=enable_quicklooks,
-            max_threads=max_threads
-        )
-        if ctrl_pre.exists() and ctrl_post.exists():
-            f_ctrl = l1_pool.submit(
+    if s1_available:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as l1_pool:
+            f_ev = l1_pool.submit(
                 run_layer1,
-                pre_path=str(ctrl_pre),
-                post_path=str(ctrl_post),
+                pre_path=str(s1_pre_path),
+                post_path=str(s1_post_path),
                 dem_path=str(dem_file),
-                meta_path=str(ctrl_meta) if ctrl_meta.exists() else None,
-                out_dir=str(ctrl_interim_dir),
+                meta_path=str(s1_meta_path),
+                out_dir=str(interim_dir),
                 window_size=prep_cfg.get("filter_window_size", 5),
                 drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
                 look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
@@ -371,12 +402,42 @@ def run_pipeline(
                 enable_quicklooks=enable_quicklooks,
                 max_threads=max_threads
             )
-        else:
-            f_ctrl = None
+            if ctrl_pre.exists() and ctrl_post.exists():
+                f_ctrl = l1_pool.submit(
+                    run_layer1,
+                    pre_path=str(ctrl_pre),
+                    post_path=str(ctrl_post),
+                    dem_path=str(dem_file),
+                    meta_path=str(ctrl_meta) if ctrl_meta.exists() else None,
+                    out_dir=str(ctrl_interim_dir),
+                    window_size=prep_cfg.get("filter_window_size", 5),
+                    drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
+                    look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
+                    orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
+                    dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0),
+                    enable_quicklooks=enable_quicklooks,
+                    max_threads=max_threads
+                )
+            else:
+                f_ctrl = None
 
-        l1_res = f_ev.result()
-        if f_ctrl:
-            f_ctrl.result()
+            l1_res = f_ev.result()
+            if f_ctrl:
+                f_ctrl.result()
+    else:
+        # S1 unavailable: run DEM-only grid for L1
+        l1_res = run_layer1_dem_only(
+            bbox=bbox,
+            utm_crs=utm_crs,
+            dem_path=str(dem_file),
+            out_dir=str(interim_dir),
+            pixel_size_m=10.0,
+            drainage_threshold=prep_cfg.get("drainage_accumulation_threshold", 5000),
+            look_angle_deg=prep_cfg.get("look_angle_deg", 38.0),
+            orbit_heading_deg=prep_cfg.get("orbit_heading_deg", 350.0),
+            dem_buffer_km=prep_cfg.get("dem_buffer_km", 10.0),
+            max_threads=max_threads
+        )
 
     l1_duration_s = round(time.time() - t_l1_0, 2)
     layer_logs["L1"] = {
@@ -648,12 +709,27 @@ def run_pipeline(
     total_duration_s = round(time.time() - t0, 2)
     peak_ram_overall = get_peak_ram_mb()
 
-    # Determine sensors used
-    sensors_used = ["Sentinel-1 RTC SAR", "Copernicus DEM-30", "OpenStreetMap"]
-    if s2_cache_path.exists() and len(list(s2_cache_path.glob("*.npz"))) > 0:
-        sensors_used.insert(0, "Sentinel-2 MSI Optical")
+    # Determine sensors used and degradation notes
+    sensors_used = []
+    has_s2_data = s2_cache_path.exists() and len(list(s2_cache_path.glob("*.npz"))) > 0
+    if has_s2_data:
+        sensors_used.append("Sentinel-2 MSI Optical")
+    if s1_available and (raw_dir / "s1" / "pre.tif").exists():
+        sensors_used.append("Sentinel-1 RTC SAR")
+    sensors_used.extend(["Copernicus DEM-30", "OpenStreetMap"])
+
     s2_scenes_skipped = l0_sources.get("s2", {}).get("scenes_skipped", [])
-    overall_status = "DEGRADED" if s2_scenes_skipped else "COMPLETED"
+    overall_status = "COMPLETED"
+    optical_note = l2_res.get("optical_evidence_note", "")
+
+    if not s1_available:
+        overall_status = "DEGRADED"
+        degraded_msg = f"Sentinel-1 unavailable: {s1_error or 'read failure'}; results from Sentinel-2 only"
+        optical_note = f"{optical_note} ({degraded_msg})" if optical_note else degraded_msg
+    elif not s2_available or s2_scenes_skipped or not has_s2_data:
+        overall_status = "DEGRADED"
+        if not s2_available or not has_s2_data:
+            optical_note = f"Sentinel-2 unavailable: {s2_error or 'no clear scenes'}; results from Sentinel-1 only"
 
     summary_payload = {
         "status": overall_status,
@@ -665,7 +741,7 @@ def run_pipeline(
         "peak_ram_mb": peak_ram_overall,
         "swap_used_mb": get_swap_used_mb(),
         "sensors_used": sensors_used,
-        "optical_evidence_note": l2_res.get("optical_evidence_note", ""),
+        "optical_evidence_note": optical_note,
         "s2_scenes_used": l0_sources.get("s2", {}).get("scenes_used", []),
         "s2_scenes_skipped": s2_scenes_skipped,
         "l0_sources": l0_sources,

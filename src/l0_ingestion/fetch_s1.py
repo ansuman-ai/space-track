@@ -87,15 +87,15 @@ def query_stac(
                 time.sleep(2)
                 continue
             logger.error(f"Network error querying Planetary Computer STAC: {e}")
-            sys.exit(f"FAILED: Network error querying STAC: {e}")
+            raise RuntimeError(f"Network error querying STAC: {e}")
 
     if resp.status_code == 403:
         logger.error("HTTP 403 Forbidden: Sandbox or network environment blocked access to Planetary Computer STAC.")
-        sys.exit("FAILED: HTTP 403 Forbidden when accessing Planetary Computer STAC API.")
+        raise RuntimeError("HTTP 403 Forbidden when accessing Planetary Computer STAC API.")
 
     if resp.status_code != 200:
         logger.error(f"STAC search returned HTTP {resp.status_code}: {resp.text}")
-        sys.exit(f"FAILED: STAC search returned HTTP {resp.status_code}: {resp.text}")
+        raise RuntimeError(f"STAC search returned HTTP {resp.status_code}: {resp.text}")
 
     features = resp.json().get("features", [])
     return features
@@ -131,7 +131,7 @@ def download_and_clip_bands(
     vh_asset = assets.get("vh")
 
     if not vv_asset or not vh_asset:
-        sys.exit(f"FAILED: Item {item_meta['id']} missing VV or VH asset")
+        raise RuntimeError(f"Item {item_meta['id']} missing VV or VH asset")
 
     vv_url = sign_url(vv_asset["href"], token)
     vh_url = sign_url(vh_asset["href"], token)
@@ -141,18 +141,25 @@ def download_and_clip_bands(
     from .gdal_env import get_shared_gdal_env
     try:
         env = get_shared_gdal_env(
+            tag="Sentinel-1",
             GDAL_HTTP_VERSION="1.1",
             GDAL_HTTP_MULTIPLEX="NO",
             GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="NO",
             CPL_VSIL_CURL_CHUNK_SIZE="1048576",
-            GDAL_HTTP_TIMEOUT="120",
-            GDAL_HTTP_CONNECTTIMEOUT="30",
-            GDAL_HTTP_MAX_RETRY="5"
+            GDAL_HTTP_TIMEOUT="60",
+            GDAL_HTTP_CONNECTTIMEOUT="20",
+            GDAL_HTTP_MAX_RETRY="2"
         )
 
-        def _read_band(u):
+        current_token = token
+
+        def _read_band(raw_asset_href):
+            nonlocal current_token
             last_err = None
             for attempt in range(5):
+                # Prepare signed URL with current token
+                base_u = raw_asset_href.split("?")[0] if "?" in raw_asset_href else raw_asset_href
+                u = f"{base_u}?{current_token}" if current_token else raw_asset_href
                 try:
                     with env:
                         with rasterio.open(u) as src:
@@ -167,14 +174,18 @@ def download_and_clip_bands(
                             return d, out_trans, meta
                 except Exception as e:
                     last_err = e
-                    sleep_s = 2 ** attempt
-                    logger.warning(f"Attempt {attempt+1}/5 failed reading S1 band from Planetary Computer ({e}); retrying in {sleep_s}s...")
+                    sleep_s = 2 ** min(attempt, 3)
+                    logger.warning(f"Attempt {attempt+1}/5 failed reading S1 band from Planetary Computer ({e}); refreshing SAS token and retrying in {sleep_s}s...")
+                    # Refresh SAS token before retrying
+                    fresh = get_sas_token("sentinel-1-rtc")
+                    if fresh:
+                        current_token = fresh
                     time.sleep(sleep_s)
             raise last_err
 
         # Fetch VV and VH sequentially to prevent Azure Blob rate-limiting / connection reset
-        vv_data, out_transform, out_meta = _read_band(vv_url)
-        vh_data, _, _ = _read_band(vh_url)
+        vv_data, out_transform, out_meta = _read_band(vv_asset["href"])
+        vh_data, _, _ = _read_band(vh_asset["href"])
 
         out_meta.update({
             "driver": "GTiff",
@@ -200,7 +211,7 @@ def download_and_clip_bands(
         logger.info(f"Saved clipped RTC raster to {out_path} ({vv_data.shape[1]}x{vv_data.shape[0]})")
     except Exception as e:
         logger.error(f"Failed to read/clip raster assets: {e}")
-        sys.exit(f"FAILED: Could not download and clip raster: {e}")
+        raise RuntimeError(f"Could not download and clip S1 raster: {e}")
 
 
 def check_bbox_overlap(item: Dict[str, Any], bbox: List[float], min_overlap: float = 0.90) -> Tuple[bool, float]:
@@ -290,7 +301,7 @@ def fetch_pair(
     post_candidates = query_stac(bbox, post_search_start, post_search_end)
 
     if not post_candidates:
-        sys.exit(f"FAILED: No Sentinel-1 scenes found after event date {event_date} for bbox {bbox}")
+        raise RuntimeError(f"No Sentinel-1 scenes found after event date {event_date} for bbox {bbox}")
 
     post_candidates.sort(key=lambda x: x.get("properties", {}).get("datetime", ""))
     
@@ -342,9 +353,10 @@ def fetch_pair(
         if selected_pre:
             break
 
-    assert selected_post is not None and selected_pre is not None, (
-        f"FAILED: Could not find matching same-orbit pre/post Sentinel-1 pair with >90% bbox overlap for event date {event_date} bbox {bbox}"
-    )
+    if selected_post is None or selected_pre is None:
+        raise RuntimeError(
+            f"Could not find matching same-orbit pre/post Sentinel-1 pair with >90% bbox overlap for event date {event_date} bbox {bbox}"
+        )
 
     logger.info(f"Found matched event pair: Post={selected_post['id']} ({selected_post['datetime']}), Pre={selected_pre['id']} ({selected_pre['datetime']}), Orbit={selected_post['relative_orbit']}")
 
@@ -369,9 +381,10 @@ def fetch_pair(
             selected_ctrl_pre = c_meta
             break
 
-    assert selected_ctrl_pre is not None, (
-        f"FAILED: Missing Sentinel-1 control scene with >90% bbox overlap (same relative orbit {selected_pre['relative_orbit']} 12 days prior to pre-event scene)"
-    )
+    if selected_ctrl_pre is None:
+        raise RuntimeError(
+            f"Missing Sentinel-1 control scene with >90% bbox overlap (same relative orbit {selected_pre['relative_orbit']} 12 days prior to pre-event scene)"
+        )
 
     logger.info(f"Found matched control pre scene: {selected_ctrl_pre['id']} ({selected_ctrl_pre['datetime']})")
 

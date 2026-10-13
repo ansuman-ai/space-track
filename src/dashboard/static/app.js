@@ -1734,10 +1734,14 @@ async function askCopilot(question) {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
     const answer = d.answer || "No response received.";
-    const isOffline = d.provider === "offline" || answer.includes("[ANSWERED IN OFFLINE MODE]");
-    const metaTagText = isOffline
-      ? "Answered offline"
-      : `Answered live by ${d.model || d.provider} in ${elapsed}s`;
+    const isOffline = d.provider === "offline" || d.answer_path === "offline" || answer.includes("[ANSWERED IN OFFLINE MODE]");
+    const isRules = d.answer_path === "rules" || d.model === "rules" || d.provider === "rules" || d.answer_path === "keyword_refusal" || d.answer_path === "template_fallback";
+    let metaTagText = `Answered live by ${d.model || d.provider} in ${elapsed}s`;
+    if (isOffline) {
+      metaTagText = "Answered offline";
+    } else if (isRules) {
+      metaTagText = "Answered by rules (no AI model)";
+    }
 
     const sources = d.sources || [];
     let sourcesBtnHtml = "";
