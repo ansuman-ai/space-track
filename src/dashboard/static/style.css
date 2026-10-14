@@ -102,12 +102,16 @@ html, body {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .header-titles {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .header-title-btn {
@@ -119,6 +123,9 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .header-title-btn:hover .title-main {
@@ -126,18 +133,20 @@ html, body {
 }
 
 .title-main {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-main);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .title-dropdown-caret {
   font-size: 11px;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .header-subtitle-row {
@@ -148,10 +157,16 @@ html, body {
   color: var(--text-secondary);
   margin-top: 1px;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .header-sentence {
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .badge-validation {
@@ -164,6 +179,8 @@ html, body {
   background: #EAECEB;
   border: 1px solid #D1D6D4;
   color: var(--text-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .badge-validation.verified {
@@ -292,6 +309,61 @@ html, body {
   height: 1px;
   background: var(--border-line);
   margin: 4px 0;
+}
+
+/* Responsive header adjustments */
+#menu-opt-sitrep {
+  display: none;
+}
+
+#menu-more-wrap {
+  flex-shrink: 0;
+}
+
+.btn-icon-menu {
+  flex-shrink: 0;
+}
+
+@media (max-width: 1380px) {
+  #btn-download-sitrep {
+    display: none !important;
+  }
+  #menu-opt-sitrep {
+    display: flex !important;
+  }
+}
+
+/* Start Screen Active Mode (No run loaded) */
+body.start-screen-active #side-panel {
+  display: none !important;
+}
+
+body.start-screen-active #map-container {
+  width: 100% !important;
+}
+
+body.start-screen-active .map-top-right-controls {
+  display: none !important;
+}
+
+body.start-screen-active #layer-legend-panel {
+  display: none !important;
+}
+
+body.start-screen-active #btn-copilot-trigger {
+  display: none !important;
+}
+
+body.start-screen-active #btn-download-sitrep {
+  display: none !important;
+}
+
+body.start-screen-active #val-header-validation {
+  display: none !important;
+}
+
+body.start-screen-active #attr-sentinel {
+  display: none !important;
 }
 
 /* ==========================================================================

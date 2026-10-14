@@ -452,13 +452,12 @@ class NumberGuard:
             if st == "ambiguous":
                 return tool_output.get("clarification_prompt", "Multiple locations found. Please specify.")
             if st == "not_found":
-                msg = tool_output.get("message", "Place was not found inside this run's area.")
                 q = tool_output.get("query", "")
                 if lang == "ne":
-                    return f"स्थान '{q}' यस प्रकोप क्षेत्रभित्र भेटिएन।"
+                    return f"{q} यस प्रकोप क्षेत्रभित्र भेटिएन।" if q else "यो स्थान यस प्रकोप क्षेत्रभित्र भेटिएन।"
                 elif lang == "hi":
-                    return f"स्थान '{q}' इस आपदा क्षेत्र में नहीं मिला।"
-                return msg
+                    return f"{q} इस आपदा क्षेत्र में नहीं मिला।" if q else "यह स्थान इस आपदा क्षेत्र में नहीं मिला।"
+                return f"I could not find {q} in this run." if q else "I could not find the place in this run."
 
             if tool_output.get("is_local_area"):
                 area = tool_output.get("area", "local area")
@@ -571,7 +570,12 @@ class NumberGuard:
             if st == "ambiguous":
                 return tool_output.get("clarification_prompt", "Multiple locations found. Please specify.")
             if st == "not_found":
-                return tool_output.get("message", "Settlement not found in disaster area.")
+                q = tool_output.get("query") or tool_output.get("name", "")
+                if lang == "ne":
+                    return f"{q} यस प्रकोप क्षेत्रभित्र भेटिएन।" if q else "यो बस्ती यस प्रकोप क्षेत्रभित्र भेटिएन।"
+                elif lang == "hi":
+                    return f"{q} इस आपदा क्षेत्र में नहीं मिला।" if q else "यह बस्ती इस आपदा क्षेत्र में नहीं मिली।"
+                return f"I could not find {q} in this run." if q else "I could not find the settlement in this run."
 
             name = tool_output.get("name", "Settlement")
             v_opt = tool_output.get("vehicle_status_optimistic", "unknown")
@@ -609,13 +613,12 @@ class NumberGuard:
             if st == "ambiguous":
                 return tool_output.get("clarification_prompt", "Multiple locations found. Please specify.")
             if st == "not_found":
-                msg = tool_output.get("message", "Place was not found inside this run's area.")
                 q = tool_output.get("query", "")
                 if lang == "ne":
-                    return f"स्थान '{q}' यस प्रकोप क्षेत्रभित्र भेटिएन।"
+                    return f"{q} यस प्रकोप क्षेत्रभित्र भेटिएन।" if q else "यो पुल यस प्रकोप क्षेत्रभित्र भेटिएन।"
                 elif lang == "hi":
-                    return f"स्थान '{q}' इस आपदा क्षेत्र में नहीं मिला।"
-                return msg
+                    return f"{q} इस आपदा क्षेत्र में नहीं मिला।" if q else "यह पुल इस आपदा क्षेत्र में नहीं मिला।"
+                return f"I could not find {q} in this run." if q else "I could not find the bridge in this run."
 
             if tool_output.get("is_local_area"):
                 area = tool_output.get("area", "local area")
@@ -690,13 +693,12 @@ class NumberGuard:
             if st == "ambiguous":
                 return tool_output.get("clarification_prompt", "Multiple road corridors or areas found. Please specify.")
             if st == "not_found":
-                msg = tool_output.get("message", "Road or area was not found inside this run's area.")
                 q = tool_output.get("query", "")
                 if lang == "ne":
-                    return f"सडक वा स्थान '{q}' यस प्रकोप क्षेत्रभित्र भेटिएन।"
+                    return f"{q} यस प्रकोप क्षेत्रभित्र भेटिएन।" if q else "यो सडक वा स्थान यस प्रकोप क्षेत्रभित्र भेटिएन।"
                 elif lang == "hi":
-                    return f"सड़क या स्थान '{q}' इस आपदा क्षेत्र में नहीं मिला।"
-                return msg
+                    return f"{q} इस आपदा क्षेत्र में नहीं मिला।" if q else "यह सड़क या स्थान इस आपदा क्षेत्र में नहीं मिला।"
+                return f"I could not find {q} in this run." if q else "I could not find the road in this run."
 
             rd = tool_output.get("road_name", "Road")
             passability = tool_output.get("passability", "CLOSED")

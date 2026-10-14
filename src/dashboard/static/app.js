@@ -53,6 +53,13 @@ function startDashboardApp() {
   initCopilot();
   initModals();
   initStartScreen();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetRun = urlParams.get("run");
+  if (!targetRun) {
+    showStartScreen();
+  }
+
   loadRunsList();
 }
 
@@ -198,6 +205,16 @@ function initHeaderControls() {
   }
 
   // More menu items
+  const optSitrep = document.getElementById("menu-opt-sitrep");
+  if (optSitrep) {
+    optSitrep.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
+      if (currentRunId) {
+        window.open(`/api/runs/${currentRunId}/sitrep?lang=${currentLang}&format=pdf`, "_blank");
+      }
+    });
+  }
+
   const optSlider = document.getElementById("menu-opt-slider");
   if (optSlider) {
     optSlider.addEventListener("click", () => {
@@ -714,9 +731,38 @@ function showStartScreen() {
   url.searchParams.delete("run");
   window.history.replaceState({}, "", url);
 
+  document.body.classList.add("start-screen-active");
+
   // Show Start Screen overlay
   const panel = document.getElementById("start-screen-panel");
   if (panel) panel.classList.remove("hidden");
+
+  // Reset header text so nothing run-specific appears
+  const titleEl = document.getElementById("run-main-title");
+  if (titleEl) {
+    titleEl.textContent = "Himalayan Disaster Assessment";
+    titleEl.removeAttribute("title");
+  }
+  const titleBtn = document.getElementById("btn-open-run-switcher");
+  if (titleBtn) {
+    titleBtn.removeAttribute("title");
+  }
+  const subtitleSentence = document.getElementById("header-subtitle-sentence");
+  if (subtitleSentence) {
+    subtitleSentence.textContent = "Spaceborne Rapid Assessment Platform";
+  }
+  const valPill = document.getElementById("val-header-validation");
+  if (valPill) {
+    valPill.style.display = "none";
+  }
+  const btnSitrep = document.getElementById("btn-download-sitrep");
+  if (btnSitrep) {
+    btnSitrep.style.display = "none";
+  }
+  const attrSentinel = document.getElementById("attr-sentinel");
+  if (attrSentinel) {
+    attrSentinel.style.display = "none";
+  }
 
   // Show full OSM basemap without AOI dimming
   if (aoiDimLayer) { map.removeLayer(aoiDimLayer); aoiDimLayer = null; }
@@ -739,6 +785,7 @@ function showStartScreen() {
 
   // Himalayan / South Asia Regional View (~70–98 E, 5–37 N)
   map.fitBounds([[5, 70], [37, 98]]);
+  map.invalidateSize();
 
   // Populate Previous assessments
   populatePreviousAssessments();
@@ -746,9 +793,18 @@ function showStartScreen() {
 
 function hideStartScreen() {
   isStartScreenActive = false;
+  document.body.classList.remove("start-screen-active");
   clearStartBbox();
   const panel = document.getElementById("start-screen-panel");
   if (panel) panel.classList.add("hidden");
+
+  const valPill = document.getElementById("val-header-validation");
+  if (valPill) valPill.style.display = "";
+  const btnSitrep = document.getElementById("btn-download-sitrep");
+  if (btnSitrep) btnSitrep.style.display = "";
+  const attrSentinel = document.getElementById("attr-sentinel");
+  if (attrSentinel) attrSentinel.style.display = "";
+  map.invalidateSize();
 }
 
 function populatePreviousAssessments() {
@@ -1056,8 +1112,14 @@ function updateHeader(data) {
   const mainTitleEl = document.getElementById("run-main-title");
   const subtitleEl = document.getElementById("header-subtitle-sentence");
   const valPillEl = document.getElementById("val-header-validation");
+  const titleBtn = document.getElementById("btn-open-run-switcher");
 
-  mainTitleEl.textContent = data.main_title || data.label || "Disaster Assessment";
+  const titleText = data.main_title || data.label || "Disaster Assessment";
+  mainTitleEl.textContent = titleText;
+  mainTitleEl.setAttribute("title", titleText);
+  if (titleBtn) {
+    titleBtn.setAttribute("title", `Assessment run: ${titleText} (click to switch)`);
+  }
 
   // Subtitle sentence: "<river/place>, <date>. <Mountain/Flat> terrain."
   const placeOrRiver = data.primary_river || data.primary_place || (data.osm_label ? data.osm_label.split("—")[0].trim() : "Primary Corridor");
@@ -1073,11 +1135,20 @@ function updateHeader(data) {
     valPillEl.textContent = "Not validated (practice run)";
     valPillEl.className = "badge-validation";
   }
+  valPillEl.style.display = "";
 
   // Dynamic Year Attribution in Footer
   const attrSentinel = document.getElementById("attr-sentinel");
   const year = data.event_year || (data.event_date ? data.event_date.split("-")[0] : "2026");
-  attrSentinel.textContent = `Contains modified Copernicus Sentinel data ${year}.`;
+  if (attrSentinel) {
+    attrSentinel.textContent = `Contains modified Copernicus Sentinel data ${year}.`;
+    attrSentinel.style.display = "";
+  }
+
+  const btnSitrep = document.getElementById("btn-download-sitrep");
+  if (btnSitrep) {
+    btnSitrep.style.display = "";
+  }
 }
 
 // ==========================================================================

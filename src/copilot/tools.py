@@ -593,6 +593,15 @@ class CopilotTools:
                         resolved_name = f"River Confluence ({coords[1]:.4f}, {coords[0]:.4f})"
 
                 # 3. Resolve place name
+                if not coords and self.store.graded_bridges:
+                    clean_br = area_str.lower()
+                    for b in self.store.graded_bridges:
+                        bn = str(b.get("name") or b.get("tags", {}).get("name") or "").lower()
+                        if bn and (clean_br in bn or bn in clean_br):
+                            coords = b.get("coordinates")
+                            resolved_name = b.get("name") or area_str
+                            break
+
                 if not coords:
                     m_res = self.resolver.resolve(area_str)
                     if m_res.status == "ambiguous":
@@ -609,7 +618,7 @@ class CopilotTools:
                             "tool": "bridges_status",
                             "status": "not_found",
                             "query": area_str,
-                            "message": m_res.clarification_prompt or f"Place '{area_str}' was not found inside this run's area.",
+                            "message": f"I could not find {area_str} in this run.",
                             "fact_ids": [],
                         }
                     elif m_res.status in ["exact", "fuzzy"] and m_res.match:
@@ -806,7 +815,7 @@ class CopilotTools:
                             "tool": "roads_status",
                             "status": "not_found",
                             "query": area_str,
-                            "message": m_res.clarification_prompt or f"Place '{area_str}' was not found inside this run's area.",
+                            "message": f"I could not find {area_str} in this run.",
                             "fact_ids": [],
                         }
                     elif m_res.match:
@@ -920,7 +929,7 @@ class CopilotTools:
                         "tool": "roads_status",
                         "status": "not_found",
                         "query": name,
-                        "message": f"Road matching '{name}' was not found in this run.",
+                        "message": f"I could not find {name} in this run.",
                         "fact_ids": [],
                     }
 

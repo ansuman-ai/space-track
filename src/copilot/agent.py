@@ -48,7 +48,7 @@ from .tools import CopilotTools, get_tool_definitions
 logger = logging.getLogger("copilot.agent")
 
 SYSTEM_PROMPT = """Himalayan Disaster SitRep Copilot.
-1. ZERO FABRICATION: Output numbers and place names strictly from tool results this turn. If data requested is absent, state that only the requested information is 'not available in the data' (तथ्याङ्कमा उपलब्ध छैन / डेटा में उपलब्ध नहीं है). When asked about a specific place, road, or entity that is outside the area (e.g. Ramnagar, Pokhara, Birganj/बीरगञ्ज/वीरगञ्ज, NH99), explicitly name the requested entity in the user's language and state that it was not found in the disaster assessment area (e.g. 'Ramnagar was not found in the data / assessment area' / 'बीरगञ्ज विपद् आकलन क्षेत्रभित्र भेटिएन (तथ्याङ्कमा उपलब्ध छैन)'). NEVER append unrelated disclaimers about casualties or weather to questions that did not ask for them. Only state casualty or forecast absence when the user specifically asked for casualties or forecasts.
+1. ZERO FABRICATION: Output numbers and place names strictly from tool results this turn. If data requested is absent, state that only the requested information is 'not available in the data' (तथ्याङ्कमा उपलब्ध छैन / डेटा में उपलब्ध नहीं है). If a requested road, bridge, place, or entity is not found in the run data (or a tool returns status 'not_found' for entity <x>), state: 'I could not find <x> in this run.' (in Nepali: '<x> यस प्रकोप क्षेत्रभित्र भेटिएन', in Hindi: '<x> इस आपदा क्षेत्र में नहीं मिला'). NEVER append unrelated disclaimers about casualties or weather to questions that did not ask for them. Only state casualty or forecast absence when the user specifically asked for casualties or forecasts.
 2. LANGUAGE: Reply strictly in user's query language (English -> English; Hindi -> Hindi Devanagari; Nepali -> Nepali Devanagari).
 3. LOCAL DAMAGE & ROADS: Call damage_summary(area=..., radius_km=1.0) or roads_status(name=..., area=..., radius_km=1.0) for local places/coords; you MUST state the radius in your answer (e.g. 'within 1.0 km of [Place]'). When asked about a highway corridor (e.g. 'Is the main road open?' or 'Pasang Lhamu Highway'), quote the corridor fields from roads_status (e.g. 4.42 km destroyed out of 36.62 km evaluated on the main highway corridor), NEVER quoting whole-AOI road length (5.98 km) as the corridor figure.
 4. CUT-OFFS: Call cutoff_settlements. Cloud-unverified routes are CONNECTED and NOT in cut-offs.
@@ -501,17 +501,7 @@ class CopilotAgent:
                 answer_path="offline",
             )
 
-        # 1a. Specific fake entity / out of area place checks
-        if "nh99" in q_lower:
-            return AgentResponse(
-                text="NH99 was not found in the disaster area road network (not in the data).",
-                tools_called=["roads_status"],
-                tool_outputs=[{"road": "NH99", "status": "not found"}],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-                answer_path="offline",
-            )
+
 
         if "pokhara" in q_lower or "पोखरा" in query:
             return AgentResponse(
@@ -946,7 +936,7 @@ class CopilotAgent:
             )
 
         # 4i. Roads status intent
-        if _has_kw(["highway", "road", "sadak", "सडक", "राजमार्ग", "riverside", "corridor", "open", "passable", "blocked", "closed", "reach", "truck", "vehicular", "खुला", "बन्द"]) and not _has_kw(["bridge", "bridges", "pul", "पुल", "marmat", "repair"]):
+        if (_has_kw(["highway", "road", "sadak", "सडक", "राजमार्ग", "riverside", "corridor", "open", "passable", "blocked", "closed", "reach", "truck", "vehicular", "खुला", "बन्द"]) or bool(re.search(r"\b(?:NH|SH|AH)\s*\d+\b", query, re.IGNORECASE))) and not _has_kw(["bridge", "bridges", "pul", "पुल", "marmat", "repair"]):
             def _extract_area_tmp(q: str) -> Optional[str]:
                 coords = parse_coordinates_query(q)
                 if coords:
@@ -979,6 +969,17 @@ class CopilotAgent:
                 road_name = "riverside highway"
             elif not road_name and any(kw in q_clean for kw in ["truck", "reach", "access", "north"]):
                 road_name = "riverside highway"
+            elif not road_name:
+                m_hwy = re.search(r"\b([A-Za-z]{1,4}\s*[-]?\s*\d+[A-Za-z]?)\b", query)
+                if m_hwy:
+                    road_name = m_hwy.group(1).strip()
+                else:
+                    m_rd = re.search(r"\b([A-Za-z0-9\s]+?)\s+(?:highway|road|corridor|sadak|मार्ग|सडक|राजमार्ग)\b", query, re.IGNORECASE)
+                    if m_rd:
+                        cand = m_rd.group(1).strip()
+                        cand = re.sub(r"^(?:the|is|are|in|on|at|what|how|about)\s+", "", cand, flags=re.IGNORECASE).strip()
+                        if cand and len(cand) >= 2 and cand.lower() not in {"main", "local", "access", "this", "the"}:
+                            road_name = f"{cand} road" if not cand.lower().endswith("road") else cand
             out = self.tools.roads_status(name=road_name, area=area_arg)
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -1041,6 +1042,13 @@ class CopilotAgent:
         # 5. Bridges status intent
         if _has_kw(["bridge", "bridges", "pul", "पुल", "पुलहरू", "पुलों"]):
             area_arg = _extract_area(query)
+            if not area_arg:
+                m_br = re.search(r"\b([A-Za-z0-9\u0900-\u097F\s]+?)\s+(?:bridge|pul|पुल)\b", query, re.IGNORECASE)
+                if m_br:
+                    cand = m_br.group(1).strip()
+                    cand = re.sub(r"^(?:the|is|are|in|at|what|how|about)\s+", "", cand, flags=re.IGNORECASE).strip()
+                    if cand and len(cand) >= 2 and cand.lower() not in {"this", "the", "a", "any", "which", "how many", "all"}:
+                        area_arg = f"{cand} bridge"
             out = self.tools.bridges_status(area=area_arg)
             self.conversation_tool_outputs.append(out)
             text = self.guard.build_template_answer(out, lang)
@@ -1532,19 +1540,7 @@ class CopilotAgent:
                 turn_latency_sec=0.01,
             )
 
-        if "nh99" in q_lower:
-            return AgentResponse(
-                text="NH99 was not found in the disaster area road network (not in the data).",
-                tools_called=["roads_status"],
-                tool_outputs=[{"road": "NH99", "status": "not found"}],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-                provider="rules",
-                model="rules",
-                answer_path="offline",
-                turn_latency_sec=0.01,
-            )
+
 
         if "pokhara" in q_lower or "पोखरा" in query:
             return AgentResponse(
@@ -1633,9 +1629,9 @@ class CopilotAgent:
         t_turn_start = time.time()
         call_logs_this_turn: List[Dict[str, Any]] = []
         for endpoint in endpoints:
-            # Enforce 10.0-second total timeout before falling back to offline mode (< 10s total)
-            if time.time() - t_turn_start > 10.0:
-                logger.warning("10.0-second LLM turn deadline exceeded; falling back to offline immediately.")
+            # Enforce 7.2-second hard total timeout across all endpoints to stay strictly under 8.0s turn limit
+            if time.time() - t_turn_start >= 7.2:
+                logger.warning("7.2-second LLM turn deadline reached; falling back to offline immediately to preserve <8.0s budget.")
                 resp = self._offline_answer(query, lang)
                 resp.text = f"[ANSWERED IN OFFLINE MODE]\n{resp.text}"
                 resp.provider = "offline"
@@ -1643,6 +1639,7 @@ class CopilotAgent:
                 resp.answer_path = "offline"
                 resp.masked_key_id = None
                 resp.api_call_logs = call_logs_this_turn
+                resp.turn_latency_sec = round(time.time() - t_turn_start, 2)
                 return resp
 
             provider = endpoint.get("provider", "offline")
@@ -1660,11 +1657,13 @@ class CopilotAgent:
                 resp.answer_path = "offline"
                 resp.masked_key_id = None
                 resp.api_call_logs = call_logs_this_turn
+                resp.turn_latency_sec = round(time.time() - t_turn_start, 2)
                 return resp
 
             while True:
-                if time.time() - t_turn_start > 7.5:
-                    logger.warning("7.5-second LLM turn deadline reached inside loop; moving to offline.")
+                elapsed_loop = time.time() - t_turn_start
+                if elapsed_loop >= 6.8:
+                    logger.warning("Turn elapsed %.2fs (>= 6.8s) inside loop; moving to offline to keep <8.0s.", elapsed_loop)
                     break
 
                 active_key = self.key_pool.get_active_key(provider)
@@ -1672,7 +1671,9 @@ class CopilotAgent:
                     logger.warning("No active keys for provider %s. Failing over to next endpoint.", provider)
                     break
 
-                rem_timeout = max(0.5, min(6.0, 7.8 - (time.time() - t_turn_start)))
+                rem_timeout = max(0.5, min(4.5, 7.2 - elapsed_loop))
+                if rem_timeout < 0.8:
+                    break
                 client = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_timeout)
                 tools_called: List[str] = []
                 tool_outputs: List[Dict[str, Any]] = []
@@ -1757,41 +1758,47 @@ class CopilotAgent:
                                 "content": json.dumps(out_payload, ensure_ascii=False),
                             })
 
-                        if time.time() - t_turn_start > 6.0:
-                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn under 8.0s.", time.time() - t_turn_start)
+                        elapsed_before_c2 = time.time() - t_turn_start
+                        if elapsed_before_c2 >= 5.2 or (7.4 - elapsed_before_c2) < 2.0:
+                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn strictly under 8.0s.", elapsed_before_c2)
                             answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
                             answer_path = "template_fallback"
                         else:
                             t_tool_start = time.time()
-                            rem_c2 = max(0.5, min(6.0, 7.8 - (time.time() - t_turn_start)))
+                            rem_c2 = max(0.5, min(3.8, 7.4 - elapsed_before_c2))
                             client_c2 = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_c2)
-                            completion = client_c2.chat.completions.create(
-                                model=model_name,
-                                messages=messages_copy,
-                                temperature=0.1,
-                                max_tokens=1000,
-                            )
-                            llm_calls += 1
-                            call2_prompt = getattr(completion.usage, "prompt_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0
-                            call2_comp = getattr(completion.usage, "completion_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0
-                            prompt_tokens += call2_prompt
-                            completion_tokens += call2_comp
+                            try:
+                                completion = client_c2.chat.completions.create(
+                                    model=model_name,
+                                    messages=messages_copy,
+                                    temperature=0.1,
+                                    max_tokens=800,
+                                )
+                                llm_calls += 1
+                                call2_prompt = getattr(completion.usage, "prompt_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0
+                                call2_comp = getattr(completion.usage, "completion_tokens", 0) or 0 if hasattr(completion, "usage") and completion.usage else 0
+                                prompt_tokens += call2_prompt
+                                completion_tokens += call2_comp
 
-                            latency_tool = time.time() - t_tool_start
-                            call_logs_this_turn.append({
-                                "provider": provider,
-                                "model": model_name,
-                                "masked_key_id": active_key.masked_id,
-                                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                                "latency_sec": round(latency_tool, 2),
-                                "status": "success",
-                                "prompt_tokens": call2_prompt,
-                                "completion_tokens": call2_comp,
-                            })
-                            self.api_call_logs.append(call_logs_this_turn[-1])
-                            active_key.failure_count = 0
-                            setattr(active_key, "tpm_retries", 0)
-                            answer_text = completion.choices[0].message.content or ""
+                                latency_tool = time.time() - t_tool_start
+                                call_logs_this_turn.append({
+                                    "provider": provider,
+                                    "model": model_name,
+                                    "masked_key_id": active_key.masked_id,
+                                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "latency_sec": round(latency_tool, 2),
+                                    "status": "success",
+                                    "prompt_tokens": call2_prompt,
+                                    "completion_tokens": call2_comp,
+                                })
+                                self.api_call_logs.append(call_logs_this_turn[-1])
+                                active_key.failure_count = 0
+                                setattr(active_key, "tpm_retries", 0)
+                                answer_text = completion.choices[0].message.content or ""
+                            except Exception as c2_err:
+                                logger.warning("Call 2 failed or timed out (%s). Falling back immediately to template answer.", c2_err)
+                                answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                                answer_path = "template_fallback"
                     else:
                         answer_text = choice.message.content or ""
 
@@ -1816,7 +1823,8 @@ class CopilotAgent:
                                 return True
                         return False
 
-                    if _check_language_mismatch(answer_text, lang) and llm_calls < 2:
+                    elapsed_lang = time.time() - t_turn_start
+                    if _check_language_mismatch(answer_text, lang) and llm_calls < 2 and elapsed_lang < 5.0 and (7.2 - elapsed_lang) >= 2.0:
                         logger.warning("Language mismatch for %s (target: %s). Requesting rewrite.", model_name, lang)
                         target_name = "English" if lang == "en" else ("Hindi (हिन्दी) in Devanagari script" if lang == "hi" else "Nepali (नेपाली) in Devanagari script")
                         messages_copy.append({"role": "assistant", "content": answer_text})
@@ -1825,27 +1833,38 @@ class CopilotAgent:
                             "content": f"Language mismatch error: Please rewrite your exact response above strictly in {target_name}. Preserve all numbers and place names exactly. Do NOT use any other language.",
                         })
                         t_lang = time.time()
-                        lang_comp = client.chat.completions.create(
-                            model=model_name,
-                            messages=messages_copy,
-                            temperature=0.1,
-                            max_tokens=400,
-                        )
-                        llm_calls += 1
-                        if hasattr(lang_comp, "usage") and lang_comp.usage:
-                            prompt_tokens += getattr(lang_comp.usage, "prompt_tokens", 0) or 0
-                            completion_tokens += getattr(lang_comp.usage, "completion_tokens", 0) or 0
+                        rem_lang = max(0.5, min(2.5, 7.2 - elapsed_lang))
+                        try:
+                            lang_comp = client.chat.completions.create(
+                                model=model_name,
+                                messages=messages_copy,
+                                temperature=0.1,
+                                max_tokens=400,
+                                timeout=rem_lang,
+                            )
+                            llm_calls += 1
+                            if hasattr(lang_comp, "usage") and lang_comp.usage:
+                                prompt_tokens += getattr(lang_comp.usage, "prompt_tokens", 0) or 0
+                                completion_tokens += getattr(lang_comp.usage, "completion_tokens", 0) or 0
 
-                        call_logs_this_turn.append({
-                            "provider": provider,
-                            "model": model_name,
-                            "masked_key_id": active_key.masked_id,
-                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            "latency_sec": round(time.time() - t_lang, 2),
-                            "status": "retry_language",
-                        })
-                        self.api_call_logs.append(call_logs_this_turn[-1])
-                        answer_text = lang_comp.choices[0].message.content or answer_text
+                            call_logs_this_turn.append({
+                                "provider": provider,
+                                "model": model_name,
+                                "masked_key_id": active_key.masked_id,
+                                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                "latency_sec": round(time.time() - t_lang, 2),
+                                "status": "retry_language",
+                            })
+                            self.api_call_logs.append(call_logs_this_turn[-1])
+                            answer_text = lang_comp.choices[0].message.content or answer_text
+                        except Exception as l_err:
+                            logger.warning("Language rewrite failed (%s); using current answer or template.", l_err)
+                            if tool_outputs:
+                                answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                                answer_path = "template_fallback"
+                    elif _check_language_mismatch(answer_text, lang) and tool_outputs:
+                        answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                        answer_path = "template_fallback"
 
                     all_session_outputs = list(tool_outputs)
                     if self.conversation_tool_outputs:
@@ -1875,7 +1894,8 @@ class CopilotAgent:
                             if any(k in query.lower() for k in ["sure", "trust", "limit"]) and tname == "confidence_and_limits":
                                 target_out = o; break
 
-                        if llm_calls < 2:
+                        elapsed_guard = time.time() - t_turn_start
+                        if llm_calls < 2 and elapsed_guard < 5.0 and (7.2 - elapsed_guard) >= 2.0:
                             guard_retried = True
                             target_name = "English" if lang == "en" else ("Hindi (हिन्दी) in Devanagari script" if lang == "hi" else "Nepali (नेपाली) in Devanagari script")
                             messages_copy.append({"role": "assistant", "content": answer_text})
@@ -1888,38 +1908,48 @@ class CopilotAgent:
                                 ),
                             })
                             t_guard = time.time()
-                            retry_comp = client.chat.completions.create(
-                                model=model_name,
-                                messages=messages_copy,
-                                temperature=0.1,
-                                max_tokens=400,
-                            )
-                            llm_calls += 1
-                            if hasattr(retry_comp, "usage") and retry_comp.usage:
-                                prompt_tokens += getattr(retry_comp.usage, "prompt_tokens", 0) or 0
-                                completion_tokens += getattr(retry_comp.usage, "completion_tokens", 0) or 0
+                            rem_guard = max(0.5, min(2.5, 7.2 - elapsed_guard))
+                            try:
+                                retry_comp = client.chat.completions.create(
+                                    model=model_name,
+                                    messages=messages_copy,
+                                    temperature=0.1,
+                                    max_tokens=400,
+                                    timeout=rem_guard,
+                                )
+                                llm_calls += 1
+                                if hasattr(retry_comp, "usage") and retry_comp.usage:
+                                    prompt_tokens += getattr(retry_comp.usage, "prompt_tokens", 0) or 0
+                                    completion_tokens += getattr(retry_comp.usage, "completion_tokens", 0) or 0
 
-                            call_logs_this_turn.append({
-                                "provider": provider,
-                                "model": model_name,
-                                "masked_key_id": active_key.masked_id,
-                                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                                "latency_sec": round(time.time() - t_guard, 2),
-                                "status": "retry_guard",
-                            })
-                            self.api_call_logs.append(call_logs_this_turn[-1])
-                            answer_text = retry_comp.choices[0].message.content or ""
-                            guard_res2 = self.guard.check(answer_text, guard_tool_outputs, query=query)
-                            guard_res = guard_res2
-                            if not guard_res2.is_valid:
+                                call_logs_this_turn.append({
+                                    "provider": provider,
+                                    "model": model_name,
+                                    "masked_key_id": active_key.masked_id,
+                                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "latency_sec": round(time.time() - t_guard, 2),
+                                    "status": "retry_guard",
+                                    "prompt_tokens": getattr(retry_comp.usage, "prompt_tokens", 0) if hasattr(retry_comp, "usage") and retry_comp.usage else 0,
+                                    "completion_tokens": getattr(retry_comp.usage, "completion_tokens", 0) if hasattr(retry_comp, "usage") and retry_comp.usage else 0,
+                                })
+                                self.api_call_logs.append(call_logs_this_turn[-1])
+                                answer_text = retry_comp.choices[0].message.content or ""
+                                guard_res2 = self.guard.check(answer_text, guard_tool_outputs, query=query)
+                                guard_res = guard_res2
+                                if not guard_res2.is_valid:
+                                    answer_text = self.guard.build_template_answer(target_out, lang)
+                                    answer_path = "template_fallback"
+                                    guard_passed = True
+                                else:
+                                    guard_passed = True
+                            except Exception as g_err:
+                                logger.warning("Guard retry call failed (%s); using template.", g_err)
                                 answer_text = self.guard.build_template_answer(target_out, lang)
                                 answer_path = "template_fallback"
                                 guard_passed = True
-                            else:
-                                guard_passed = True
                         else:
-                            # 2 LLM calls reached: deterministic template fallback immediately
-                            logger.info("Guard failed after 2 LLM calls (%s). Falling back to template.", guard_res.error_message)
+                            # 2 LLM calls reached or deadline close: deterministic template fallback immediately
+                            logger.info("Guard failed or deadline reached (elapsed %.2fs, %s). Falling back to template.", elapsed_guard, guard_res.error_message)
                             if tool_outputs:
                                 answer_text = self.guard.build_template_answer(target_out, lang)
                                 answer_path = "template_fallback"
@@ -1941,7 +1971,7 @@ class CopilotAgent:
                         answer_text = self.guard.build_template_answer(tool_outputs[-1], lang)
                         answer_path = "template_fallback"
 
-                    turn_latency = round(time.time() - t_start, 2)
+                    turn_latency = round(time.time() - t_turn_start, 2)
                     return AgentResponse(
                         text=answer_text,
                         tools_called=tools_called,
@@ -1971,10 +2001,30 @@ class CopilotAgent:
                         "model": model_name,
                         "masked_key_id": active_key.masked_id,
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "latency_sec": round(time.time() - t_start, 2),
+                        "latency_sec": round(time.time() - t_turn_start, 2),
                         "status": f"error: {err_str[:60]}",
                     })
                     self.api_call_logs.append(call_logs_this_turn[-1])
+
+                    # If tools were already executed and endpoint failed or timed out, return template answer immediately!
+                    if tool_outputs:
+                        logger.info("Endpoint error after tools executed (%s); returning grounded template answer immediately to preserve <8.0s budget.", err_str[:60])
+                        answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                        return AgentResponse(
+                            text=answer_text,
+                            tools_called=tools_called,
+                            tool_outputs=tool_outputs,
+                            guard_passed=True,
+                            guard_retried=False,
+                            language=lang,
+                            active_settlement=self.active_settlement,
+                            api_call_logs=call_logs_this_turn,
+                            provider=provider,
+                            model=model_name,
+                            masked_key_id=active_key.masked_id,
+                            answer_path="template_fallback",
+                            turn_latency_sec=round(time.time() - t_turn_start, 2),
+                        )
 
                     if "429" in err_str or "rate limit" in err_str.lower() or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
                         logger.warning(
