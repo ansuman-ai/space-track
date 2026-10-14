@@ -279,9 +279,35 @@ class SitRepGenerator:
         osm_id = best_single.get("osm_id", "") if best_single else ""
         len_m = best_single.get("total_destroyed_length_m", 0.0) if best_single else 0.0
 
+        road_label = ""
+        roads_file = Path(self.store.run_dir) / "processed" / "roads_graded.geojson"
+        if roads_file.exists() and osm_id:
+            try:
+                r_data = json.loads(roads_file.read_text())
+                for feat in r_data.get("features", []):
+                    props = feat.get("properties", {})
+                    oid = props.get("@osmId") or props.get("osm_id") or ""
+                    if oid == osm_id:
+                        rname = props.get("name:en") or props.get("name")
+                        rref = props.get("ref")
+                        if rname and any(k in rname.lower() for k in ["pasang", "laahamu", "lhamu"]):
+                            rname = "Pasang Lhamu Highway"
+                        if rname and rref:
+                            road_label = f"{rname} ({rref})"
+                        elif rname:
+                            road_label = rname
+                        elif rref:
+                            road_label = rref
+                        break
+            except Exception:
+                pass
+
+        label_prefix = f"{road_label}, " if road_label else ""
+        m_len_str = f"{round(len_m)} m"
+
         if s_rec > 0:
-            single_repair_en = f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
-            single_repair_ne = f"सबैभन्दा प्रभावकारी एकल मर्मत: {osm_id}, {len_m:.1f} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
+            single_repair_en = f"Best single repair: {label_prefix}{osm_id}, {m_len_str} -> {s_rec} settlements ({b_rec} buildings)"
+            single_repair_ne = f"सबैभन्दा प्रभावकारी एकल मर्मत: {label_prefix}{osm_id}, {round(len_m)} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
         else:
             single_repair_en = "No single repair reconnects a settlement on its own"
             single_repair_ne = "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"

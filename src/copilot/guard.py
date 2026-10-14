@@ -797,11 +797,13 @@ class NumberGuard:
             osm_id = best_single.get("osm_id", "")
             len_m = best_single.get("total_destroyed_length_m", 0.0)
             s_rec = best_single.get("settlements_regained_if_only_repaired", 0)
-            b_rec = best_single.get("buildings_regained_if_only_repaired", 0)
+            road_label = best_single.get("road_label", "")
+            label_prefix = f"{road_label}, " if road_label else ""
+            m_len_str = f"{round(len_m)} m"
 
             if lang == "ne":
                 ne_single = (
-                    f"सबैभन्दा प्रभावकारी एकल मर्मत: {osm_id}, {len_m:.1f} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
+                    f"सबैभन्दा प्रभावकारी एकल मर्मत: {label_prefix}{osm_id}, {round(len_m)} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
                     if s_restores
                     else "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"
                 )
@@ -812,7 +814,7 @@ class NumberGuard:
                 )
             elif lang == "hi":
                 hi_single = (
-                    f"सर्वश्रेष्ठ एकल मरम्मत: {osm_id}, {len_m:.1f} मी -> {s_rec} बस्तियाँ ({b_rec} भवन)"
+                    f"सर्वश्रेष्ठ एकल मरम्मत: {label_prefix}{osm_id}, {round(len_m)} मी -> {s_rec} बस्तियाँ ({b_rec} भवन)"
                     if s_restores
                     else "कोई भी एकल मरम्मत अकेले किसी बस्ती तक पहुँच बहाल नहीं करती"
                 )
@@ -823,7 +825,7 @@ class NumberGuard:
                 )
             else:
                 en_single = s_sentence or (
-                    f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+                    f"Best single repair: {label_prefix}{osm_id}, {m_len_str} -> {s_rec} settlements ({b_rec} buildings)"
                     if s_restores
                     else "No single repair reconnects a settlement on its own"
                 )

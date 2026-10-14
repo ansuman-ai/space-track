@@ -436,6 +436,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     veh_pess_cut = cutoff_summary.get("vehicle", {}).get("pessimistic", {}).get("cut_off_count", 0)
     walk_opt_cut = cutoff_summary.get("walking", {}).get("optimistic", {}).get("cut_off_count", 0)
     walk_pess_cut = cutoff_summary.get("walking", {}).get("pessimistic", {}).get("cut_off_count", 0)
+    connected_unverified = cutoff_summary.get("vehicle", {}).get("optimistic", {}).get("connected_unverified_count", 0)
 
     # Calculate no-ground-access settlements (both vehicle and walking severed)
     both_cut_opt = 0
@@ -496,15 +497,41 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
                 b_rec = top_single.get("buildings_regained_if_only_repaired", 0)
                 osm_id = top_single.get("osm_id", "")
                 m_len = top_single.get("total_destroyed_length_m", 0.0)
+
+                road_label = ""
+                roads_file = routing.parent / "roads_graded.geojson"
+                if roads_file.exists():
+                    try:
+                        r_data = json.loads(roads_file.read_text())
+                        for feat in r_data.get("features", []):
+                            props = feat.get("properties", {})
+                            oid = props.get("@osmId") or props.get("osm_id") or ""
+                            if oid == osm_id:
+                                rname = props.get("name:en") or props.get("name")
+                                rref = props.get("ref")
+                                if rname and any(k in rname.lower() for k in ["pasang", "laahamu", "lhamu"]):
+                                    rname = "Pasang Lhamu Highway"
+                                if rname and rref:
+                                    road_label = f"{rname} ({rref})"
+                                elif rname:
+                                    road_label = rname
+                                elif rref:
+                                    road_label = rref
+                                break
+                    except Exception:
+                        pass
+
+                label_prefix = f"{road_label}, " if road_label else ""
                 best_single_repair = {
                     "osm_id": osm_id,
+                    "road_label": road_label,
                     "length_m": m_len,
                     "settlements_reconnected": s_rec,
                     "buildings_reconnected": b_rec,
                     "reconnects_settlements": s_rec > 0,
                 }
                 if s_rec > 0:
-                    single_repair_sentence = f"Best single repair: {osm_id}, {m_len:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+                    single_repair_sentence = f"Best single repair: {label_prefix}{osm_id}, {round(m_len)} m -> {s_rec} settlements ({b_rec} buildings)"
                 else:
                     single_repair_sentence = "No single repair reconnects a settlement on its own"
         except Exception:
@@ -564,7 +591,8 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             "walking_optimistic": walk_opt_cut,
             "walking_pessimistic": walk_pess_cut,
             "no_ground_access_optimistic": both_cut_opt,
-            "no_ground_access_pessimistic": both_cut_pess
+            "no_ground_access_pessimistic": both_cut_pess,
+            "connected_unverified": connected_unverified
         },
         "repair_package_1": {
             "has_actionable_package": has_actionable,

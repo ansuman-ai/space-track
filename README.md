@@ -156,6 +156,42 @@ A fresh cold Trishuli pipeline execution with `--no-cache` and empty caches was 
 
 ---
 
+## Copilot Assistant
+
+The disaster assessment Copilot provides interactive natural-language querying of damage statistics, road blockages, bridge outages, cut-off settlements, and prioritized repair corridors.
+
+### Operating Modes
+
+1. **Offline Mode (Default / Zero-Config)**:
+   - Works immediately out of the box **without any API key or external internet access**.
+   - Backed by a deterministic, grounded rule-and-template synthesis engine running against pipeline output files (`damage_summary.json`, `cutoff_summary.json`, `repair_packages.json`, etc.).
+   - Responses generated in offline mode are explicitly labelled with `[ANSWERED IN OFFLINE MODE]` in the chat interface.
+
+2. **Live LLM Mode**:
+   - Provides tool-calling conversational interaction in English, Nepali (नेपाली), and Hindi (हिन्दी).
+   - Enforces a strict two-pass `NumberGuard` that verifies every quantitative claim against tool output payloads, instantly rejecting hallucinations.
+   - Requires the user to provide their own API key(s) in a local `.env` file at the repository root.
+
+### Supported Providers & Environment Variables
+
+Place your keys in `.env` (comma-separated if using multiple keys for automatic rotation):
+
+| Provider | Environment Variable | Key Format | Default Models |
+| :--- | :--- | :--- | :--- |
+| **Groq** | `GROQ_API_KEYS` (or `GROQ_API_KEY`) | `gsk_...` | `openai/gpt-oss-120b`, `openai/gpt-oss-20b` |
+| **Google Gemini** | `GEMINI_API_KEYS` (or `GEMINI_API_KEY`) | `AQ....` / `AIza...` | `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite` |
+| **OpenRouter** | `OPENROUTER_API_KEYS` (or `OPENROUTER_API_KEY`, `PLATFORM_API_KEY`) | `sk-or-...` | `openai/gpt-4o-mini` |
+
+> [!CAUTION]
+> **Never commit your `.env` file.** `.env` is ignored by `.gitignore`. Do not commit, log, or push API keys to any git repository.
+
+### Key Rotation & Fast Failover
+- **Intra-Provider Rotation**: If an active API key encounters a 429 rate limit or quota exhaustion, Copilot automatically rotates to the next active key for the same provider immediately before failing over to the next provider.
+- **Provider Failover Order**: `Groq` $\to$ `Gemini` $\to$ `OpenRouter` $\to$ `Offline Mode`.
+- **Latency Protection**: Individual provider calls timeout after 6.0 s; whole-turn latency is strictly capped at 8.0 s before falling back cleanly to offline synthesis.
+
+---
+
 ## Installation & Build
 
 ### 1. Requirements

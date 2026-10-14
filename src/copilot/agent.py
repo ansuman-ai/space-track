@@ -651,13 +651,15 @@ class CopilotAgent:
         if _has_kw(["paani kab", "pani kab", "kab aaya", "flood arrive", "कहिले आयो", "कहिल्यै आयो"]):
             out = self.tools.event_summary()
             self.conversation_tool_outputs.append(out)
+            ev_date = self.store.get_value("event.date", "not recorded")
+            opt_date = self.store.get_value("limitations.optical_evidence_date", ev_date)
             text = (
-                "बाढी आउने यकिन समय (hourly timing) तथ्याङ्कमा उपलब्ध छैन। यद्यपि, घटना मिति 2026-08-26 हो र अप्टिकल स्याटेलाइट प्रमाण मिति 2026-08-27 (घटनाको १ दिनपछि) को हो।"
+                f"बाढी आउने यकिन समय (hourly timing) तथ्याङ्कमा उपलब्ध छैन। यद्यपि, घटना मिति {ev_date} हो र अप्टिकल स्याटेलाइट प्रमाण मिति {opt_date} को हो।"
                 if lang == "ne"
                 else (
-                    "बाढ़ आने का सटीक घंटा/समय (hourly timing) डेटा में दर्ज नहीं है। हालांकि, घटना की तिथि 2026-08-26 है और ऑप्टिकल उपग्रह साक्ष्य 2026-08-27 (घटना के 1 दिन बाद) की है।"
+                    f"बाढ़ आने का सटीक घंटा/समय (hourly timing) डेटा में दर्ज नहीं है। हालांकि, घटना की तिथि {ev_date} है और ऑप्टिकल उपग्रह साक्ष्य {opt_date} की है।"
                     if lang == "hi"
-                    else "Exact hourly flood onset timing is not recorded in the pipeline data. However, the event date is 2026-08-26, and the optical satellite verification image was acquired on 2026-08-27 (1 day after the event)."
+                    else f"Exact hourly flood onset timing is not recorded in the pipeline data. However, the event date is {ev_date}, and the optical satellite verification image was acquired on {opt_date}."
                 )
             )
             return AgentResponse(
@@ -840,11 +842,21 @@ class CopilotAgent:
             br_dest = m.get("bridges_destroyed", "not computed")
             cut_c = m.get("cut_off_settlements", "not computed")
             ev_date = out.get("event_date", "not computed")
+            def _to_deva(val):
+                s = str(val)
+                table = str.maketrans("0123456789", "०१२३४५६७८९")
+                return s.translate(table)
+
+            b_aff_deva = _to_deva(b_aff)
+            b_dest_deva = _to_deva(b_dest)
+            br_dest_deva = _to_deva(br_dest)
+            cut_c_deva = _to_deva(cut_c)
+
             text = (
                 f"प्रमुख जिल्ला अधिकारीका लागि संक्षिप्त स्थिति सारांश ({ev_date}):\n"
-                f"• कुल २२५ ({b_aff}) भवनहरू प्रभावित (१०७ / {b_dest} पूर्ण नष्ट) भएका छन्।\n"
-                f"• १२ ({br_dest}) वटा मुख्य पुलहरू नष्ट भई यातायात अवरुद्ध भएको छ।\n"
-                f"• कुल ४४ ({cut_c}) बस्तीहरू सडक सम्पर्कबाट विच्छेद भएका छन् र तत्काल उद्धार आवश्यक छ।"
+                f"• कुल {b_aff_deva} ({b_aff}) भवनहरू प्रभावित ({b_dest_deva} / {b_dest} पूर्ण नष्ट) भएका छन्।\n"
+                f"• {br_dest_deva} ({br_dest}) वटा मुख्य पुलहरू नष्ट भई यातायात अवरुद्ध भएको छ।\n"
+                f"• कुल {cut_c_deva} ({cut_c}) बस्तीहरू सडक सम्पर्कबाट विच्छेद भएका छन् र तत्काल उद्धार आवश्यक छ।"
             )
             return AgentResponse(
                 text=text,
@@ -1651,8 +1663,8 @@ class CopilotAgent:
                 return resp
 
             while True:
-                if time.time() - t_turn_start > 9.5:
-                    logger.warning("9.5-second LLM turn deadline exceeded inside loop; moving to offline.")
+                if time.time() - t_turn_start > 7.5:
+                    logger.warning("7.5-second LLM turn deadline reached inside loop; moving to offline.")
                     break
 
                 active_key = self.key_pool.get_active_key(provider)
@@ -1660,7 +1672,7 @@ class CopilotAgent:
                     logger.warning("No active keys for provider %s. Failing over to next endpoint.", provider)
                     break
 
-                rem_timeout = max(1.0, min(6.0, 10.0 - (time.time() - t_turn_start)))
+                rem_timeout = max(0.5, min(6.0, 7.8 - (time.time() - t_turn_start)))
                 client = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_timeout)
                 tools_called: List[str] = []
                 tool_outputs: List[Dict[str, Any]] = []
@@ -1745,13 +1757,13 @@ class CopilotAgent:
                                 "content": json.dumps(out_payload, ensure_ascii=False),
                             })
 
-                        if time.time() - t_turn_start > 8.0:
-                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn under 10s.", time.time() - t_turn_start)
+                        if time.time() - t_turn_start > 6.0:
+                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn under 8.0s.", time.time() - t_turn_start)
                             answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
                             answer_path = "template_fallback"
                         else:
                             t_tool_start = time.time()
-                            rem_c2 = max(1.0, min(6.0, 9.8 - (time.time() - t_turn_start)))
+                            rem_c2 = max(0.5, min(6.0, 7.8 - (time.time() - t_turn_start)))
                             client_c2 = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_c2)
                             completion = client_c2.chat.completions.create(
                                 model=model_name,
@@ -1966,16 +1978,23 @@ class CopilotAgent:
 
                     if "429" in err_str or "rate limit" in err_str.lower() or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
                         logger.warning(
-                            "Rate limit / Quota on %s:%s (key %s). Marking exhausted for 24h and failing over immediately (< 3s).",
+                            "Rate limit / Quota on %s:%s (key %s). Marking exhausted for 24h.",
                             provider, model_name, active_key.masked_id
                         )
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="429 rate limit or quota exceeded", cooldown_s=86400.0)
+                        if self.key_pool.get_active_key(provider):
+                            logger.info("Rotating immediately to next active key for provider %s.", provider)
+                            continue
+                        logger.warning("All keys for provider %s exhausted. Failing over to next provider.", provider)
                         break
                     elif any(c in err_str.lower() for c in ["401", "invalid api key", "invalid auth key", "api_key_invalid", "unauthorized"]):
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="401 Invalid API Key")
                         continue
                     elif "402" in err_str or "Payment Required" in err_str:
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="402 Payment Required", cooldown_s=86400.0)
+                        if self.key_pool.get_active_key(provider):
+                            logger.info("Rotating immediately to next active key for provider %s.", provider)
+                            continue
                         break
                     elif any(c in err_str for c in ["404", "model_not_found", "model_decommissioned", "does not exist", "not found"]):
                         logger.warning("Model %s on provider %s returned 404/not found. Failing over to next endpoint.", model_name, provider)
@@ -1985,9 +2004,13 @@ class CopilotAgent:
                         break
                     elif "413" in err_str or "request too large" in err_str.lower() or "tpm" in err_str.lower():
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="413 request too large / TPM limit", cooldown_s=86400.0)
+                        if self.key_pool.get_active_key(provider):
+                            logger.info("Rotating immediately to next active key for provider %s.", provider)
+                            continue
                         break
                     elif any(c in err_str.lower() for c in ["timeout", "timed out", "deadline"]):
-                        logger.warning("Call to %s:%s (key %s) timed out (%s). Moving to next endpoint.", provider, model_name, active_key.masked_id, err_str[:80])
+                        dur = round(time.time() - t_start, 2)
+                        logger.warning("Provider %s (model %s, key %s) was slow / timed out (%.2fs). Moving to next endpoint.", provider, model_name, active_key.masked_id, dur)
                         break
                     else:
                         logger.warning("Call to %s:%s (key %s) failed with %s. Moving to next provider.", provider, model_name, active_key.masked_id, err_str[:80])

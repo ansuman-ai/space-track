@@ -1438,7 +1438,7 @@ function updateSidePanel(data) {
 
   document.getElementById("val-br-possible").textContent = (isFlat ? (br.possibly_flooded || 0) : (br.possibly_damaged || 0)).toLocaleString();
   document.getElementById("lbl-row-br-possible").textContent = isFlat ? "Possibly flooded" : "Possibly damaged";
-  document.getElementById("val-br-total").textContent = (br.total_assessed || 27).toLocaleString();
+  document.getElementById("val-br-total").textContent = (br.total_assessed || 0).toLocaleString();
 
   document.getElementById("val-r-destroyed").textContent = `${(r.destroyed_km !== undefined ? r.destroyed_km.toFixed(1) : "0.0")} km`;
   document.getElementById("lbl-row-r-destroyed").textContent = isFlat ? "Flooded / impassable" : "Destroyed";
@@ -1623,8 +1623,9 @@ function updateAccessList() {
 
   // Update Grey Note Box
   const rCloud = currentRunData.metrics.roads_km.unverified_km || 0;
+  const cloudSettlements = (m.cutoffs && m.cutoffs.connected_unverified !== undefined) ? m.cutoffs.connected_unverified : 0;
   document.getElementById("access-cloud-note").textContent =
-    `23 other settlements look connected, but only through roads under cloud (${rCloud} km obscured). They are not counted as cut off.`;
+    `${cloudSettlements} other settlements look connected, but only through roads under cloud (${rCloud} km obscured). They are not counted as cut off.`;
 }
 
 function formatSettlementDisplayName(p, coords) {
