@@ -48,8 +48,8 @@ def run_evaluation(
     agents: Dict[str, CopilotAgent] = {}
 
     run_aliases = {
-        "test_A_trishuli": runs_root / "test_A_cold_final2_run1",
-        "test_B_melamchi": runs_root / "grid_0.55_B",
+        "test_A_trishuli": runs_root / "test_A_cold_verify",
+        "test_B_melamchi": runs_root / "test_B_cold_verify",
     }
 
     for run_name in ["test_A_trishuli", "test_B_melamchi"]:

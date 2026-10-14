@@ -1210,7 +1210,7 @@ def list_runs(show_all: bool = Query(False)):
 
     runs = []
     for item in RUNS_DIR.iterdir():
-        if not item.is_dir():
+        if not item.is_dir() or item.name.startswith("_") or item.name.startswith("."):
             continue
         if (item / "run_summary.json").exists():
             meta = get_run_metadata(item)
@@ -1218,8 +1218,7 @@ def list_runs(show_all: bool = Query(False)):
                 continue
 
             if not show_all:
-                is_user_run = item.name.startswith("run_") or (item / "status.json").exists()
-                if (meta["id"] in verified_map or is_user_run) and meta["status"] in ["COMPLETED", "DEGRADED"]:
+                if meta["id"] in verified_map and meta["status"] in ["COMPLETED", "DEGRADED"]:
                     runs.append(meta)
             else:
                 runs.append(meta)

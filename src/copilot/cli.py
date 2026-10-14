@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run-dir",
         type=str,
-        default="/home/zeus/Downloads/project1/runs/test_A_trishuli",
+        default="/home/zeus/Downloads/project1/runs/test_A_cold_verify",
         help="Path to pipeline run output directory",
     )
     parser.add_argument(

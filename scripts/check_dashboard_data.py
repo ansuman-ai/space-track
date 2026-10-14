@@ -296,11 +296,100 @@ def verify_no_cross_run_leakage() -> bool:
     return True
 
 
+def verify_canonical_manifest_numbers() -> bool:
+    """
+    For each verified run in runs_manifest.json, asserts that key numbers shown by
+    the dashboard API and the copilot tool engine strictly equal the canonical files on disk.
+    (e.g., Trishuli 107/12/44/4, Melamchi 72/4/5/6 ...)
+    """
+    print("\n=======================================================")
+    print("VERIFYING CANONICAL NUMBERS (API + COPILOT == DISK JSON)")
+    print("=======================================================")
+    from src.dashboard.app import load_runs_manifest
+    from src.copilot.facts import FactStore
+    from src.copilot.tools import CopilotTools
+
+    manifest = load_runs_manifest()
+    verified_runs = manifest.get("verified_runs", {})
+    if not verified_runs:
+        print("FAILED: No verified runs found in manifest!")
+        return False
+
+    errors = []
+    for rid in verified_runs:
+        r_dir = RUNS_DIR / rid
+        if not r_dir.exists():
+            errors.append(f"Verified run {rid} does not exist in {RUNS_DIR}")
+            continue
+
+        meta = get_run_metadata(r_dir)
+        if not meta:
+            errors.append(f"Could not load metadata for {rid}")
+            continue
+        m = meta["metrics"]
+
+        fs = FactStore(r_dir)
+        tools = CopilotTools(fs)
+        d_out = tools.damage_summary()
+
+        b_dest = d_out.get("buildings", {}).get("destroyed", 0)
+        br_dest = d_out.get("bridges", {}).get("destroyed", 0)
+
+        dmg_p = r_dir / "processed" / "damage_summary.json"
+        dmg = json.loads(dmg_p.read_text()) if dmg_p.exists() else {}
+        exp_b = dmg.get("buildings", {}).get("damage_grade_counts", {}).get("Destroyed", 0)
+        exp_br = dmg.get("bridges", {}).get("damage_grade_counts", {}).get("Destroyed", 0)
+
+        cut_p = r_dir / "processed" / "routing" / "cutoff_summary.json"
+        cut = json.loads(cut_p.read_text()) if cut_p.exists() else {}
+        exp_v = cut.get("vehicle", {}).get("optimistic", {}).get("cut_off_count", 0)
+        exp_w = cut.get("walking", {}).get("optimistic", {}).get("cut_off_count", 0)
+
+        api_b = m["buildings"]["destroyed"]
+        api_br = m["bridges"]["destroyed"]
+        api_v = m["cutoffs"]["vehicle_optimistic"]
+        api_w = m["cutoffs"]["walking_optimistic"]
+
+        # 1. API matches JSON
+        if api_b != exp_b:
+            errors.append(f"{rid}: API bld destroyed {api_b} != JSON {exp_b}")
+        if api_br != exp_br:
+            errors.append(f"{rid}: API brg destroyed {api_br} != JSON {exp_br}")
+        if api_v != exp_v:
+            errors.append(f"{rid}: API veh cutoff {api_v} != JSON {exp_v}")
+        if api_w != exp_w:
+            errors.append(f"{rid}: API walk cutoff {api_w} != JSON {exp_w}")
+
+        # 2. Copilot matches JSON
+        if b_dest != exp_b:
+            errors.append(f"{rid}: Copilot bld destroyed {b_dest} != JSON {exp_b}")
+        if br_dest != exp_br:
+            errors.append(f"{rid}: Copilot brg destroyed {br_dest} != JSON {exp_br}")
+
+        # 3. Specific canonical expectations
+        if rid == "test_A_cold_verify":
+            if (api_b, api_br, api_v, api_w) != (107, 12, 44, 4):
+                errors.append(f"Trishuli canonical mismatch: expected 107/12/44/4, got {api_b}/{api_br}/{api_v}/{api_w}")
+        elif rid == "test_B_cold_verify":
+            if (api_b, api_br, api_v) != (72, 4, 5):
+                errors.append(f"Melamchi canonical mismatch: expected 72/4/5, got {api_b}/{api_br}/{api_v}")
+
+        print(f"✓ {rid:42}: bld={api_b}, brg={api_br}, cut_veh={api_v}, cut_walk={api_w} (API == Copilot == Disk JSON)")
+
+    if errors:
+        print(f"FAILED with {len(errors)} canonical verification error(s):")
+        for err in errors:
+            print(f"  - {err}")
+        return False
+    print("ALL CANONICAL VERIFIED RUNS MATCHED BIT-FOR-BIT ACROSS API AND COPILOT.")
+    return True
+
+
 def main():
     target_runs = ["test_A_cold_verify", "test_B_cold_verify", "practice_assam_event"]
     
-    # If other runs exist in runs/, verify them too if they have run_summary.json
-    all_runs = [d for d in RUNS_DIR.iterdir() if d.is_dir() and (d / "run_summary.json").exists()]
+    # If other runs exist in runs/, verify them too if they have run_summary.json (excluding _archive)
+    all_runs = [d for d in RUNS_DIR.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "run_summary.json").exists()]
     
     # Run the core 3 target runs first, plus any others
     to_verify = [RUNS_DIR / r for r in target_runs if (RUNS_DIR / r).exists()]
@@ -322,6 +411,11 @@ def main():
     # Also verify strict data isolation across runs
     isolation_ok = verify_no_cross_run_leakage()
     if not isolation_ok:
+        failed += 1
+
+    # Also verify canonical manifest numbers against API and Copilot
+    canonical_ok = verify_canonical_manifest_numbers()
+    if not canonical_ok:
         failed += 1
 
     print("\n=======================================================")

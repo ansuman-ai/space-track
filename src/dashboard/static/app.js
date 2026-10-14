@@ -837,7 +837,7 @@ function populatePreviousAssessments() {
 // ==========================================================================
 async function loadRunsList() {
   try {
-    const res = await fetch("/api/runs?show_all=true");
+    const res = await fetch("/api/runs");
     allRunsList = await res.json();
 
     const select = document.getElementById("modal-run-select");
