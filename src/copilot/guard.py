@@ -250,6 +250,8 @@ class NumberGuard:
                 base_cat = "building"
             elif "cutoff" in tname or "rescue" in tname or "settlement" in tname:
                 base_cat = "settlement"
+            elif "downstream" in tname:
+                base_cat = "settlement"
             elif "repair" in tname or "road" in tname:
                 base_cat = "distance"
             _walk_category(out, base_cat)
@@ -888,6 +890,37 @@ class NumberGuard:
                     f"- Hydraulically inferred hazard area: {inferred} km²\n"
                     f"- Population figures are not available in OpenStreetMap baseline data."
                 )
+
+        elif tool_name == "downstream_settlements":
+            q_place = tool_output.get("query_place", "the selected point")
+            total_km = tool_output.get("total_downstream_km", 0.0)
+            settlements = tool_output.get("downstream_settlements", [])
+            buf_m = tool_output.get("buffer_m", 500.0)
+
+            if not settlements:
+                if lang == "ne":
+                    return f"{q_place} बाट बग्ने नदी बहाव मार्ग (कुल {total_km} कि.मी.) मा {buf_m:.0f} मिटर भित्र कुनै बस्ती भेटिएन।"
+                elif lang == "hi":
+                    return f"{q_place} से डाउनस्ट्रीम प्रवाह पथ (कुल {total_km} किमी) में {buf_m:.0f} मीटर के भीतर कोई बस्ती नहीं मिली।"
+                return f"No settlements found within {buf_m:.0f} m of the downstream flow path from {q_place} (path length: {total_km} km to AOI edge)."
+
+            lines_en = [f"Settlements downstream of {q_place} (within {buf_m:.0f} m of D8 drainage path, total {total_km} km to AOI edge):"]
+            for idx, s in enumerate(settlements):
+                lines_en.append(f"  {idx+1}. {s['name']} - {s['distance_downstream_km']} km downstream (offset: {s['lateral_offset_m']} m), {s['building_count']} buildings, status: {s['access_status']}")
+
+            lines_ne = [f"{q_place} बाट बग्ने नदी बहाव मार्ग (कुल {total_km} कि.मी., {buf_m:.0f} मिटर परिधि) मुनिका बस्तीहरू:"]
+            for idx, s in enumerate(settlements):
+                lines_ne.append(f"  {idx+1}. {s['name']} - {s['distance_downstream_km']} कि.मी. तल ({s['lateral_offset_m']} मि.), {s['building_count']} भवनहरू, स्थिति: {s['access_status']}")
+
+            lines_hi = [f"{q_place} से डाउनस्ट्रीम प्रवाह मार्ग (कुल {total_km} किमी, {buf_m:.0f} मीटर दायरा) की बस्तियाँ:"]
+            for idx, s in enumerate(settlements):
+                lines_hi.append(f"  {idx+1}. {s['name']} - {s['distance_downstream_km']} किमी नीचे ({s['lateral_offset_m']} मी), {s['building_count']} भवन, स्थिति: {s['access_status']}")
+
+            if lang == "ne":
+                return "\n".join(lines_ne)
+            elif lang == "hi":
+                return "\n".join(lines_hi)
+            return "\n".join(lines_en)
 
         # Fallback generic string
         return "Information grounded in satellite pipeline outputs: " + str(tool_output)

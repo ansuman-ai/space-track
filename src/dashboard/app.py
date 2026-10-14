@@ -1369,6 +1369,56 @@ def get_repair_packages(run_id: str):
     return JSONResponse(content=json.loads(pkg_file.read_text()))
 
 
+@app.get("/api/runs/{run_id}/flowpath")
+def get_flowpath(
+    run_id: str,
+    lon: float = Query(..., description="Starting longitude"),
+    lat: float = Query(..., description="Starting latitude"),
+    buffer_m: float = Query(500.0, description="Settlement buffer distance in meters"),
+):
+    """Traces D8 downstream flow path from (lon, lat) to AOI edge and identifies settlements within buffer_m."""
+    run_folder = validate_run_id(run_id)
+    dem_p = run_folder / "raw" / "dem" / "dem_buffered.tif"
+    if not dem_p.exists():
+        dem_p = run_folder / "raw" / "dem" / "dem.tif"
+    if not dem_p.exists():
+        raise HTTPException(status_code=404, detail="DEM raster not available for flow path tracing")
+
+    settlements_p = run_folder / "processed" / "routing" / "settlements.geojson"
+    from src.l1_preprocessing.flow_tracer import compute_d8_flow_path, find_downstream_settlements
+
+    try:
+        path_nodes = compute_d8_flow_path(dem_p, lon, lat)
+        settlements = find_downstream_settlements(path_nodes, settlements_p, buffer_distance_m=buffer_m)
+    except Exception as e:
+        logger.error(f"Error computing flow path: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    coordinates = [[node["lon"], node["lat"]] for node in path_nodes]
+    geojson_feature = {
+        "type": "Feature",
+        "geometry": {
+            "type": "LineString",
+            "coordinates": coordinates,
+        },
+        "properties": {
+            "start_lon": lon,
+            "start_lat": lat,
+            "total_downstream_km": path_nodes[-1]["distance_downstream_km"] if path_nodes else 0.0,
+            "nodes_count": len(path_nodes),
+            "buffer_m": buffer_m,
+        }
+    }
+
+    return {
+        "path_geojson": geojson_feature,
+        "path_nodes": path_nodes,
+        "downstream_settlements": settlements,
+        "total_downstream_km": path_nodes[-1]["distance_downstream_km"] if path_nodes else 0.0,
+        "settlements_count": len(settlements),
+    }
+
+
 @app.get("/api/runs/{run_id}/s2-meta")
 def get_s2_metadata(run_id: str):
     """Returns metadata for Sentinel-2 cloud-masked composite scenes matching run_summary."""

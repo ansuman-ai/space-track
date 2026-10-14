@@ -260,6 +260,22 @@ class CopilotAgent:
             res = self.tools.limitations()
         elif name == "list_runs":
             res = self.tools.list_runs()
+        elif name == "downstream_settlements":
+            buf_val = args.get("buffer_m")
+            b_m = 500.0
+            if buf_val is not None:
+                try:
+                    b_m = float(buf_val)
+                except (ValueError, TypeError):
+                    b_m = 500.0
+            lon_v = args.get("lon")
+            lat_v = args.get("lat")
+            res = self.tools.downstream_settlements(
+                place=args.get("place"),
+                lon=float(lon_v) if lon_v is not None else None,
+                lat=float(lat_v) if lat_v is not None else None,
+                buffer_m=b_m,
+            )
         elif name == "load_run":
             res = self.tools.load_run(run_name=args.get("run_name", ""))
             self.resolver = self.tools.resolver
@@ -948,6 +964,29 @@ class CopilotAgent:
                     return target
             return None
 
+        # 4j. Downstream flow path settlements intent
+        if _has_kw(["downstream", "flowpath", "flow path", "तल्लो तटीय", "निचले"]):
+            target_place = None
+            m_down = re.search(r"\b(?:downstream of|downstream from|downstream|तल्लो तटीय|निचले)\s+([A-Za-z0-9_.\u0900-\u097F\s]+)", query, flags=re.IGNORECASE)
+            if m_down:
+                target_place = m_down.group(1).strip()
+                target_place = re.sub(r"\b(village|villages|settlement|settlements|basti|gaon|in|at|what|which|are|is)\b.*$", "", target_place, flags=re.IGNORECASE).strip()
+                target_place = target_place.rstrip("?.,!")
+            if not target_place:
+                target_place = _extract_area(query)
+
+            out = self.tools.downstream_settlements(place=target_place)
+            self.conversation_tool_outputs.append(out)
+            text = self.guard.build_template_answer(out, lang)
+            return AgentResponse(
+                text=text,
+                tools_called=["downstream_settlements"],
+                tool_outputs=[out],
+                guard_passed=True,
+                guard_retried=False,
+                language=lang,
+            )
+
         # 5. Bridges status intent
         if _has_kw(["bridge", "bridges", "pul", "पुल", "पुलहरू", "पुलों"]):
             area_arg = _extract_area(query)
@@ -1202,6 +1241,8 @@ class CopilotAgent:
         if any(k in q for k in ["run", "event", "melamchi", "sikkim", "assam", "other", "switch", "list", "load"]):
             scores["load_run"] += 12
             scores["list_runs"] += 8
+        if any(k in q for k in ["downstream", "flow", "drainage", "तल्लो", "निचले", "नदी तल", "तट"]):
+            scores["downstream_settlements"] += 14
 
         # Spatial / coordinate checks
         from .names import parse_coordinates_query

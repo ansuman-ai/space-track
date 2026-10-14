@@ -47,6 +47,7 @@
           </button>
           <div class="dropdown-menu hidden" id="more-dropdown-menu">
             <button class="dropdown-item" id="menu-opt-slider">Compare before and after</button>
+            <button class="dropdown-item" id="menu-opt-flowpath">Trace downstream flow</button>
             <button class="dropdown-item" id="menu-opt-lang">नेपाली</button>
             <button class="dropdown-item" id="menu-opt-projector">Projector mode</button>
             <div class="dropdown-divider"></div>
@@ -110,6 +111,12 @@
             </svg>
             <span>N</span>
           </div>
+          <button id="btn-toggle-flowpath" class="btn-map-action" title="Click upstream point to trace D8 downstream flow path">
+            <svg class="map-action-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M8 2v9M4 7l4 4 4-4M3 14h10" />
+            </svg>
+            <span>Flow path</span>
+          </button>
           <button id="btn-toggle-s2-comparison" class="btn-map-action" title="Compare Sentinel-2 before and after imagery">
             <svg class="map-action-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <rect x="2" y="2" width="12" height="12" rx="2" />
@@ -279,6 +286,11 @@
         <!-- Offline Basemap Fallback Notice -->
         <div id="offline-basemap-notice" class="offline-basemap-banner hidden">
           <span>Offline mode: Live OpenStreetMap tiles unavailable. Switched to offline DEM terrain &amp; local OSM baseline.</span>
+        </div>
+
+        <!-- Flow Path Active Notice -->
+        <div id="flowpath-banner" class="offline-basemap-banner hidden" style="background-color: #E0F2FE; border-color: #BAE6FD; color: #0369A1;">
+          <span id="flowpath-banner-text">Flow path mode active: click an upstream point on the map to trace downstream drainage</span>
         </div>
 
         <!-- Bottom Thin White Status Ribbon (24px) -->

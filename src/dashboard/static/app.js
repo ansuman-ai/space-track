@@ -135,6 +135,10 @@ function initMap() {
   map.createPane("s2Pane");
   map.getPane("s2Pane").style.zIndex = 250;
 
+  // 6. Flow Path Tracing Pane (z=450, above hazards, below popups)
+  map.createPane("flowpathPane");
+  map.getPane("flowpathPane").style.zIndex = 450;
+
   // Add default OSM raster tiles to osmTilePane
   baseLayers.osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     pane: "osmTilePane",
@@ -143,6 +147,13 @@ function initMap() {
   }).addTo(map);
 
   baseLayers.offlineGroup = L.layerGroup();
+
+  // Map click listener for D8 flow path tracing
+  map.on("click", (e) => {
+    if (flowpathModeActive) {
+      handleFlowpathMapClick(e);
+    }
+  });
 }
 
 // ==========================================================================
@@ -200,6 +211,22 @@ function initHeaderControls() {
   if (btnMapS2) {
     btnMapS2.addEventListener("click", () => {
       toggleS2Slider(!s2OverlayActive);
+    });
+  }
+
+  // Map Top-Right Flow Path button
+  const btnFlowpath = document.getElementById("btn-toggle-flowpath");
+  if (btnFlowpath) {
+    btnFlowpath.addEventListener("click", () => {
+      toggleFlowpathMode();
+    });
+  }
+
+  const optFlowpath = document.getElementById("menu-opt-flowpath");
+  if (optFlowpath) {
+    optFlowpath.addEventListener("click", () => {
+      if (moreMenu) moreMenu.classList.add("hidden");
+      toggleFlowpathMode();
     });
   }
 
@@ -2273,4 +2300,154 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// ==========================================================================
+// D8 Flow Path Tracing (Bonus)
+// ==========================================================================
+let flowpathModeActive = false;
+let flowpathLayerGroup = null;
+
+function toggleFlowpathMode(forceState) {
+  flowpathModeActive = typeof forceState === "boolean" ? forceState : !flowpathModeActive;
+  const btn = document.getElementById("btn-toggle-flowpath");
+  const banner = document.getElementById("flowpath-banner");
+  const bannerText = document.getElementById("flowpath-banner-text");
+  const mapEl = document.getElementById("map");
+
+  if (btn) {
+    if (flowpathModeActive) {
+      btn.classList.add("active");
+      btn.style.backgroundColor = "#1B2326";
+      btn.style.color = "#FFFFFF";
+    } else {
+      btn.classList.remove("active");
+      btn.style.backgroundColor = "";
+      btn.style.color = "";
+    }
+  }
+
+  if (mapEl) {
+    mapEl.style.cursor = flowpathModeActive ? "crosshair" : "";
+  }
+
+  if (banner) {
+    if (flowpathModeActive) {
+      if (bannerText) {
+        bannerText.textContent = "Flow path mode active: click any point on the map to trace D8 drainage path downstream";
+      }
+      banner.classList.remove("hidden");
+    } else {
+      banner.classList.add("hidden");
+      clearFlowpath();
+    }
+  }
+}
+
+function clearFlowpath() {
+  if (flowpathLayerGroup && map) {
+    flowpathLayerGroup.clearLayers();
+  }
+}
+
+async function handleFlowpathMapClick(e) {
+  if (!flowpathModeActive || !currentRunId) return;
+  const { lat, lng } = e.latlng;
+  const bannerText = document.getElementById("flowpath-banner-text");
+  if (bannerText) {
+    bannerText.textContent = `Tracing D8 downstream flow from (${lat.toFixed(4)}, ${lng.toFixed(4)})...`;
+  }
+
+  try {
+    const res = await fetch(`/api/runs/${currentRunId}/flowpath?lon=${lng}&lat=${lat}&buffer_m=500`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (bannerText) bannerText.textContent = `Flow path failed: ${err.detail || "Server error"}`;
+      return;
+    }
+    const data = await res.json();
+    renderFlowpathResult(lat, lng, data);
+  } catch (err) {
+    console.error("Error tracing flow path:", err);
+    if (bannerText) bannerText.textContent = "Error communicating with server for flow path";
+  }
+}
+
+function renderFlowpathResult(startLat, startLng, data) {
+  if (!flowpathLayerGroup) {
+    flowpathLayerGroup = L.layerGroup({ pane: "flowpathPane" }).addTo(map);
+  } else {
+    flowpathLayerGroup.clearLayers();
+    if (!map.hasLayer(flowpathLayerGroup)) {
+      flowpathLayerGroup.addTo(map);
+    }
+  }
+
+  // 1. Draw start point marker
+  const startMarker = L.circleMarker([startLat, startLng], {
+    pane: "flowpathPane",
+    radius: 7,
+    fillColor: "#00E5FF",
+    color: "#1B2326",
+    weight: 2.5,
+    opacity: 1,
+    fillOpacity: 1
+  });
+  flowpathLayerGroup.addLayer(startMarker);
+
+  // 2. Draw flow path LineString
+  const pathGeoJson = L.geoJSON(data.path_geojson, {
+    pane: "flowpathPane",
+    style: {
+      color: "#00E5FF",
+      weight: 4.5,
+      opacity: 0.9,
+      lineCap: "round",
+      lineJoin: "round"
+    }
+  });
+  flowpathLayerGroup.addLayer(pathGeoJson);
+
+  // 3. Highlight downstream settlements within 500m
+  const settlements = data.downstream_settlements || [];
+  settlements.forEach((s) => {
+    const sMarker = L.circleMarker([s.lat, s.lon], {
+      pane: "flowpathPane",
+      radius: 9,
+      fillColor: "#F59E0B",
+      color: "#1B2326",
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.85
+    });
+
+    const popupContent = `
+      <div style="font-family: var(--font-sans); font-size: 13px; line-height: 1.4;">
+        <strong style="color: #1B2326;">${s.name}</strong><br>
+        <span style="color: var(--text-secondary);">Distance downstream:</span> <b>${s.distance_downstream_km} km</b><br>
+        <span style="color: var(--text-secondary);">Lateral offset:</span> ${s.lateral_offset_m} m from river<br>
+        <span style="color: var(--text-secondary);">Buildings:</span> ${s.building_count}<br>
+        <span style="color: var(--text-secondary);">Access status:</span> ${s.access_status}
+      </div>
+    `;
+    sMarker.bindPopup(popupContent);
+    flowpathLayerGroup.addLayer(sMarker);
+  });
+
+  // 4. Update banner text with summary
+  const bannerText = document.getElementById("flowpath-banner-text");
+  if (bannerText) {
+    bannerText.innerHTML = `Flow path traced: <b>${data.total_downstream_km} km</b> to AOI edge. <b>${settlements.length} settlements</b> within 500 m buffer. Click again to trace another point.`;
+  }
+
+  // 5. Open popup on start marker
+  const startPopupHtml = `
+    <div style="font-family: var(--font-sans); font-size: 13px; line-height: 1.4;">
+      <strong style="color: #0369A1;">D8 Hydraulic Flow Path</strong><br>
+      Total downstream distance: <b>${data.total_downstream_km} km</b><br>
+      Downstream settlements (500m): <b>${settlements.length}</b>
+    </div>
+  `;
+  startMarker.bindPopup(startPopupHtml).openPopup();
+}
+
 

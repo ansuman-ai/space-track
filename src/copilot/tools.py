@@ -1559,6 +1559,79 @@ class CopilotTools:
             "fact_ids": fact_ids,
         }
 
+    def downstream_settlements(
+        self,
+        place: Optional[str] = None,
+        lon: Optional[float] = None,
+        lat: Optional[float] = None,
+        buffer_m: float = 500.0,
+    ) -> Dict[str, Any]:
+        """Compute D8 downstream drainage path and find downstream settlements within buffer_m."""
+        from src.l1_preprocessing.flow_tracer import compute_d8_flow_path, find_downstream_settlements
+
+        # Determine start coordinates
+        start_lon, start_lat = lon, lat
+        resolved_name = place or ""
+
+        if (start_lon is None or start_lat is None) and place:
+            # Resolve place coordinates via resolver or settlement index
+            coord_pt = parse_coordinates_query(place)
+            if coord_pt:
+                start_lat, start_lon = coord_pt
+            else:
+                res = self.resolver.resolve(place)
+                if res.status in ["exact", "fuzzy"] and res.match:
+                    coords = res.match.get("coordinates")
+                    if coords and isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                        start_lon, start_lat = coords[0], coords[1]
+                    else:
+                        start_lon = res.match.get("lon")
+                        start_lat = res.match.get("lat")
+                    resolved_name = res.match.get("name", place)
+                elif res.candidates:
+                    c0 = res.candidates[0]
+                    coords0 = c0.get("coordinates")
+                    if coords0 and isinstance(coords0, (list, tuple)) and len(coords0) >= 2:
+                        start_lon, start_lat = coords0[0], coords0[1]
+                    else:
+                        start_lon = c0.get("lon")
+                        start_lat = c0.get("lat")
+                    resolved_name = c0.get("name", place)
+
+        if start_lon is None or start_lat is None:
+            # Fallback to AOI centroid
+            meta = self.store.metadata
+            bbox = meta.get("bbox", [85.3, 28.1, 85.42, 28.25])
+            start_lon = (bbox[0] + bbox[2]) / 2.0
+            start_lat = (bbox[1] + bbox[3]) / 2.0
+
+        dem_p = self.store.run_dir / "raw" / "dem" / "dem_buffered.tif"
+        if not dem_p.exists():
+            dem_p = self.store.run_dir / "raw" / "dem" / "dem.tif"
+
+        settlements_p = self.store.run_dir / "processed" / "routing" / "settlements.geojson"
+
+        try:
+            path_nodes = compute_d8_flow_path(dem_p, start_lon, start_lat)
+            downstream_list = find_downstream_settlements(path_nodes, settlements_p, buffer_distance_m=buffer_m)
+        except Exception as e:
+            logger.warning("Downstream flow path computation error: %s", e)
+            path_nodes = []
+            downstream_list = []
+
+        total_path_km = path_nodes[-1]["distance_downstream_km"] if path_nodes else 0.0
+
+        return {
+            "tool": "downstream_settlements",
+            "query_place": resolved_name or f"({start_lat:.4f}, {start_lon:.4f})",
+            "start_coordinate": {"lon": round(start_lon, 5), "lat": round(start_lat, 5)},
+            "path_nodes_count": len(path_nodes),
+            "total_downstream_km": round(total_path_km, 2),
+            "buffer_m": buffer_m,
+            "settlements_count": len(downstream_list),
+            "downstream_settlements": downstream_list,
+        }
+
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
     """JSON schemas for tool calling."""
@@ -1655,6 +1728,19 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "type": "object",
                 "properties": {"run_name": {"type": "string", "description": "Name of the run to load."}},
                 "required": ["run_name"],
+            },
+        },
+        {
+            "name": "downstream_settlements",
+            "description": "Trace D8 drainage path downstream from a place or coordinate and list vulnerable downstream settlements within buffer distance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "place": {"type": ["string", "null"], "description": "Starting place name or coordinate string."},
+                    "lon": {"type": ["number", "null"], "description": "Starting longitude."},
+                    "lat": {"type": ["number", "null"], "description": "Starting latitude."},
+                    "buffer_m": {"type": ["number", "null"], "description": "Lateral distance buffer in meters (default 500m)."},
+                },
             },
         },
     ]
