@@ -144,11 +144,12 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
         except Exception as e:
             logger.warning(f"PC STAC query failed: {e}; using direct AWS Open Data Copernicus DEM")
 
-    from .gdal_env import get_shared_gdal_env
+    from .gdal_env import get_shared_gdal_env, log_worker_gdal_env
     for fetch_attempt in range(3):
         opened_datasets = []
         try:
             with get_shared_gdal_env(tag="DEM", AWS_NO_SIGN_REQUEST='YES'):
+                log_worker_gdal_env("DEM", f"fetch_attempt={fetch_attempt+1}")
                 for lat in range(lat_min_int, lat_max_int + 1):
                     for lon in range(lon_min_int, lon_max_int + 1):
                         aws_url = get_aws_dem_tile_url(lat, lon)

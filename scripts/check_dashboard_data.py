@@ -260,7 +260,13 @@ def verify_no_cross_run_leakage() -> bool:
     assert m_a1["metrics"]["repair_package_1"]["reconnects_settlements"] == 19
     assert m_a1["metrics"]["repair_package_1"]["reconnects_buildings"] == 939
     assert "EMSR927" in m_a1["validation_status"]
-    print("✓ Trishuli loaded: 1.08 km², 107 destroyed, 13 bridges, 44 cut-offs, pkg1 reconnects 19/939")
+    obs_a = m_a1["metrics"]["areas"]["observed_km2"]
+    bld_a = m_a1["metrics"]["buildings"]["destroyed"]
+    brg_a = m_a1["metrics"]["bridges"]["destroyed"]
+    cut_a = m_a1["metrics"]["cutoffs"]["vehicle_optimistic"]
+    pkg_s = m_a1["metrics"]["repair_package_1"]["reconnects_settlements"]
+    pkg_b = m_a1["metrics"]["repair_package_1"]["reconnects_buildings"]
+    print(f"✓ Trishuli loaded: {obs_a} km², {bld_a} destroyed, {brg_a} bridges, {cut_a} cut-offs, pkg1 reconnects {pkg_s}/{pkg_b}")
 
     # 2. Switch to Melamchi
     m_b = get_run_metadata(melamchi_dir)
@@ -270,7 +276,11 @@ def verify_no_cross_run_leakage() -> bool:
     # Must NOT retain Trishuli's repair package or cutoffs!
     assert m_b["metrics"]["repair_package_1"]["reconnects_settlements"] != 19, "Leaked Trishuli repair package into Melamchi!"
     assert m_b["metrics"]["repair_package_1"]["reconnects_buildings"] != 939, "Leaked Trishuli buildings count into Melamchi!"
-    print(f"✓ Melamchi loaded: {m_b['metrics']['areas']['observed_km2']} km², 72 destroyed, 4 bridges, 5 cut-offs, 0-element package eliminated (isolated_pre_event excluded)")
+    obs_b = m_b["metrics"]["areas"]["observed_km2"]
+    bld_b = m_b["metrics"]["buildings"]["destroyed"]
+    brg_b = m_b["metrics"]["bridges"]["destroyed"]
+    cut_b = m_b["metrics"]["cutoffs"]["vehicle_optimistic"]
+    print(f"✓ Melamchi loaded: {obs_b} km², {bld_b} destroyed, {brg_b} bridges, {cut_b} cut-offs, 0-element package eliminated (isolated_pre_event excluded)")
 
     # 3. Switch to Assam
     m_c = get_run_metadata(assam_dir)
@@ -280,7 +290,11 @@ def verify_no_cross_run_leakage() -> bool:
     assert m_c["metrics"]["cutoffs"]["vehicle_optimistic"] == 5
     assert m_c["metrics"]["areas"]["observed_km2"] == 17.3577
     assert m_c["metrics"]["repair_package_1"]["reconnects_settlements"] != 19
-    print("✓ Assam loaded: flat_floodplain, 17.36 km², 9 flooded buildings, 5 cut-offs")
+    reg_c = m_c["regime"]
+    obs_c = m_c["metrics"]["areas"]["observed_km2"]
+    fld_c = m_c["metrics"]["buildings"]["flooded"]
+    cut_c = m_c["metrics"]["cutoffs"]["vehicle_optimistic"]
+    print(f"✓ Assam loaded: {reg_c}, {obs_c} km², {fld_c} flooded buildings, {cut_c} cut-offs")
 
     # 4. Switch BACK to Trishuli - assert pristine reload
     m_a2 = get_run_metadata(trishuli_dir)

@@ -15,6 +15,8 @@ import pytest
 from src.copilot.facts import FactStore
 from src.copilot.tools import CopilotTools, clip_linestring_to_circle
 
+repo_root = Path(__file__).resolve().parent.parent
+
 
 def test_linestring_clipping_geometry() -> None:
     """Test pure geometric LineString clipping against circle."""
@@ -58,10 +60,10 @@ def test_road_clipping_geometric_bounds() -> None:
     
     Clipped length inside a 1 km circle must be < 2 * pi * 1 km and <= unclipped length.
     """
+    repo_root = Path(__file__).resolve().parent.parent
     candidate_runs = [
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_verify"),
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_final2_run1"),
-        Path("runs/test_A_cold_verify"),
+        repo_root / "runs" / "test_A_cold_verify",
+        repo_root / "runs" / "test_A_cold_final2_run1",
     ]
     run_dir = next((p for p in candidate_runs if p.exists()), None)
     assert run_dir is not None, "Test run directory not found"
@@ -100,9 +102,8 @@ def test_road_clipping_geometric_bounds() -> None:
 def test_damage_summary_road_clipping() -> None:
     """Verify damage_summary clips road geometries in local queries."""
     candidate_runs = [
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_verify"),
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_final2_run1"),
-        Path("runs/test_A_cold_verify"),
+        repo_root / "runs" / "test_A_cold_verify",
+        repo_root / "runs" / "test_A_cold_final2_run1",
     ]
     run_dir = next((p for p in candidate_runs if p.exists()), None)
     assert run_dir is not None, "Test run directory not found"

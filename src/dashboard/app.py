@@ -354,7 +354,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
     if event_name:
         main_title = event_name
         subtitle = human_label
-        display_label = f"{event_name} — {human_label}"
+        display_label = f"{event_name} — {event_date} ({regime.replace('_', ' ').title()})"
     else:
         main_title = human_label
         subtitle = ""

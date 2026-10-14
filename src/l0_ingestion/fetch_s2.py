@@ -6,6 +6,7 @@ and downloads cropped spectral bands and metadata for active footprints.
 
 import os
 import time
+import random
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Optional
@@ -15,7 +16,7 @@ import rasterio
 from rasterio.windows import from_bounds
 import logging
 
-from .gdal_env import get_shared_gdal_env
+from .gdal_env import get_shared_gdal_env, log_worker_gdal_env
 
 logger = logging.getLogger("fetch_s2")
 
@@ -351,41 +352,48 @@ def fetch_s2(
             if b_src not in assets:
                 return None, None
             raw_href = assets[b_src]['href']
+            base_url = raw_href.split("?")[0] if "?" in raw_href else raw_href
+
+            last_err = None
             for attempt in range(5):
-                # Apply current token or re-sign on retry
-                if "?" in raw_href:
-                    base_url = raw_href.split("?")[0]
-                else:
-                    base_url = raw_href
+                if attempt > 0:
+                    # Exponential backoff with random jitter
+                    backoff = (1.5 ** attempt) + random.uniform(0.5, 1.5)
+                    logger.warning(
+                        f"Retrying S2 band {b_name} for {scene_id[:25]} (attempt {attempt+1}/5) in {backoff:.2f}s "
+                        f"after error: {last_err}"
+                    )
+                    time.sleep(backoff)
+                    fresh_token = get_s2_sas_token()
+                    if fresh_token:
+                        token = fresh_token
+
                 url = f"{base_url}?{token}" if token else raw_href
-                with env:
-                    try:
+                try:
+                    with get_shared_gdal_env(tag=f"S2_{b_name}"):
+                        log_worker_gdal_env("Sentinel-2", f"scene={scene_id[:25]} band={b_name} attempt={attempt+1}")
                         with rasterio.open(url) as s:
                             b_s = transform_bounds(utm_crs, s.crs, *utm_bounds) if s.crs.to_string() != utm_crs else utm_bounds
                             w = from_bounds(*b_s, transform=s.transform)
                             out_s = (3, *target_shape) if b_name == 'visual' else target_shape
+                            # Read only the target bounding box window
                             arr = s.read(window=w, out_shape=out_s)
                             if b_name != 'visual' and arr.ndim == 3 and arr.shape[0] == 1:
                                 arr = arr[0]
                             return b_name, arr
-                    except Exception as e:
-                        if attempt < 4:
-                            # Re-sign with fresh SAS token on failure
-                            logger.warning(f"Error reading S2 band {b_name} for {scene_id} ({e}); refreshing SAS token and retrying attempt {attempt+2}/5...")
-                            fresh_token = get_s2_sas_token()
-                            if fresh_token:
-                                token = fresh_token
-                            time.sleep(1.5 * (attempt + 1))
-                            continue
-                        logger.warning(f"Failed reading band {b_name} for {scene_id} after 5 attempts: {e}")
-                        return None, None
+                except Exception as e:
+                    last_err = e
+            logger.warning(f"Failed reading band {b_name} for {scene_id[:25]} after 5 attempts: {last_err}")
+            return None, None
 
         bands = {
             "sun_elevation": np.array(sun_elev, dtype=np.float32),
             "sun_azimuth": np.array(sun_az, dtype=np.float32)
         }
 
-        b_ex = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        # Configurable concurrency for Planetary Computer reads (default: 3)
+        pc_workers = int(os.environ.get("PC_MAX_CONCURRENCY", "3"))
+        b_ex = concurrent.futures.ThreadPoolExecutor(max_workers=pc_workers)
         try:
             futs = [b_ex.submit(_read_band, b) for b in band_names]
             for fut in futs:
@@ -408,7 +416,10 @@ def fetch_s2(
             os.replace(tmp_fn, save_fn)
             logger.info(f"Saved S2 scene to {save_fn.name}")
             return save_fn.name
-        return None
+        else:
+            missing = [k for k in req_bands if k not in bands]
+            logger.warning(f"Scene {scene_id[:35]} missing critical bands {missing}; skipping this scene and continuing with remaining candidates.")
+            return None
 
     t0_download = time.time()
     all_downloaded = []

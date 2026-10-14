@@ -25,7 +25,8 @@ load_dotenv()
 from src.copilot.facts import FactStore
 from src.copilot.agent import CopilotAgent
 
-TRISHULI_RUN_PATH = Path("/home/zeus/Downloads/project1/runs/test_A_cold_final2_run1")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TRISHULI_RUN_PATH = REPO_ROOT / "runs" / "test_A_cold_verify"
 
 MODELS = [
     {"display_name": "Groq: qwen/qwen3.8-27b", "model": "qwen/qwen3.8-27b", "file_tag": "groq-qwen3.8-27b"},
@@ -145,7 +146,7 @@ def run_model(model_cfg: Dict[str, str]) -> Dict[str, Any]:
         time.sleep(2.0)
 
     # Generate Markdown transcript
-    md_path = Path(f"/home/zeus/Downloads/project1-copilot/tests/heldout_v3_{file_tag}.md")
+    md_path = REPO_ROOT / "tests" / f"heldout_v3_{file_tag}.md"
     
     first_prov = records[0]["provider"] if records else "unknown"
     first_key = records[0]["masked_key_id"] if records else "unknown"
@@ -223,7 +224,7 @@ def main():
         print(f"  Tool Calling Rate: {r['tools_called_count']} / {len(QUESTIONS)}")
 
     # Save summary json
-    summary_path = Path("/home/zeus/Downloads/project1-copilot/tests/heldout_v3_summary.json")
+    summary_path = REPO_ROOT / "tests" / "heldout_v3_summary.json"
     clean_summary = []
     for r in results:
         clean_summary.append({

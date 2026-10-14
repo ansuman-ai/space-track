@@ -203,23 +203,19 @@ def load_s1_features(
     else:
         desc_lr_event = np.zeros_like(post_vv_db)
 
-    # Seasonal control S1 (if available for paddy / permanent water suppression)
+    # Seasonal control S1 (within current run folder only; zero reads from other runs or archives)
+    run_root = post_vv_path.parents[2] if len(post_vv_path.parents) > 2 else post_vv_path.parent
     seas_cands = [
+        run_root / "seasonal_control_2023" / "s1_seasonal_post.tif",
+        run_root / "raw" / "s1" / "seasonal_post.tif",
         post_vv_path.parent / "seasonal_post_vv.tif",
-        post_vv_path.parent.parent / "seasonal_control_2023" / "s1_seasonal_post.tif",
-        post_vv_path.parent.parent.parent / "_archive" / "practice_assam_event_e2e_final3" / "seasonal_control_2023" / "s1_seasonal_post.tif",
-        post_vv_path.parent.parent / "seasonal" / "raw" / "s1" / "post.tif",
-        post_vv_path.parent.parent / "seasonal" / "interim" / "post_vv.tif"
+        run_root / "seasonal" / "raw" / "s1" / "post.tif",
+        run_root / "seasonal" / "interim" / "post_vv.tif"
     ]
     seas_post_f = next((p for p in seas_cands if p and p.exists()), None)
     if seas_post_f:
         with rasterio.open(seas_post_f) as s_seas:
             seas_post_out = s_seas.read(1)
-        local_target = post_vv_path.parent.parent / "seasonal_control_2023" / "s1_seasonal_post.tif"
-        if not local_target.exists():
-            import shutil
-            local_target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(seas_post_f, local_target)
     else:
         seas_post_out = None
 

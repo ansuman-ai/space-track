@@ -20,6 +20,7 @@ import concurrent.futures
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("fetch_s1")
 import time
+import random
 
 # Ensure proxy does not interfere with GDAL/requests direct calls
 for _k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
@@ -138,30 +139,30 @@ def download_and_clip_bands(
 
     min_lon, min_lat, max_lon, max_lat = bbox
 
-    from .gdal_env import get_shared_gdal_env
+    from .gdal_env import get_shared_gdal_env, log_worker_gdal_env
     try:
-        env = get_shared_gdal_env(
-            tag="Sentinel-1",
-            GDAL_HTTP_VERSION="1.1",
-            GDAL_HTTP_MULTIPLEX="NO",
-            GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="NO",
-            CPL_VSIL_CURL_CHUNK_SIZE="1048576",
-            GDAL_HTTP_TIMEOUT="60",
-            GDAL_HTTP_CONNECTTIMEOUT="20",
-            GDAL_HTTP_MAX_RETRY="2"
-        )
-
         current_token = token
 
         def _read_band(raw_asset_href):
             nonlocal current_token
+            base_u = raw_asset_href.split("?")[0] if "?" in raw_asset_href else raw_asset_href
             last_err = None
             for attempt in range(5):
-                # Prepare signed URL with current token
-                base_u = raw_asset_href.split("?")[0] if "?" in raw_asset_href else raw_asset_href
+                if attempt > 0:
+                    backoff = (1.5 ** attempt) + random.uniform(0.5, 1.5)
+                    logger.warning(
+                        f"Retrying S1 band {Path(base_u).name} (attempt {attempt+1}/5) in {backoff:.2f}s "
+                        f"after error: {last_err}"
+                    )
+                    time.sleep(backoff)
+                    fresh = get_sas_token("sentinel-1-rtc")
+                    if fresh:
+                        current_token = fresh
+
                 u = f"{base_u}?{current_token}" if current_token else raw_asset_href
                 try:
-                    with env:
+                    with get_shared_gdal_env(tag="Sentinel-1"):
+                        log_worker_gdal_env("Sentinel-1", f"asset={Path(base_u).name} attempt={attempt+1}")
                         with rasterio.open(u) as src:
                             if src.crs and src.crs.to_string() != "EPSG:4326":
                                 proj_bounds = transform_bounds("EPSG:4326", src.crs, min_lon, min_lat, max_lon, max_lat)
@@ -174,13 +175,7 @@ def download_and_clip_bands(
                             return d, out_trans, meta
                 except Exception as e:
                     last_err = e
-                    sleep_s = 2 ** min(attempt, 3)
-                    logger.warning(f"Attempt {attempt+1}/5 failed reading S1 band from Planetary Computer ({e}); refreshing SAS token and retrying in {sleep_s}s...")
-                    # Refresh SAS token before retrying
-                    fresh = get_sas_token("sentinel-1-rtc")
-                    if fresh:
-                        current_token = fresh
-                    time.sleep(sleep_s)
+            logger.error(f"Failed reading S1 asset {Path(base_u).name} after 5 attempts: {last_err}")
             raise last_err
 
         # Fetch VV and VH sequentially to prevent Azure Blob rate-limiting / connection reset
@@ -396,6 +391,36 @@ def fetch_pair(
     download_and_clip_bands(selected_post, bbox, post_tif, token)
     download_and_clip_bands(selected_ctrl_pre, bbox, ctrl_pre_tif, token)
 
+    # Search and download seasonal control scene (~1 year before event date, ±12 days, same orbit)
+    selected_seasonal = None
+    try:
+        target_seas_dt = ev_dt.replace(year=ev_dt.year - 1)
+        seas_search_start = (target_seas_dt - timedelta(days=12)).strftime("%Y-%m-%dT00:00:00Z")
+        seas_search_end = (target_seas_dt + timedelta(days=12)).strftime("%Y-%m-%dT23:59:59Z")
+        logger.info(f"Querying STAC for seasonal control scene between {seas_search_start} and {seas_search_end} (orbit={selected_post['relative_orbit']})...")
+        seas_candidates = query_stac(bbox, seas_search_start, seas_search_end)
+        for cand in seas_candidates:
+            s_meta = extract_metadata(cand)
+            if (s_meta["relative_orbit"] == selected_post["relative_orbit"] and
+                s_meta["orbit_direction"] == selected_post["orbit_direction"]):
+                ok_s, s_ov = check_bbox_overlap(cand, bbox, min_overlap=0.90)
+                if ok_s:
+                    selected_seasonal = s_meta
+                    break
+    except Exception as e:
+        logger.warning(f"Error querying STAC for seasonal control scene: {e}")
+
+    seasonal_tif = out_path / "seasonal_post.tif"
+    if selected_seasonal:
+        logger.info(f"Found matched seasonal control scene: {selected_seasonal['id']} ({selected_seasonal['datetime']})")
+        download_and_clip_bands(selected_seasonal, bbox, seasonal_tif, token)
+        legacy_seas_dir = out_path.parent.parent / "seasonal_control_2023"
+        legacy_seas_dir.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy2(seasonal_tif, legacy_seas_dir / "s1_seasonal_post.tif")
+    else:
+        logger.info("No matching same-orbit seasonal control scene found.")
+
     event_metadata_payload = {
         "event_date": event_date,
         "bbox": bbox,
@@ -415,6 +440,14 @@ def fetch_pair(
             "lookback_days": delta_used
         }
     }
+    if selected_seasonal:
+        event_metadata_payload["seasonal"] = {
+            "id": selected_seasonal["id"],
+            "datetime": selected_seasonal["datetime"],
+            "relative_orbit": selected_seasonal["relative_orbit"],
+            "orbit_direction": selected_seasonal["orbit_direction"],
+            "platform": selected_seasonal["platform"]
+        }
     with open(meta_json, "w") as f:
         json.dump(event_metadata_payload, f, indent=2)
 

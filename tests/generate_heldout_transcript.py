@@ -7,12 +7,21 @@ from src.copilot.tools import CopilotTools
 from src.copilot.guard import NumberGuard
 
 def main():
-    run_path = Path("/home/zeus/Downloads/project1/runs/test_A_trishuli")
+    repo_root = Path(__file__).resolve().parent.parent
+    candidate_runs_a = [
+        repo_root / "runs" / "test_A_cold_verify",
+        repo_root / "runs" / "test_A_trishuli",
+    ]
+    run_path = next((p for p in candidate_runs_a if p.exists()), candidate_runs_a[0])
     fs = FactStore(run_path)
     tools = CopilotTools(fs)
     guard = NumberGuard()
 
-    melamchi_path = Path("/home/zeus/Downloads/project1/runs/test_B_melamchi")
+    candidate_runs_b = [
+        repo_root / "runs" / "test_B_cold_verify",
+        repo_root / "runs" / "test_B_melamchi",
+    ]
+    melamchi_path = next((p for p in candidate_runs_b if p.exists()), candidate_runs_b[0])
     fs_m = FactStore(melamchi_path)
     tools_m = CopilotTools(fs_m)
 
@@ -149,7 +158,7 @@ def main():
         out_md.append(f"- Details: `{g_res.details}`\n")
         out_md.append("---\n")
 
-    target_path = Path("/home/zeus/Downloads/project1-copilot/tests/heldout_transcript.md")
+    target_path = repo_root / "tests" / "heldout_transcript.md"
     with open(target_path, "w", encoding="utf-8") as f:
         f.write("\n".join(out_md))
 

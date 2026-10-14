@@ -143,6 +143,20 @@ def run_pipeline(
     t0 = time.time()
 
     out_path = Path(out_dir).resolve()
+    if event_name is None:
+        txt_path = out_path / "event_name.txt"
+        if txt_path.exists():
+            try:
+                event_name = txt_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+    elif event_name:
+        txt_path = out_path / "event_name.txt"
+        try:
+            txt_path.write_text(event_name, encoding="utf-8")
+        except Exception:
+            pass
+
     raw_dir = out_path / "raw"
     interim_dir = out_path / "interim"
     processed_dir = out_path / "processed"
@@ -325,6 +339,10 @@ def run_pipeline(
                 "scenes_skipped": s2_res.get("skipped_scenes", []),
                 "budget_exceeded": s2_res.get("budget_exceeded", False)
             }
+            if len(s2_res.get("scenes", [])) == 0:
+                s2_available = False
+                s2_error = "No Sentinel-2 scenes available or all candidate scenes failed"
+                l0_notes.append("Sentinel-2 unavailable: No scenes available")
         except Exception as e:
             logger.warning(f"Sentinel-2 fetch failed: {e}")
             s2_available = False
@@ -726,10 +744,9 @@ def run_pipeline(
         overall_status = "DEGRADED"
         degraded_msg = f"Sentinel-1 unavailable: {s1_error or 'read failure'}; results from Sentinel-2 only"
         optical_note = f"{optical_note} ({degraded_msg})" if optical_note else degraded_msg
-    elif not s2_available or s2_scenes_skipped or not has_s2_data:
+    elif not s2_available or not has_s2_data:
         overall_status = "DEGRADED"
-        if not s2_available or not has_s2_data:
-            optical_note = f"Sentinel-2 unavailable: {s2_error or 'no clear scenes'}; results from Sentinel-1 only"
+        optical_note = f"Sentinel-2 unavailable: {s2_error or 'no clear scenes'}; results from Sentinel-1 only"
 
     if l2_res.get("status") == "DEGRADED" or not l2_res.get("seasonal_control_available", True):
         overall_status = "DEGRADED"

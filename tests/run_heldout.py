@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -23,15 +24,17 @@ MODEL_NAME = "gemini-3.8-flash"
 
 def call_gemini_llm(prompt: str, timeout: int = 30) -> str:
     """Invoke Google Gemini Flash via agentapi and extract model response."""
+    home = Path(os.environ.get("HOME", "/tmp"))
+    agentapi_cmd = shutil.which("agentapi") or str(home / ".gemini/antigravity/bin/agentapi")
     p = subprocess.run(
-        ["/home/zeus/.gemini/antigravity/bin/agentapi", "new-conversation", "--model=flash", prompt],
+        [agentapi_cmd, "new-conversation", "--model=flash", prompt],
         capture_output=True,
         text=True,
         check=True,
     )
     data = json.loads(p.stdout)
     cid = data["response"]["newConversation"]["conversationId"]
-    log_path = Path(f"/home/zeus/.gemini/antigravity/brain/{cid}/.system_generated/logs/transcript.jsonl")
+    log_path = home / f".gemini/antigravity/brain/{cid}/.system_generated/logs/transcript.jsonl"
 
     start = time.time()
     while time.time() - start < timeout:
@@ -48,20 +51,25 @@ def call_gemini_llm(prompt: str, timeout: int = 30) -> str:
 
 
 def main():
-    print(f"==================================================")
-    print(f" RUNNING HELDOUT BENCHMARK ON REAL LLM")
-    print(f" Provider: {PROVIDER_NAME}")
-    print(f" Model:    {MODEL_NAME}")
-    print(f" Run:      test_A_trishuli (2026-08-26)")
-    print(f"==================================================\n")
-
-    run_path = Path("/home/zeus/Downloads/project1/runs/test_A_trishuli")
+    repo_root = Path(__file__).resolve().parent.parent
+    import argparse
+    parser = argparse.ArgumentParser(description="Run held-out copilot benchmark")
+    parser.add_argument("--run-dir", default=str(repo_root / "runs" / "test_A_cold_verify"), help="Path to run directory")
+    args, _ = parser.parse_known_args()
+    run_path = Path(args.run_dir)
     fact_store = FactStore(run_path)
     tools = CopilotTools(fact_store)
     guard = NumberGuard()
 
+    print(f"==================================================")
+    print(f" RUNNING HELDOUT BENCHMARK ON REAL LLM")
+    print(f" Provider: {PROVIDER_NAME}")
+    print(f" Model:    {MODEL_NAME}")
+    print(f" Run:      {run_path.name} ({fact_store.event_date})")
+    print(f"==================================================\n")
+
     # Also load Melamchi store for cross-run reference if queried
-    melamchi_run_path = Path("/home/zeus/Downloads/project1/runs/test_B_melamchi")
+    melamchi_run_path = repo_root / "runs" / "test_B_cold_verify"
     melamchi_store = FactStore(melamchi_run_path) if melamchi_run_path.exists() else None
     melamchi_tools = CopilotTools(melamchi_store) if melamchi_store else None
 
@@ -271,7 +279,7 @@ Regenerate grounded answer:"""
         })
 
     # Save transcript to tests/heldout_transcript.md
-    out_file = Path("/home/zeus/Downloads/project1-copilot/tests/heldout_transcript.md")
+    out_file = repo_root / "tests" / "heldout_transcript.md"
     with open(out_file, "w", encoding="utf-8") as f:
         f.write(f"# Held-out Evaluation Transcript\n\n")
         f.write(f"- **Provider:** {PROVIDER_NAME}\n")

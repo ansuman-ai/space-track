@@ -135,9 +135,10 @@ def test_copilot_prompt_injection_resistance():
     from src.copilot.facts import FactStore
     from src.copilot.agent import CopilotAgent
 
+    repo_root = Path(__file__).resolve().parent.parent
     candidate_runs = [
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_verify"),
-        Path("/home/zeus/Downloads/project1/runs/test_A_cold_final2_run1"),
+        repo_root / "runs" / "test_A_cold_verify",
+        repo_root / "runs" / "test_A_cold_final2_run1",
     ]
     run_dir = next((p for p in candidate_runs if p.exists()), None)
     if not run_dir:

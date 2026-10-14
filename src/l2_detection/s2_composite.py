@@ -37,11 +37,10 @@ def load_or_cache_s2_scene(
 
     import requests
     http = requests.Session()
-    http.trust_env = False
-
-    env = rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', CPL_VSIL_CURL_USE_HEAD='NO', GDAL_HTTP_CONNECTTIMEOUT='30')
+    from ..l0_ingestion.gdal_env import get_shared_gdal_env, log_worker_gdal_env
     bands = {}
-    with env:
+    with get_shared_gdal_env(tag="S2_composite"):
+        log_worker_gdal_env("S2_composite", f"item={item_id[:25]}")
         for b_name in ['B02', 'B03', 'B04', 'B08', 'B11', 'SCL', 'visual']:
             url = assets[b_name]['href']
             if s2_token and "?" not in url:

@@ -681,37 +681,54 @@ class CopilotAgent:
         if _has_kw(["sitrep", "situation report", "report do", "रिपोर्ट", "स्थिति प्रतिवेदन", "प्रतिवेदन", "डाउनलोड"]):
             out = self.tools.event_summary()
             self.conversation_tool_outputs.append(out)
-            m = out.get("metrics", {})
-            b_aff = m.get("buildings_affected_total", "not computed")
-            b_dest = m.get("buildings_destroyed", "not computed")
-            br_dest = m.get("bridges_destroyed", "not computed")
-            cut_c = m.get("cut_off_settlements", "not computed")
-            ev_date = out.get("event_date", "not computed")
-            obs_area = m.get("affected_km2_observed", "not computed")
+            from .sitrep import SitRepGenerator
+            gen = SitRepGenerator(self.store)
+            v = gen.values
             run_name = Path(self.store.run_dir).name
 
             if lang == "ne":
                 text = (
-                    f"यस प्रकोप क्षेत्रको संक्षिप्त स्थिति प्रतिवेदन ({ev_date}):\n"
-                    f"• प्रत्यक्ष बाढी/क्षति क्षेत्र: {obs_area} वर्ग कि.मी.\n"
-                    f"• भौतिक क्षति: कुल {b_aff} भवन प्रभावित ({b_dest} पूर्ण नष्ट), र {br_dest} मुख्य पुल नष्ट।\n"
-                    f"• पहुँच विच्छेद: {cut_c} बस्तीहरू कुनै पनि सहर वा अस्पतालबाट विच्छेद छन्।\n\n"
+                    f"द्रुत विपद् स्थिति प्रतिवेदन संक्षेप ({v['event_date']}):\n\n"
+                    f"१. बाढी कहाँ आयो?\n"
+                    f"• प्रत्यक्ष बाढी क्षेत्र {v['affected_km2_observed']} वर्ग कि.मी. (अनुमानित {v['affected_km2_inferred']} वर्ग कि.मी.), {v['primary_river']} वरपर लगभग {v['upstream_place']} देखि {v['downstream_place']} सम्म।\n\n"
+                    f"२. के क्षति भयो?\n"
+                    f"• भवनहरू: {v['buildings_destroyed']} {v['bld_grade_1_label_ne']} (कुल {v['buildings_affected_total']} प्रभावित)।\n"
+                    f"• पुल तथा सडक: {v['bridges_destroyed']} मुख्य पुल नष्ट; {v['roads_destroyed_km']} कि.मी. सडक नष्ट ({v['main_road_destroyed_ne']})।\n\n"
+                    f"३. को सम्पर्कविहीन भयो?\n"
+                    f"• {v['cutoff_vehicle_optimistic_count']} बस्तीहरू सवारी साधनबाट विच्छेद (निराशावादी: {v['cutoff_vehicle_pessimistic_count']}); {v['no_ground_access_count']} बस्तीहरू पूर्ण स्थल सम्पर्कविहीन।\n\n"
+                    f"४. पहिले के मर्मत गर्ने?\n"
+                    f"• {v['single_repair_sentence_ne']}।\n"
+                    f"• {v['package_1_sentence_ne']}\n\n"
                     f"[DOWNLOAD_SITREP:{run_name}]"
                 )
             elif lang == "hi":
                 text = (
-                    f"आपदा स्थिति प्रतिवेदन संक्षेप ({ev_date}):\n"
-                    f"• प्रत्यक्ष प्रभावित क्षेत्र: {obs_area} वर्ग किमी।\n"
-                    f"• बुनियादी ढांचा क्षति: {b_aff} कुल प्रभावित भवन ({b_dest} नष्ट), {br_dest} पुल नष्ट।\n"
-                    f"• संपर्क विच्छेद: {cut_c} बस्तियां सड़क संपर्क से कटी हुई हैं।\n\n"
+                    f"आपदा स्थिति प्रतिवेदन संक्षेप ({v['event_date']}):\n\n"
+                    f"1. Where did the flood hit? / बाढी कहाँ आयो?\n"
+                    f"• प्रत्यक्ष प्रभावित क्षेत्र {v['affected_km2_observed']} वर्ग किमी (अनुमानित {v['affected_km2_inferred']} वर्ग किमी), {v['primary_river']} के किनारे लगभग {v['upstream_place']} से {v['downstream_place']} तक।\n\n"
+                    f"2. What was damaged? / के क्षति भयो?\n"
+                    f"• भवन: {v['buildings_destroyed']} नष्ट / जलमग्न (कुल {v['buildings_affected_total']} प्रभावित)।\n"
+                    f"• पुल और सड़कें: {v['bridges_destroyed']} मुख्य पुल नष्ट; {v['roads_destroyed_km']} किमी सड़कें नष्ट ({v['main_road_destroyed_en']})।\n\n"
+                    f"3. Who is cut off? / को सम्पर्कविहीन भयो?\n"
+                    f"• {v['cutoff_vehicle_optimistic_count']} बस्तियां सड़क संपर्क से कटी हुई; {v['no_ground_access_count']} बस्तियों का जमीनी संपर्क पूरी तरह कटा।\n\n"
+                    f"4. What to repair first / पहिले के मर्मत गर्ने?\n"
+                    f"• {v['single_repair_sentence_en']}.\n"
+                    f"• {v['package_1_sentence_en']}\n\n"
                     f"[DOWNLOAD_SITREP:{run_name}]"
                 )
             else:
                 text = (
-                    f"Situation Report Summary ({ev_date}):\n"
-                    f"• Directly observed hazard: {obs_area} km².\n"
-                    f"• Infrastructure impact: {b_aff} affected buildings ({b_dest} destroyed), {br_dest} destroyed bridges.\n"
-                    f"• Isolation: {cut_c} settlements cut off from any town or hospital by road.\n\n"
+                    f"Situation Report Summary ({v['event_date']}):\n\n"
+                    f"1. Where did the flood hit?\n"
+                    f"• Directly observed hazard: {v['affected_km2_observed']} km² (inferred: {v['affected_km2_inferred']} km²) along {v['primary_river']} from near {v['upstream_place']} to near {v['downstream_place']}.\n\n"
+                    f"2. What was damaged?\n"
+                    f"• Buildings: {v['buildings_destroyed']} {v['bld_grade_1_label'].lower()} ({v['buildings_affected_total']} total affected).\n"
+                    f"• Bridges & Roads: {v['bridges_destroyed']} destroyed bridges (corridors: {v['major_bridge_roads_en']}); {v['roads_destroyed_km']} km destroyed roads ({v['main_road_destroyed_en']}).\n\n"
+                    f"3. Who is cut off?\n"
+                    f"• {v['cutoff_vehicle_optimistic_count']} settlements cut off by road (pessimistic: {v['cutoff_vehicle_pessimistic_count']}); {v['no_ground_access_count']} settlements have no ground access.\n\n"
+                    f"4. What to repair first\n"
+                    f"• {v['single_repair_sentence_en']}.\n"
+                    f"• {v['package_1_sentence_en']}\n\n"
                     f"[DOWNLOAD_SITREP:{run_name}]"
                 )
             return AgentResponse(
@@ -1573,28 +1590,38 @@ class CopilotAgent:
 
         if any(k in q_lower or k in query for k in ["situation report", "sitrep", "प्रतिवेदन", "रिपोर्ट"]):
             out = self.tools.event_summary()
-            m = out.get("metrics", {})
-            b_aff = m.get("buildings_affected_total", "not computed")
-            b_dest = m.get("buildings_destroyed", "not computed")
-            br_dest = m.get("bridges_destroyed", "not computed")
-            cut_c = m.get("cut_off_settlements", "not computed")
-            ev_date = out.get("event_date", "2026-08-26")
-            obs_area = m.get("affected_km2_observed", "not computed")
+            from .sitrep import SitRepGenerator
+            gen = SitRepGenerator(self.store)
+            v = gen.values
             run_name = Path(self.store.run_dir).name
             if lang == "ne":
                 text = (
-                    f"यस विपद्को द्रुत स्थिति प्रतिवेदन ({ev_date}):\n"
-                    f"• प्रत्यक्ष प्रभावित क्षेत्र: {obs_area} वर्ग कि.मी.\n"
-                    f"• भौतिक क्षति: कुल {b_aff} भवन प्रभावित ({b_dest} पूर्ण नष्ट), र {br_dest} मुख्य पुल नष्ट।\n"
-                    f"• पहुँच विच्छेद: {cut_c} बस्तीहरू कुनै पनि सहर वा अस्पतालबाट विच्छेद छन्।\n\n"
+                    f"द्रुत विपद् स्थिति प्रतिवेदन संक्षेप ({v['event_date']}):\n\n"
+                    f"१. बाढी कहाँ आयो?\n"
+                    f"• प्रत्यक्ष बाढी क्षेत्र {v['affected_km2_observed']} वर्ग कि.मी. (अनुमानित {v['affected_km2_inferred']} वर्ग कि.मी.), {v['primary_river']} वरपर लगभग {v['upstream_place']} देखि {v['downstream_place']} सम्म।\n\n"
+                    f"२. के क्षति भयो?\n"
+                    f"• भवनहरू: {v['buildings_destroyed']} {v['bld_grade_1_label_ne']} (कुल {v['buildings_affected_total']} प्रभावित)।\n"
+                    f"• पुल तथा सडक: {v['bridges_destroyed']} मुख्य पुल नष्ट; {v['roads_destroyed_km']} कि.मी. सडक नष्ट ({v['main_road_destroyed_ne']})।\n\n"
+                    f"३. को सम्पर्कविहीन भयो?\n"
+                    f"• {v['cutoff_vehicle_optimistic_count']} बस्तीहरू सवारी साधनबाट विच्छेद (निराशावादी: {v['cutoff_vehicle_pessimistic_count']}); {v['no_ground_access_count']} बस्तीहरू पूर्ण स्थल सम्पर्कविहीन।\n\n"
+                    f"४. पहिले के मर्मत गर्ने?\n"
+                    f"• {v['single_repair_sentence_ne']}।\n"
+                    f"• {v['package_1_sentence_ne']}\n\n"
                     f"[DOWNLOAD_SITREP:{run_name}]"
                 )
             else:
                 text = (
-                    f"Situation Report Summary ({ev_date}):\n"
-                    f"• Directly observed hazard: {obs_area} km².\n"
-                    f"• Infrastructure impact: {b_aff} affected buildings ({b_dest} destroyed), {br_dest} destroyed bridges.\n"
-                    f"• Isolation: {cut_c} settlements cut off from any town or hospital by road.\n\n"
+                    f"Situation Report Summary ({v['event_date']}):\n\n"
+                    f"1. Where did the flood hit?\n"
+                    f"• Directly observed hazard: {v['affected_km2_observed']} km² (inferred: {v['affected_km2_inferred']} km²) along {v['primary_river']} from near {v['upstream_place']} to near {v['downstream_place']}.\n\n"
+                    f"2. What was damaged?\n"
+                    f"• Buildings: {v['buildings_destroyed']} {v['bld_grade_1_label'].lower()} ({v['buildings_affected_total']} total affected).\n"
+                    f"• Bridges & Roads: {v['bridges_destroyed']} destroyed bridges (corridors: {v['major_bridge_roads_en']}); {v['roads_destroyed_km']} km destroyed roads ({v['main_road_destroyed_en']}).\n\n"
+                    f"3. Who is cut off?\n"
+                    f"• {v['cutoff_vehicle_optimistic_count']} settlements cut off by road (pessimistic: {v['cutoff_vehicle_pessimistic_count']}); {v['no_ground_access_count']} settlements have no ground access.\n\n"
+                    f"4. What to repair first\n"
+                    f"• {v['single_repair_sentence_en']}.\n"
+                    f"• {v['package_1_sentence_en']}\n\n"
                     f"[DOWNLOAD_SITREP:{run_name}]"
                 )
             return AgentResponse(

@@ -220,10 +220,11 @@ def main():
         default="tests/copilot_questions.yaml",
         help="Path to questions YAML",
     )
+    repo_root = Path(__file__).resolve().parent.parent
     parser.add_argument(
         "--runs-dir",
         type=str,
-        default="/home/zeus/Downloads/project1/runs",
+        default=str(repo_root / "runs"),
         help="Directory containing pipeline runs",
     )
     parser.add_argument(

@@ -17,14 +17,17 @@ SHARED_GDAL_CONFIG: Dict[str, str] = {
     "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "NO",
     "GDAL_HTTP_MULTIPLEX": "NO",
     "GDAL_HTTP_VERSION": "1.1",
+    "GDAL_HTTP_MULTIRANGE": "SERIAL",
     "VSI_CACHE": "TRUE",
     "VSI_CACHE_SIZE": "100000000",
     "CPL_VSIL_CURL_CHUNK_SIZE": "2097152",      # 2 MB chunk cache
     "GDAL_INGESTED_BYTES_AT_OPEN": "131072",   # 128 KB initial header read
     "CURL_CA_BUNDLE": "/etc/ssl/certs/ca-certificates.crt",
-    "GDAL_HTTP_CONNECTTIMEOUT": "15",
-    "GDAL_HTTP_TIMEOUT": "30",
-    "GDAL_HTTP_MAX_RETRY": "2"
+    "GDAL_HTTP_CONNECTTIMEOUT": "30",
+    "GDAL_HTTP_TIMEOUT": "60",
+    "GDAL_HTTP_MAX_RETRY": "5",
+    "GDAL_HTTP_RETRY_DELAY": "2",
+    "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504,0"
 }
 
 
@@ -34,10 +37,33 @@ def log_effective_gdal_config(tag: str, cfg: Dict[str, Any]) -> None:
     logger.info(f"[GDAL_CONFIG] Effective settings for {tag}: {cfg_summary}")
 
 
+def log_worker_gdal_env(sensor_tag: str, detail: str = "") -> Dict[str, str]:
+    """
+    Log and verify active GDAL options inside worker threads/processes at the moment of raster reads.
+    Proves that thread-local rasterio.Env settings are in effect.
+    """
+    import threading
+    from rasterio._env import get_gdal_config
+    keys = [
+        "GDAL_DISABLE_READDIR_ON_OPEN",
+        "CPL_VSIL_CURL_CHUNK_SIZE",
+        "GDAL_HTTP_TIMEOUT",
+        "GDAL_HTTP_VERSION",
+        "GDAL_HTTP_MAX_RETRY",
+        "GDAL_HTTP_MULTIRANGE",
+        "VSI_CACHE"
+    ]
+    effective = {k: get_gdal_config(k) for k in keys}
+    eff_str = ", ".join(f"{k}={v}" for k, v in effective.items())
+    logger.info(f"[GDAL_WORKER_VERIFY] [{sensor_tag}] thread={threading.current_thread().name} {detail} -> {eff_str}")
+    return effective
+
+
 def get_shared_gdal_env(tag: str = "remote_fetch", **overrides) -> rasterio.Env:
     """Return a configured rasterio.Env context with shared latency-optimized settings."""
     cfg = dict(SHARED_GDAL_CONFIG)
     cfg.update(overrides)
     log_effective_gdal_config(tag, cfg)
     return rasterio.Env(**cfg)
+
 

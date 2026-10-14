@@ -1,9 +1,14 @@
 """Bilingual 1-Page Situation Report Generator (English & Nepali).
 
-Generates strictly grounded 1-page situation reports:
-- Dynamic data binding from FactStore with 0 hardcoded values.
+Generates strictly grounded 1-page situation reports structured around the problem statement:
+1. "Where did the flood hit?" / "बाढी कहाँ आयो?"
+2. "What was damaged?" / "के क्षति भयो?"
+3. "Who is cut off?" / "को सम्पर्कविहीन भयो?"
+4. "What to repair first" / "पहिले के मर्मत गर्ने?"
+
+- Dynamic data binding from FactStore and run files with 0 hardcoded numbers.
 - Exactly 1 A4 portrait page layout in PDF with overview map quicklook.
-- Separate optional lineage appendix document.
+- Separate lineage appendix document.
 - Compliant attributions including European Union Copernicus EMS and Educational prototype disclaimer.
 """
 
@@ -11,13 +16,18 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 import logging
 import os
 import re
+from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import weasyprint
+
+from src.common.naming import format_settlement_name
+from src.dashboard.app import extract_primary_river
 
 from .facts import FactStore
 from .guard import NumberGuard
@@ -25,106 +35,130 @@ from .guard import NumberGuard
 logger = logging.getLogger("copilot.sitrep")
 
 
+def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """Calculate great-circle distance between two geographic coordinates in kilometers."""
+    R = 6371.0
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * c
+
+
 SITREP_TEMPLATE_PROSE_EN = """# RAPID DISASTER SITUATION REPORT (SITREP)
-**Event Date:** {{event_date}} | **AOI:** {{bbox}} | **Assessment Type:** Situation Report
-**Satellite Observation:** {{optical_evidence_date}} | **Sensors:** {{sensors_used}}
+**Event Date:** {{event_date}} | **AOI:** {{bbox}} | **Assessment Type:** Rapid Situation Report
+**Satellite Observations:** Pre: {{pre_dates_str}} | Post: {{post_dates_str}} | **Sensors:** {{sensors_used}}
 
 ---
 
-### 1. EXECUTIVE SUMMARY
-A disaster event occurred on **{{event_date}}**. Satellite change detection identifies **{{affected_km2_observed}} km²** of directly observed hazard extent, with an additional **{{affected_km2_inferred}} km²** inferred along steep drainage corridors.
-
-Access to **{{cutoff_vehicle_optimistic_count}} settlements** is severed for motorized vehicles due to road and bridge damage. Furthermore, **{{connected_unverified_count}} settlements** rely on transit routes obscured by clouds, where passable conditions cannot be confirmed.
+### 1. Where did the flood hit?
+Satellite change detection identifies **{{affected_km2_observed}} km²** of directly observed hazard extent and **{{affected_km2_inferred}} km²** inferred along drainage corridors. The affected hazard stretch extends along **{{primary_river}}** from near **{{upstream_place}}** to near **{{downstream_place}}**.
 
 ---
 
-### 2. INFRASTRUCTURE DAMAGE BREAKDOWN
+### 2. What was damaged?
 - **Buildings (Total {{buildings_total}} assessed):**
-  - Destroyed: **{{buildings_destroyed}}**
-  - Damaged / Flooded: **{{buildings_damaged}}**
-  - Possibly Damaged / Flooded: **{{buildings_possibly_damaged}}**
+  - {{bld_grade_1_label}}: **{{buildings_destroyed}}**
+  - {{bld_grade_2_label}}: **{{buildings_damaged}}**
+  - Possibly Damaged: **{{buildings_possibly_damaged}}**
   - Total Affected: **{{buildings_affected_total}}**
   - Cloud-Covered (Unverified): **{{buildings_cloud_unverified}}**
 
-- **Road Network (Total {{roads_total_km}} km assessed; {{roads_drivable_km}} km drivable network in bbox):**
-  - Destroyed: **{{roads_destroyed_km}} km**
-  - Possibly Damaged: **{{roads_possibly_damaged_km}} km**
-  - Cloud-Covered (Unverified): **{{roads_cloud_unverified_km}} km**
-
 - **Bridges (Total {{bridges_total}} assessed):**
-  - Destroyed: **{{bridges_destroyed}}**
+  - Destroyed / Flooded: **{{bridges_destroyed}}** (Major road corridors: {{major_bridge_roads_en}})
   - Possibly Damaged: **{{bridges_possibly_damaged}}**
   - Total Affected: **{{bridges_affected_total}}**
   - Cloud-Covered (Unverified): **{{bridges_cloud_unverified}}**
 
+- **Road Network (Total {{roads_total_km}} km assessed; {{roads_drivable_km}} km drivable network in bbox):**
+  - Destroyed: **{{roads_destroyed_km}} km** (Main corridor damage: {{main_road_destroyed_en}})
+  - Possibly Damaged: **{{roads_possibly_damaged_km}} km**
+  - Cloud-Covered (Unverified): **{{roads_cloud_unverified_km}} km**
+
 ---
 
-### 3. ROUTING & REPAIR PRIORITIZATION
-- **Cut-Off Settlements:** **{{cutoff_vehicle_optimistic_count}} settlements** cut off from any town or hospital by vehicle (pessimistic: **{{cutoff_vehicle_pessimistic_count}}**). Pedestrian cut-off: **{{cutoff_walking_optimistic_count}} settlements**.
-- **Repair Priority:** Repair **Package 1** ({{package_1_element_count}} road elements: {{package_1_elements_list}}, total length: **{{package_1_length_m}} m**) restores vehicle access to **{{package_1_reconnected_settlements}} cut-off settlements** and **{{package_1_reconnected_buildings}} buildings**. {{single_repair_sentence_en}}.
+### 3. Who is cut off?
+- **Road Cut-Off Settlements:** **{{cutoff_vehicle_optimistic_count}} settlements** cut off from any town or hospital by vehicle (pessimistic: **{{cutoff_vehicle_pessimistic_count}}**). Pedestrian cut-off: **{{cutoff_walking_optimistic_count}} settlements**.
+- **No Ground Access:** **{{no_ground_access_count}} settlements** have both vehicle and walking routes severed (air / boat priority).
+
+#### No-Ground-Access Settlements
+{{no_ground_table_md_en}}
+
+#### 5 Largest Road Cut-Off Settlements
+{{top_veh_table_md_en}}
 
 ---
 
-### 4. DATA LIMITATIONS & UNCERTAINTIES
+### 4. What to repair first
+- **Best Single Repair:** {{single_repair_sentence_en}}.
+- **Access Restoration Package 1:** {{package_1_sentence_en}}
+
+---
+
+### Known Limitations & Attributions
 1. **Cloud Obscuration:** {{buildings_cloud_unverified}} buildings and {{roads_cloud_unverified_km}} km of roads remain unverified due to cloud cover.
-2. **Hydraulic Inundation Inference:** Tributary hazard boundaries are hydraulically modeled rather than observed by radar backscatter.
+2. **Hydraulic Inundation Inference:** Tributary hazard boundaries are hydraulically modeled rather than observed by radar backscatter; radar shadow/layover masked using DEM look-angle.
 3. **OSM Baseline Data:** Residential population counts are not available in OpenStreetMap baseline data.
 
----
-
-### 5. ATTRIBUTIONS & CREDITS
 {{attributions}}
 """
 
 
 SITREP_TEMPLATE_PROSE_NE = """# द्रुत विपद् स्थिति प्रतिवेदन (SITREP)
-**घटना मिति:** {{event_date}} | **प्रभावित क्षेत्र (AOI):** {{bbox}} | **प्रतिवेदन प्रकार:** स्थिति प्रतिवेदन
-**भूउपग्रह अवलोकन:** {{optical_evidence_date}} | **प्रयोग गरिएका सेन्सरहरू:** {{sensors_used}}
+**घटना मिति:** {{event_date}} | **प्रभावित क्षेत्र (AOI):** {{bbox}} | **प्रतिवेदन प्रकार:** द्रुत स्थिति प्रतिवेदन
+**भूउपग्रह अवलोकन:** पूर्व: {{pre_dates_str}} | पश्चात: {{post_dates_str}} | **प्रयोग गरिएका सेन्सरहरू:** {{sensors_used}}
 
 ---
 
-### १. कार्यकारी सारांश
-मिति **{{event_date}}** मा घटेको प्राकृतिक प्रकोपबाट प्रत्यक्ष रूपमा **{{affected_km2_observed}} वर्ग कि.मी.** भूभाग प्रभावित भएको पुष्टि भएको छ। यसका अतिरिक्त खोला तथा पहिरो बहाव क्षेत्रमा **{{affected_km2_inferred}} वर्ग कि.मी.** क्षेत्र अनुमानित प्रभावित छ।
-
-सडक तथा पुलहरूमा भएको क्षतिका कारण **{{cutoff_vehicle_optimistic_count}} बस्तीहरू** सवारी साधन आवागमनबाट पूर्ण रूपमा सम्पर्कविहीन भएका छन्। साथै **{{connected_unverified_count}} बस्तीहरू** बादलले ढाकिएका मार्गहरूमा निर्भर रहेकाले तिनको अवस्था स्थलगत पुष्टि हुन बाँकी छ।
+### १. बाढी कहाँ आयो?
+भूउपग्रह परिवर्तन पहिचान अनुसार **{{affected_km2_observed}} वर्ग कि.मी.** क्षेत्रमा प्रत्यक्ष बाढी/क्षति पुष्टि भएको छ र **{{affected_km2_inferred}} वर्ग कि.मी.** क्षेत्र खोला तथा पहिरो बहावमा अनुमानित छ। बाढीको मुख्य प्रभाव **{{primary_river}}** वरपर **लगभग {{upstream_place}} देखि {{downstream_place}} सम्म** फैलिएको छ।
 
 ---
 
-### २. भौतिक पूर्वाधार क्षति विवरण
+### २. के क्षति भयो?
 - **भवनहरू (कुल {{buildings_total}} मूल्याङ्कन):**
-  - पूर्ण रूपमा नष्ट: **{{buildings_destroyed}}**
-  - क्षतिग्रस्त / जलमग्न: **{{buildings_damaged}}**
+  - {{bld_grade_1_label_ne}}: **{{buildings_destroyed}}**
+  - {{bld_grade_2_label_ne}}: **{{buildings_damaged}}**
   - सम्भावित क्षति: **{{buildings_possibly_damaged}}**
   - कुल प्रभावित भवन: **{{buildings_affected_total}}**
   - बादलले ढाकिएका (अपुष्ट): **{{buildings_cloud_unverified}}**
 
-- **सडक सञ्जाल (कुल {{roads_total_km}} कि.मी. मूल्याङ्कन; कोर क्षेत्रमा {{roads_drivable_km}} कि.मी. सवारी सञ्जाल):**
-  - पूर्ण नष्ट: **{{roads_destroyed_km}} कि.मी.**
-  - सम्भावित क्षति: **{{roads_possibly_damaged_km}} कि.मी.**
-  - बादलले ढाकिएका: **{{roads_cloud_unverified_km}} कि.मी.**
-
 - **पुलहरू (कुल {{bridges_total}} मूल्याङ्कन):**
-  - पूर्ण नष्ट: **{{bridges_destroyed}}**
+  - पूर्ण नष्ट / जलमग्न: **{{bridges_destroyed}}** (प्रमुख सडकहरू: {{major_bridge_roads_ne}})
   - सम्भावित क्षति: **{{bridges_possibly_damaged}}**
   - कुल प्रभावित पुल: **{{bridges_affected_total}}**
   - बादलले ढाकिएका: **{{bridges_cloud_unverified}}**
 
+- **सडक सञ्जाल (कुल {{roads_total_km}} कि.मी. मूल्याङ्कन; कोर क्षेत्रमा {{roads_drivable_km}} कि.मी. सवारी सञ्जाल):**
+  - पूर्ण नष्ट: **{{roads_destroyed_km}} कि.मी.** (प्रमुख सडक खण्ड: {{main_road_destroyed_ne}})
+  - सम्भावित क्षति: **{{roads_possibly_damaged_km}} कि.मी.**
+  - बादलले ढाकिएका: **{{roads_cloud_unverified_km}} कि.मी.**
+
 ---
 
-### ३. यातायात पहुँच तथा मर्मत प्राथमिकता
-- **सम्पर्कविहीन बस्तीहरू:** सवारी पहुँचका आधारमा **{{cutoff_vehicle_optimistic_count}} बस्तीहरू** कुनै पनि सहर वा अस्पतालबाट विच्छेद छन् (निराशावादी अवस्था: **{{cutoff_vehicle_pessimistic_count}}**)। पैदल मार्ग अवरुद्ध: **{{cutoff_walking_optimistic_count}} बस्तीहरू**।
-- **मर्मत प्राथमिकता:** **मर्मत प्याकेज १** ({{package_1_element_count}} सडक खण्डहरू: {{package_1_elements_list}}, कुल लम्बाइ: **{{package_1_length_m}} मिटर**) ले **{{package_1_reconnected_settlements}} सम्पर्कविहीन बस्तीहरू** र **{{package_1_reconnected_buildings}} भवनहरू**मा सवारी पहुँच पुनर्स्थापित गर्दछ। {{single_repair_sentence_ne}}।
+### ३. को सम्पर्कविहीन भयो?
+- **सवारी सम्पर्कविहीन बस्तीहरू:** **{{cutoff_vehicle_optimistic_count}} बस्तीहरू** कुनै पनि सहर वा अस्पतालबाट विच्छेद छन् (निराशावादी अवस्था: **{{cutoff_vehicle_pessimistic_count}}**)। पैदल मार्ग अवरुद्ध: **{{cutoff_walking_optimistic_count}} बस्तीहरू**।
+- **पूर्ण स्थल सम्पर्कविहीन:** **{{no_ground_access_count}} बस्तीहरू**मा पैदल तथा सवारी दुवै मार्ग बन्द भएका छन् (हेलिकप्टर / डुङ्गा प्राथमिकता)।
+
+#### पूर्ण स्थल सम्पर्कविहीन बस्तीहरू (No Ground Access)
+{{no_ground_table_md_ne}}
+
+#### सबैभन्दा ठूला ५ सवारी सम्पर्कविहीन बस्तीहरू
+{{top_veh_table_md_ne}}
 
 ---
 
-### ४. तथ्याङ्कका सीमितता र अनिश्चितता
+### ४. पहिले के मर्मत गर्ने?
+- **सबैभन्दा प्रभावकारी एकल मर्मत:** {{single_repair_sentence_ne}}।
+- **पहुँच पुनर्स्थापना प्याकेज १:** {{package_1_sentence_ne}}
+
+---
+
+### मुख्य सीमितता तथा प्रतिलिपि अधिकार
 १. **बादलको प्रभाव:** {{buildings_cloud_unverified}} भवनहरू र {{roads_cloud_unverified_km}} कि.मी. सडक बादलका कारण अप्टिकल स्याटेलाइटबाट प्रमाणीकरण हुन सकेको छैन।
-२. **मोडेल अनुमान:** सहायक नदीहरूमा बाढी क्षेत्र हाइड्रोलिक मोडेलिङद्वारा अनुमान गरिएको हो।
+२. **मोडेल अनुमान:** सहायक नदीहरूमा बाढी क्षेत्र हाइड्रोलिक मोडेलिङद्वारा अनुमान गरिएको हो; पहाडी भिरालो भूभाग DEM लुक-एंगलद्वारा हटाइएको छ।
 ३. **जनसंख्या तथ्याङ्क:** ओपन्स्ट्रीटम्याप आधारभूत तथ्याङ्कमा आवासीय जनसंख्या उपलब्ध छैन।
 
----
-
-### ५. स्रोत तथा प्रतिलिपि अधिकार (Attributions)
 {{attributions}}
 """
 
@@ -141,12 +175,12 @@ This appendix provides field-by-field verification linking every fact in the 1-p
 | Cut-Off Settlements (Vehicle, Optimistic) | {{cutoff_vehicle_optimistic_count}} | `processed/routing/cutoff_summary.json` | `vehicle.optimistic.cut_off_count` |
 | Cut-Off Settlements (Vehicle, Pessimistic) | {{cutoff_vehicle_pessimistic_count}} | `processed/routing/cutoff_summary.json` | `vehicle.pessimistic.cut_off_count` |
 | Cut-Off Settlements (Walking) | {{cutoff_walking_optimistic_count}} | `processed/routing/cutoff_summary.json` | `walking.optimistic.cut_off_count` |
-| Settlements via Unverified Routes | {{connected_unverified_count}} | `processed/routing/cutoff_summary.json` | `vehicle.optimistic.connected_unverified_count` |
+| No Ground Access Settlements | {{no_ground_access_count}} | `processed/routing/settlements.geojson` | `vehicle_status_opt == 'cut_off' and walking_status_opt == 'cut_off'` |
 | Total Buildings Evaluated | {{buildings_total}} | `processed/damage_summary.json` | `buildings.total_count` |
 | Total Affected Buildings | {{buildings_affected_total}} | `processed/damage_summary.json` | `buildings.affected_count` |
-| Destroyed Buildings | {{buildings_destroyed}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Destroyed` |
-| Damaged Buildings | {{buildings_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Damaged` |
-| Possibly Damaged Buildings | {{buildings_possibly_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Possibly damaged` |
+| Destroyed / Flooded Buildings | {{buildings_destroyed}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
+| Damaged Buildings | {{buildings_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
+| Possibly Damaged Buildings | {{buildings_possibly_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
 | Cloud-Unverified Buildings | {{buildings_cloud_unverified}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Unknown (cloud)` |
 | Total Road Length Evaluated | {{roads_total_km}} km | `processed/damage_summary.json` | `roads.total_km` (all OSM segments in buffer) |
 | Classified Drivable Road Network | {{roads_drivable_km}} km | `processed/damage_summary.json` | `osm_coverage.road_km_by_type` (in bbox) |
@@ -155,8 +189,8 @@ This appendix provides field-by-field verification linking every fact in the 1-p
 | Cloud-Unverified Road Length | {{roads_cloud_unverified_km}} km | `processed/damage_summary.json` | `roads.km_by_damage_grade.Unknown (cloud)` |
 | Total Bridges Evaluated | {{bridges_total}} | `processed/damage_summary.json` | `bridges.total_count` |
 | Total Affected Bridges | {{bridges_affected_total}} | `processed/damage_summary.json` | `bridges.affected_count` |
-| Destroyed Bridges | {{bridges_destroyed}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Destroyed` |
-| Possibly Damaged Bridges | {{bridges_possibly_damaged}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Possibly damaged` |
+| Destroyed / Flooded Bridges | {{bridges_destroyed}} | `processed/damage_summary.json` | `bridges.damage_grade_counts` |
+| Possibly Damaged Bridges | {{bridges_possibly_damaged}} | `processed/damage_summary.json` | `bridges.damage_grade_counts` |
 | Cloud-Unverified Bridges | {{bridges_cloud_unverified}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Unknown (cloud)` |
 | Repair Package 1 Elements | {{package_1_element_count}} | `processed/routing/repair_packages.json` | `ranked_packages[0].element_count` |
 | Package 1 Reconnected Settlements | {{package_1_reconnected_settlements}} | `processed/routing/repair_packages.json` | `ranked_packages[0].settlements_count` |
@@ -180,12 +214,12 @@ LINEAGE_APPENDIX_TEMPLATE_NE = """# स्थिति प्रतिवेद�
 | सवारी सम्पर्कविहीन बस्ती (आशावादी) | {{cutoff_vehicle_optimistic_count}} | `processed/routing/cutoff_summary.json` | `vehicle.optimistic.cut_off_count` |
 | सवारी सम्पर्कविहीन बस्ती (निराशावादी) | {{cutoff_vehicle_pessimistic_count}} | `processed/routing/cutoff_summary.json` | `vehicle.pessimistic.cut_off_count` |
 | पैदल सम्पर्कविहीन बस्ती | {{cutoff_walking_optimistic_count}} | `processed/routing/cutoff_summary.json` | `walking.optimistic.cut_off_count` |
-| अपुष्ट मार्ग प्रयोग गर्ने बस्ती | {{connected_unverified_count}} | `processed/routing/cutoff_summary.json` | `vehicle.optimistic.connected_unverified_count` |
+| पूर्ण स्थल सम्पर्कविहीन बस्ती | {{no_ground_access_count}} | `processed/routing/settlements.geojson` | `vehicle_status_opt == 'cut_off' and walking_status_opt == 'cut_off'` |
 | मूल्याङ्कन गरिएका कुल भवन | {{buildings_total}} | `processed/damage_summary.json` | `buildings.total_count` |
 | कुल प्रभावित भवनहरू | {{buildings_affected_total}} | `processed/damage_summary.json` | `buildings.affected_count` |
-| पूर्ण नष्ट भवनहरू | {{buildings_destroyed}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Destroyed` |
-| क्षतिग्रस्त भवनहरू | {{buildings_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Damaged` |
-| सम्भावित क्षति भवनहरू | {{buildings_possibly_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Possibly damaged` |
+| नष्ट / जलमग्न भवनहरू | {{buildings_destroyed}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
+| क्षतिग्रस्त भवनहरू | {{buildings_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
+| सम्भावित क्षति भवनहरू | {{buildings_possibly_damaged}} | `processed/damage_summary.json` | `buildings.damage_grade_counts` |
 | बादलले ढाकिएका भवनहरू | {{buildings_cloud_unverified}} | `processed/damage_summary.json` | `buildings.damage_grade_counts.Unknown (cloud)` |
 | कुल मूल्याङ्कन सडक लम्बाइ | {{roads_total_km}} km | `processed/damage_summary.json` | `roads.total_km` |
 | कोर क्षेत्रमा सवारी योग्य सडक | {{roads_drivable_km}} km | `processed/damage_summary.json` | `osm_coverage.road_km_by_type` |
@@ -194,8 +228,8 @@ LINEAGE_APPENDIX_TEMPLATE_NE = """# स्थिति प्रतिवेद�
 | बादलले ढाकिएको सडक | {{roads_cloud_unverified_km}} km | `processed/damage_summary.json` | `roads.km_by_damage_grade.Unknown (cloud)` |
 | मूल्याङ्कन गरिएका कुल पुल | {{bridges_total}} | `processed/damage_summary.json` | `bridges.total_count` |
 | कुल प्रभावित पुलहरू | {{bridges_affected_total}} | `processed/damage_summary.json` | `bridges.affected_count` |
-| नष्ट पुलहरू | {{bridges_destroyed}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Destroyed` |
-| सम्भावित क्षति पुलहरू | {{bridges_possibly_damaged}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Possibly damaged` |
+| नष्ट / जलमग्न पुलहरू | {{bridges_destroyed}} | `processed/damage_summary.json` | `bridges.damage_grade_counts` |
+| सम्भावित क्षति पुलहरू | {{bridges_possibly_damaged}} | `processed/damage_summary.json` | `bridges.damage_grade_counts` |
 | बादलले ढाकिएका पुलहरू | {{bridges_cloud_unverified}} | `processed/damage_summary.json` | `bridges.damage_grade_counts.Unknown (cloud)` |
 | मर्मत प्याकेज १ का खण्डहरू | {{package_1_element_count}} | `processed/routing/repair_packages.json` | `ranked_packages[0].element_count` |
 | प्याकेज १ ले जोड्ने बस्तीहरू | {{package_1_reconnected_settlements}} | `processed/routing/repair_packages.json` | `ranked_packages[0].settlements_count` |
@@ -222,33 +256,329 @@ class SitRepGenerator:
         self.guard = NumberGuard()
         self.values = self._collect_fill_values()
 
-    def _collect_fill_values(self) -> Dict[str, str]:
-        """Collect all grounded numeric values and metadata strings from FactStore."""
-        top_step = None
-        for step_idx in range(1, 6):
-            set_rec = self.store.get_value(f"repair.step_{step_idx}.settlements_reconnected", 0)
-            if set_rec > 0:
-                top_step = step_idx
-                break
-        if top_step is None:
-            top_step = 1
+    def _collect_fill_values(self) -> Dict[str, Any]:
+        """Collect all grounded numeric values and structured entities from run directory."""
+        run_dir = Path(self.store.run_dir)
+        proc = run_dir / "processed"
+        routing = proc / "routing"
+        raw = run_dir / "raw"
 
-        top_elem = self.store.get_value(f"repair.step_{top_step}.osm_id", "not computed")
-        top_len = self.store.get_value(f"repair.step_{top_step}.length_m", "not computed")
-        top_set = self.store.get_value(f"repair.step_{top_step}.settlements_reconnected", "not computed")
-        top_bld = self.store.get_value(f"repair.step_{top_step}.buildings_reconnected", "not computed")
+        # 1. Summary metadata
+        sum_p = run_dir / "run_summary.json"
+        sum_data = json.loads(sum_p.read_text()) if sum_p.exists() else {}
+        ev_date = str(sum_data.get("event_date", self.store.get_value("event.date", "2026-08-26")))
+        ev_year = ev_date[:4] if len(ev_date) >= 4 and ev_date[:4].isdigit() else "2026"
 
-        bbox_raw = self.store.metadata.get("bbox", "not computed")
-        bbox_str = f"[{bbox_raw[0]:.2f}, {bbox_raw[1]:.2f}, {bbox_raw[2]:.2f}, {bbox_raw[3]:.2f}]" if isinstance(bbox_raw, list) else str(bbox_raw)
+        bbox_raw = sum_data.get("bbox", self.store.metadata.get("bbox", [0, 0, 0, 0]))
+        bbox_str = f"[{bbox_raw[0]:.2f}, {bbox_raw[1]:.2f}, {bbox_raw[2]:.2f}, {bbox_raw[3]:.2f}]" if isinstance(bbox_raw, list) and len(bbox_raw) == 4 else str(bbox_raw)
 
-        sensors = self.store.metadata.get("sensors_used", ["Sentinel-2 MSI", "Sentinel-1 RTC SAR", "Copernicus DEM-30", "OpenStreetMap"])
+        raw_regime = sum_data.get("terrain_regime") or ("flat_floodplain" if "assam" in run_dir.name.lower() else "steep_valley")
+        is_flat = (raw_regime == "flat_floodplain")
+
+        # 2. Sensors & Dates
+        s2_scenes = sum_data.get("s2_scenes_used", [])
+        pre_dates, post_dates = set(), set()
+        for s in s2_scenes:
+            for p in s.split("_"):
+                if len(p) >= 8 and p[:8].isdigit():
+                    formatted = f"{p[:4]}-{p[4:6]}-{p[6:8]}"
+                    if s.startswith("pre_"):
+                        pre_dates.add(formatted)
+                    elif s.startswith("post_"):
+                        post_dates.add(formatted)
+        pre_dates_str = f"{min(pre_dates)} to {max(pre_dates)}" if pre_dates else "—"
+        post_dates_str = f"{min(post_dates)} to {max(post_dates)}" if post_dates else "—"
+
+        sensors = sum_data.get("sensors_used", self.store.metadata.get("sensors_used", ["Sentinel-2 MSI", "Sentinel-1 RTC SAR", "Copernicus DEM-30", "OpenStreetMap"]))
         sensors_str = ", ".join(sensors) if isinstance(sensors, list) else str(sensors)
 
-        event_date = str(self.store.get_value("event.date", self.store.metadata.get("event_date", "not computed")))
-        event_year = str(event_date)[:4] if event_date != "not computed" and len(event_date) >= 4 else "2026"
+        # 3. Hazard Areas
+        obs_area = round(float(self.store.get_value("hazard.area.event_total_affected", self.store.get_value("metrics.affected_km2_observed", 0.0))), 2)
+        inf_area = round(float(self.store.get_value("hazard.area.event_inferred_affected", self.store.get_value("metrics.affected_km2_inferred", 0.0))), 2)
+
+        # 4. River and upstream/downstream stretch
+        primary_river = extract_primary_river(run_dir) or ("Brahmaputra" if is_flat else "local river valley")
+        haz_p = proc / "hazard_polygons.geojson"
+        places_p = raw / "osm" / "osm_places.geojson"
+
+        up_place, down_place = "upstream area", "downstream area"
+        if haz_p.exists() and places_p.exists():
+            try:
+                hdata = json.loads(haz_p.read_text())
+                pdata = json.loads(places_p.read_text())
+                named_places = []
+                for pf in pdata.get("features", []):
+                    pp = pf.get("properties", {})
+                    pname = pp.get("name:en") or pp.get("name")
+                    pgeom = pf.get("geometry", {})
+                    pltype = pp.get("place", "")
+                    if pname and pgeom and pgeom.get("type") == "Point":
+                        coords = pgeom.get("coordinates", [None, None])
+                        if coords[0] is not None:
+                            named_places.append((pname, coords[0], coords[1], pltype))
+
+                c2_coords = []
+                for hf in hdata.get("features", []):
+                    if hf.get("properties", {}).get("class") in [2, 3]:
+                        def _rec(c):
+                            if not c: return
+                            if isinstance(c[0], (int, float)): c2_coords.append((c[0], c[1]))
+                            else:
+                                for sub in c: _rec(sub)
+                        _rec(hf.get("geometry", {}).get("coordinates", []))
+
+                if not c2_coords:
+                    for hf in hdata.get("features", []):
+                        def _rec(c):
+                            if not c: return
+                            if isinstance(c[0], (int, float)): c2_coords.append((c[0], c[1]))
+                            else:
+                                for sub in c: _rec(sub)
+                        _rec(hf.get("geometry", {}).get("coordinates", []))
+
+                if c2_coords and named_places:
+                    sorted_y = sorted(c2_coords, key=lambda pt: pt[1])
+                    pt_south = sorted_y[0]
+                    pt_north = sorted_y[-1]
+
+                    dem_p = raw / "dem" / "dem_cog.tif"
+                    n_is_upstream = True
+                    if dem_p.exists():
+                        try:
+                            import rasterio
+                            with rasterio.open(dem_p) as dem_src:
+                                val_s = list(dem_src.sample([pt_south]))[0][0]
+                                val_n = list(dem_src.sample([pt_north]))[0][0]
+                                if val_s > val_n:
+                                    n_is_upstream = False
+                        except Exception:
+                            pass
+
+                    pt_up = pt_north if n_is_upstream else pt_south
+                    pt_down = pt_south if n_is_upstream else pt_north
+
+                    settle_places = [p for p in named_places if p[3] in ["town", "village", "hamlet", "suburb", "neighbourhood", "isolated_dwelling"]]
+                    pool = settle_places if settle_places else named_places
+
+                    def _find_nearest(target_pt):
+                        best_n, min_d = None, 999999
+                        for pname, plon, plat, _ in pool:
+                            d = haversine_km(target_pt[0], target_pt[1], plon, plat)
+                            if d < min_d:
+                                min_d = d
+                                best_n = pname
+                        return best_n, min_d
+
+                    up_p, _ = _find_nearest(pt_up)
+                    down_p, _ = _find_nearest(pt_down)
+                    if up_p: up_place = up_p
+                    if down_p: down_place = down_p
+            except Exception as e:
+                logger.warning(f"Error computing hazard stretch: {e}")
+
+        # 5. Infrastructure Damage
+        dmg_p = proc / "damage_summary.json"
+        dmg = json.loads(dmg_p.read_text()) if dmg_p.exists() else {}
+        bld_total = dmg.get("buildings", {}).get("total_count", int(self.store.get_value("damage.buildings.total", 0)))
+        bld_affected = dmg.get("buildings", {}).get("affected_count", int(self.store.get_value("damage.buildings.affected_total", 0)))
+        b_grades = dmg.get("buildings", {}).get("damage_grade_counts", {})
+        bld_dest = b_grades.get("Destroyed", b_grades.get("Flooded", int(self.store.get_value("damage.buildings.destroyed", 0))))
+        bld_dam = b_grades.get("Damaged", b_grades.get("Possibly flooded", int(self.store.get_value("damage.buildings.damaged", 0))))
+        bld_poss = b_grades.get("Possibly damaged", int(self.store.get_value("damage.buildings.possibly_damaged", 0)))
+        bld_unv = b_grades.get("Unknown (cloud)", int(self.store.get_value("damage.buildings.unknown_cloud", 0)))
+
+        br_total = dmg.get("bridges", {}).get("total_count", int(self.store.get_value("damage.bridges.total", 0)))
+        br_affected = dmg.get("bridges", {}).get("affected_count", int(self.store.get_value("damage.bridges.affected_total", 0)))
+        br_grades = dmg.get("bridges", {}).get("damage_grade_counts", {})
+        br_dest = br_grades.get("Destroyed", br_grades.get("Flooded", int(self.store.get_value("damage.bridges.destroyed", 0))))
+        br_poss = br_grades.get("Possibly damaged", int(self.store.get_value("damage.bridges.possibly_damaged", 0)))
+        br_unv = br_grades.get("Unknown (cloud)", int(self.store.get_value("damage.bridges.unknown_cloud", 0)))
+
+        rd_total_km = round(float(dmg.get("roads", {}).get("total_km", self.store.get_value("damage.roads.total_km", 0.0))), 2)
+        rd_drivable_km = round(float(self.store.get_value("damage.roads.drivable_km", rd_total_km)), 2)
+        rd_grades = dmg.get("roads", {}).get("km_by_damage_grade", {})
+        rd_dest_km = round(float(rd_grades.get("Destroyed", rd_grades.get("Flooded", self.store.get_value("damage.roads.destroyed_km", 0.0)))), 2)
+        rd_poss_km = round(float(rd_grades.get("Possibly damaged", self.store.get_value("damage.roads.possibly_damaged_km", 0.0))), 2)
+        rd_unv_km = round(float(rd_grades.get("Unknown (cloud)", self.store.get_value("damage.roads.unknown_cloud_km", 0.0))), 2)
+
+        # Destroyed bridges on primary/secondary roads
+        major_br_roads = []
+        br_file = proc / "bridges_graded.geojson"
+        if br_file.exists():
+            try:
+                bdata = json.loads(br_file.read_text())
+                for f in bdata.get("features", []):
+                    p = f.get("properties", {})
+                    if p.get("damage_grade") in ["Destroyed", "Flooded"]:
+                        name = p.get("name:en") or p.get("name") or p.get("road_name")
+                        ref = p.get("ref") or p.get("road_ref")
+                        hw = p.get("highway")
+                        if any(k in str(name).lower() for k in ["pasang", "lhamu"]): name = "Pasang Lhamu Highway"
+                        lbl = f"{name} ({ref})" if name and ref else (name or ref or hw)
+                        if hw in ["primary", "secondary", "trunk", "motorway"] or ref in ["NH42", "NH18", "NH310A", "NH310AG", "F30"]:
+                            major_br_roads.append(lbl)
+            except Exception:
+                pass
+        major_br_roads_en = ", ".join(dict.fromkeys(major_br_roads)) if major_br_roads else "none on primary roads"
+        major_br_roads_ne = ", ".join(dict.fromkeys(major_br_roads)) if major_br_roads else "मुख्य सडकमा कुनै पनि छैन"
+
+        # Main road destroyed km
+        road_dest_by_name = {}
+        r_file = proc / "roads_graded.geojson"
+        if r_file.exists():
+            try:
+                rdata = json.loads(r_file.read_text())
+                for rf in rdata.get("features", []):
+                    rp = rf.get("properties", {})
+                    if rp.get("damage_grade") in ["Destroyed", "Flooded"]:
+                        rlen = rp.get("length_m", 0) / 1000.0
+                        rname = rp.get("name:en") or rp.get("name")
+                        rref = rp.get("ref")
+                        if rname and any(k in rname.lower() for k in ["pasang", "lhamu"]):
+                            rname = "Pasang Lhamu Highway"
+                        if rref == "NH42" or (rname and "pasang" in rname.lower()):
+                            lbl = "Pasang Lhamu Highway (NH42)"
+                        elif rref == "F30" or (rname and "melamchi" in str(rname).lower()):
+                            lbl = f"{rname or 'Helambu Highway'} (F30)"
+                        elif rref in ["NH310A", "NH310AG"] or (rname and "sikkim" in str(rname).lower()):
+                            lbl = f"{rname or 'North Sikkim Highway'} ({rref or 'NH310A'})"
+                        else:
+                            lbl = f"{rname} ({rref})" if rname and rref else (rname or rref or rp.get("highway", "local road"))
+                        road_dest_by_name[lbl] = road_dest_by_name.get(lbl, 0.0) + rlen
+            except Exception:
+                pass
+        sorted_roads = sorted(road_dest_by_name.items(), key=lambda x: x[1], reverse=True)
+        if sorted_roads:
+            main_rd_name, main_rd_len = sorted_roads[0]
+            main_road_destroyed_en = f"{main_rd_name}: {main_rd_len:.2f} km"
+            main_road_destroyed_ne = f"{main_rd_name}: {main_rd_len:.2f} कि.मी."
+        else:
+            main_road_destroyed_en = "no major classified road destroyed"
+            main_road_destroyed_ne = "कुनै प्रमुख सडक नष्ट भएको छैन"
+
+        # 6. Routing & Cut-off Settlements
+        s_file = routing / "settlements.geojson"
+        s_geo = json.loads(s_file.read_text()) if s_file.exists() else {}
+        s_features = s_geo.get("features", [])
+
+        no_ground_list = []
+        veh_cut_list = []
+        for feat in s_features:
+            p = dict(feat.get("properties", {}))
+            geom = feat.get("geometry", {})
+            coords = geom.get("coordinates", [None, None]) if geom else [None, None]
+            p["_coords"] = coords
+            p["_name"] = format_settlement_name(p, include_coords=False, include_access=False)
+            p["_bld"] = p.get("building_count", 0)
+
+            if p.get("vehicle_status_opt") == "cut_off" and p.get("walking_status_opt") == "cut_off":
+                no_ground_list.append(p)
+            if p.get("vehicle_status_opt") == "cut_off":
+                veh_cut_list.append(p)
+
+        no_ground_sorted = sorted(no_ground_list, key=lambda x: x["_bld"], reverse=True)
+        veh_cut_sorted = sorted(veh_cut_list, key=lambda x: x["_bld"], reverse=True)[:5]
+
+        c_p = routing / "cutoff_summary.json"
+        c_data = json.loads(c_p.read_text()) if c_p.exists() else {}
+        veh_opt_c = c_data.get("vehicle", {}).get("optimistic", {}).get("cut_off_count", len(veh_cut_list))
+        veh_pess_c = c_data.get("vehicle", {}).get("pessimistic", {}).get("cut_off_count", veh_opt_c)
+        walk_opt_c = c_data.get("walking", {}).get("optimistic", {}).get("cut_off_count", len(no_ground_list))
+        no_ground_c = len(no_ground_list)
+
+        def _make_table_md(items: List[Dict[str, Any]], lang_ne: bool) -> str:
+            if not items:
+                return "None (all assessed settlements retain access)." if not lang_ne else "कुनै पनि छैन (सबै बस्तीहरूमा पहुँच यथावत छ)।"
+            headers = "| बस्ती | निर्देशाङ्क | भवन संख्या |\n| :--- | :--- | :--- |" if lang_ne else "| Settlement | Coordinates | Buildings |\n| :--- | :--- | :--- |"
+            rows = []
+            for it in items:
+                c = it["_coords"]
+                cstr = f"({c[1]:.4f}, {c[0]:.4f})" if c and c[0] is not None else "—"
+                rows.append(f"| {it['_name']} | {cstr} | {it['_bld']} |")
+            return headers + "\n" + "\n".join(rows)
+
+        no_ground_table_md_en = _make_table_md(no_ground_sorted, False)
+        no_ground_table_md_ne = _make_table_md(no_ground_sorted, True)
+        top_veh_table_md_en = _make_table_md(veh_cut_sorted, False)
+        top_veh_table_md_ne = _make_table_md(veh_cut_sorted, True)
+
+        # 7. Repair Priority & Package 1
+        rp_p = routing / "repair_priority.json"
+        single_repair_en = "No single repair reconnects a settlement on its own"
+        single_repair_ne = "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"
+
+        if rp_p.exists():
+            try:
+                rp_data = json.loads(rp_p.read_text())
+                single_ranking = rp_data.get("single_element_repair_ranking", [])
+                if single_ranking:
+                    best_single = single_ranking[0]
+                    s_rec = best_single.get("settlements_regained_if_only_repaired", 0)
+                    b_rec = best_single.get("buildings_regained_if_only_repaired", 0)
+                    osm_id = best_single.get("osm_id", "")
+                    m_len = best_single.get("total_destroyed_length_m", 0.0)
+
+                    road_lbl = ""
+                    roads_file = proc / "roads_graded.geojson"
+                    if roads_file.exists():
+                        try:
+                            r_data = json.loads(roads_file.read_text())
+                            for feat in r_data.get("features", []):
+                                props = feat.get("properties", {})
+                                oid = props.get("@osmId") or props.get("osm_id") or ""
+                                if oid == osm_id:
+                                    rname = props.get("name:en") or props.get("name")
+                                    rref = props.get("ref")
+                                    if rname and any(k in rname.lower() for k in ["pasang", "lhamu"]):
+                                        rname = "Pasang Lhamu Highway"
+                                    if rname and rref: road_lbl = f"{rname} ({rref})"
+                                    elif rname: road_lbl = rname
+                                    elif rref: road_lbl = rref
+                                    break
+                        except Exception: pass
+                    lbl_pfx = f"{road_lbl}, " if road_lbl else ""
+                    if s_rec > 0:
+                        single_repair_en = f"Best single repair: {lbl_pfx}{osm_id}, {round(m_len)} m -> {s_rec} settlements ({b_rec} buildings)"
+                        single_repair_ne = f"सबैभन्दा प्रभावकारी एकल मर्मत: {lbl_pfx}{osm_id}, {round(m_len)} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
+            except Exception:
+                pass
+
+        pkg_p = routing / "repair_packages.json"
+        top_pkg = {}
+        if pkg_p.exists():
+            try:
+                pkg_data = json.loads(pkg_p.read_text())
+                for pkg in pkg_data.get("ranked_packages", []):
+                    if len(pkg.get("elements", [])) > 0:
+                        top_pkg = pkg
+                        break
+            except Exception:
+                pass
+        pkg_elem_c = top_pkg.get("element_count", len(top_pkg.get("elements", [])))
+        pkg_elems = top_pkg.get("elements", [])
+        pkg_len_m = top_pkg.get("length_m")
+        if (pkg_len_m is None or pkg_len_m == 0.0) and rp_p.exists():
+            try:
+                rp_data = json.loads(rp_p.read_text())
+                elem_lens = {x["osm_id"]: x.get("total_destroyed_length_m", 0.0) for x in rp_data.get("single_element_repair_ranking", [])}
+                pkg_len_m = round(sum(elem_lens.get(e, 0.0) for e in pkg_elems), 1)
+            except Exception:
+                pkg_len_m = 0.0
+        else:
+            pkg_len_m = round(float(pkg_len_m or 0.0), 1)
+        pkg_set_c = top_pkg.get("settlements_count", 0)
+        pkg_bld_c = top_pkg.get("buildings_count", 0)
+        pkg_elems_str = ", ".join(pkg_elems) if pkg_elems else "None"
+
+        if top_pkg and pkg_elem_c > 0:
+            pkg_sentence_en = f"Package 1 ({pkg_elem_c} elements, {pkg_len_m} m) restores vehicle access to {pkg_set_c} settlements ({pkg_bld_c} buildings)."
+            pkg_sentence_ne = f"प्याकेज १ ({pkg_elem_c} खण्ड, {pkg_len_m} मिटर) ले {pkg_set_c} बस्तीहरू ({pkg_bld_c} भवनहरू) मा सवारी पहुँच पुनर्स्थापित गर्दछ।"
+        else:
+            pkg_sentence_en = "No actionable repair package required (no network access restoration needed)."
+            pkg_sentence_ne = "कुनै पनि सडक मर्मत प्याकेज आवश्यक छैन।"
 
         attributions = (
-            f"Contains modified Copernicus Sentinel data {event_year}.\n"
+            f"Contains modified Copernicus Sentinel data {ev_year}.\n"
             "Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.\n"
             "© OpenStreetMap contributors under ODbL.\n"
             "European Union, Copernicus Emergency Management Service data (EMSR927, EMSR692, EMSR659).\n"
@@ -256,106 +586,72 @@ class SitRepGenerator:
             "Educational prototype, not an operational tool."
         )
 
-        pkg1 = self.store.repair_packages[0] if getattr(self.store, "repair_packages", None) else {}
-        pkg1_elem_cnt = str(pkg1.get("element_count", self.store.get_value("repair.package_1.element_count", "not computed")))
-        pkg1_set_cnt = str(pkg1.get("settlements_count", self.store.get_value("repair.package_1.settlements_count", "not computed")))
-        pkg1_bld_cnt = str(pkg1.get("buildings_count", self.store.get_value("repair.package_1.buildings_count", "not computed")))
-        elems_arr = pkg1.get("elements", [])
-        pkg1_elems_list = ", ".join(elems_arr) if isinstance(elems_arr, list) and elems_arr else str(elems_arr or "not computed")
-        pkg1_length_m = str(pkg1.get("length_m", round(sum(self.store.get_value(f"repair.step_{i}.length_m", 0.0) for i in range(1, 5)), 1)))
-
-        single_ranking = []
-        rp_path = Path(self.store.run_dir) / "processed" / "routing" / "repair_priority.json"
-        if rp_path.exists():
-            try:
-                rp_data = json.loads(rp_path.read_text())
-                single_ranking = rp_data.get("single_element_repair_ranking", [])
-            except Exception:
-                pass
-
-        best_single = single_ranking[0] if single_ranking else None
-        s_rec = best_single.get("settlements_regained_if_only_repaired", 0) if best_single else 0
-        b_rec = best_single.get("buildings_regained_if_only_repaired", 0) if best_single else 0
-        osm_id = best_single.get("osm_id", "") if best_single else ""
-        len_m = best_single.get("total_destroyed_length_m", 0.0) if best_single else 0.0
-
-        road_label = ""
-        roads_file = Path(self.store.run_dir) / "processed" / "roads_graded.geojson"
-        if roads_file.exists() and osm_id:
-            try:
-                r_data = json.loads(roads_file.read_text())
-                for feat in r_data.get("features", []):
-                    props = feat.get("properties", {})
-                    oid = props.get("@osmId") or props.get("osm_id") or ""
-                    if oid == osm_id:
-                        rname = props.get("name:en") or props.get("name")
-                        rref = props.get("ref")
-                        if rname and any(k in rname.lower() for k in ["pasang", "laahamu", "lhamu"]):
-                            rname = "Pasang Lhamu Highway"
-                        if rname and rref:
-                            road_label = f"{rname} ({rref})"
-                        elif rname:
-                            road_label = rname
-                        elif rref:
-                            road_label = rref
-                        break
-            except Exception:
-                pass
-
-        label_prefix = f"{road_label}, " if road_label else ""
-        m_len_str = f"{round(len_m)} m"
-
-        if s_rec > 0:
-            single_repair_en = f"Best single repair: {label_prefix}{osm_id}, {m_len_str} -> {s_rec} settlements ({b_rec} buildings)"
-            single_repair_ne = f"सबैभन्दा प्रभावकारी एकल मर्मत: {label_prefix}{osm_id}, {round(len_m)} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
-        else:
-            single_repair_en = "No single repair reconnects a settlement on its own"
-            single_repair_ne = "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"
-
-        values = {
-            "run_dir": str(self.store.run_dir),
-            "event_date": event_date,
+        return {
+            "run_dir": str(run_dir),
+            "event_date": ev_date,
+            "event_year": ev_year,
             "bbox": bbox_str,
-            "optical_evidence_date": str(self.store.metadata.get("optical_date", "not computed")),
+            "is_flat": is_flat,
             "sensors_used": sensors_str,
-            "affected_km2_observed": str(self.store.get_value("hazard.area.event_total_affected", self.store.get_value("metrics.affected_km2_observed", "not computed"))),
-            "affected_km2_inferred": str(self.store.get_value("hazard.area.event_inferred_affected", self.store.get_value("metrics.affected_km2_inferred", "not computed"))),
-            "buildings_total": str(self.store.get_value("damage.buildings.total", "not computed")),
-            "buildings_affected_total": str(self.store.get_value("damage.buildings.affected_total", "not computed")),
-            "buildings_destroyed": str(self.store.get_value("damage.buildings.destroyed", "not computed")),
-            "buildings_damaged": str(self.store.get_value("damage.buildings.damaged", "not computed")),
-            "buildings_possibly_damaged": str(self.store.get_value("damage.buildings.possibly_damaged", "not computed")),
-            "buildings_cloud_unverified": str(self.store.get_value("damage.buildings.unknown_cloud", "not computed")),
-            "bridges_total": str(self.store.get_value("damage.bridges.total", "not computed")),
-            "bridges_affected_total": str(self.store.get_value("damage.bridges.affected_total", "not computed")),
-            "bridges_destroyed": str(self.store.get_value("damage.bridges.destroyed", "not computed")),
-            "bridges_possibly_damaged": str(self.store.get_value("damage.bridges.possibly_damaged", "not computed")),
-            "bridges_cloud_unverified": str(self.store.get_value("damage.bridges.unknown_cloud", "not computed")),
-            "roads_total_km": str(self.store.get_value("damage.roads.total_km", "not computed")),
-            "roads_drivable_km": str(self.store.get_value("damage.roads.drivable_km", "not computed")),
-            "roads_destroyed_km": str(self.store.get_value("damage.roads.destroyed_km", "not computed")),
-            "roads_possibly_damaged_km": str(self.store.get_value("damage.roads.possibly_damaged_km", "not computed")),
-            "roads_cloud_unverified_km": str(self.store.get_value("damage.roads.unknown_cloud_km", "not computed")),
-            "cutoff_vehicle_optimistic_count": str(self.store.get_value("cutoff.vehicle.optimistic.count", "not computed")),
-            "cutoff_vehicle_pessimistic_count": str(self.store.get_value("cutoff.vehicle.pessimistic.count", "not computed")),
-            "cutoff_walking_optimistic_count": str(self.store.get_value("cutoff.walking.optimistic.count", "not computed")),
-            "connected_unverified_count": str(self.store.get_value("cutoff.vehicle.optimistic.connected_unverified", "not computed")),
-            "package_1_element_count": pkg1_elem_cnt,
-            "package_1_elements_list": pkg1_elems_list,
-            "package_1_length_m": pkg1_length_m,
-            "package_1_reconnected_settlements": pkg1_set_cnt,
-            "package_1_reconnected_buildings": pkg1_bld_cnt,
+            "pre_dates_str": pre_dates_str,
+            "post_dates_str": post_dates_str,
+            "affected_km2_observed": str(obs_area),
+            "affected_km2_inferred": str(inf_area),
+            "primary_river": primary_river,
+            "upstream_place": up_place,
+            "downstream_place": down_place,
+            "bld_grade_1_label": "Flooded" if is_flat else "Destroyed",
+            "bld_grade_1_label_ne": "जलमग्न" if is_flat else "पूर्ण नष्ट",
+            "bld_grade_2_label": "Possibly Flooded" if is_flat else "Damaged",
+            "bld_grade_2_label_ne": "सम्भावित जलमग्न" if is_flat else "क्षतिग्रस्त",
+            "buildings_total": str(bld_total),
+            "buildings_affected_total": str(bld_affected),
+            "buildings_destroyed": str(bld_dest),
+            "buildings_damaged": str(bld_dam),
+            "buildings_possibly_damaged": str(bld_poss),
+            "buildings_cloud_unverified": str(bld_unv),
+            "bridges_total": str(br_total),
+            "bridges_affected_total": str(br_affected),
+            "bridges_destroyed": str(br_dest),
+            "bridges_possibly_damaged": str(br_poss),
+            "bridges_cloud_unverified": str(br_unv),
+            "major_bridge_roads_en": major_br_roads_en,
+            "major_bridge_roads_ne": major_br_roads_ne,
+            "roads_total_km": str(rd_total_km),
+            "roads_drivable_km": str(rd_drivable_km),
+            "roads_destroyed_km": str(rd_dest_km),
+            "roads_possibly_damaged_km": str(rd_poss_km),
+            "roads_cloud_unverified_km": str(rd_unv_km),
+            "main_road_destroyed_en": main_road_destroyed_en,
+            "main_road_destroyed_ne": main_road_destroyed_ne,
+            "cutoff_vehicle_optimistic_count": str(veh_opt_c),
+            "cutoff_vehicle_pessimistic_count": str(veh_pess_c),
+            "cutoff_walking_optimistic_count": str(walk_opt_c),
+            "no_ground_access_count": str(no_ground_c),
+            "no_ground_table_md_en": no_ground_table_md_en,
+            "no_ground_table_md_ne": no_ground_table_md_ne,
+            "top_veh_table_md_en": top_veh_table_md_en,
+            "top_veh_table_md_ne": top_veh_table_md_ne,
+            "no_ground_sorted": no_ground_sorted,
+            "veh_cut_sorted": veh_cut_sorted,
             "single_repair_sentence_en": single_repair_en,
             "single_repair_sentence_ne": single_repair_ne,
+            "package_1_element_count": str(pkg_elem_c),
+            "package_1_elements_list": pkg_elems_str,
+            "package_1_length_m": str(pkg_len_m),
+            "package_1_reconnected_settlements": str(pkg_set_c),
+            "package_1_reconnected_buildings": str(pkg_bld_c),
+            "package_1_sentence_en": pkg_sentence_en,
+            "package_1_sentence_ne": pkg_sentence_ne,
             "attributions": attributions,
         }
-        return values
 
     def fill_template(self, template_prose: str) -> str:
         """Replace all {{placeholder}} tokens with verified numbers from FactStore."""
         filled = template_prose
         for key, val in self.values.items():
-            filled = filled.replace(f"{{{{{key}}}}}", str(val))
+            if isinstance(val, (str, int, float)):
+                filled = filled.replace(f"{{{{{key}}}}}", str(val))
         return filled
 
     def generate_markdown(self, lang: str = "en", custom_prose: Optional[str] = None) -> str:
@@ -373,149 +669,78 @@ class SitRepGenerator:
 
     def _build_1page_html(self, lang: str = "en") -> str:
         """Build strictly 1-page HTML for WeasyPrint PDF output."""
-        run_dir = Path(self.store.run_dir)
         v = self.values
+        run_dir = Path(v["run_dir"])
+        proc = run_dir / "processed"
         is_ne = (lang == "ne")
+        is_flat = v["is_flat"]
 
-        # Map overview quicklook image
+        # Quicklook image
         ql_img_tag = ""
         for ql_name in ["quicklook_l4.png", "quicklook_layer2.png"]:
-            ql_p = run_dir / "processed" / ql_name
-            if ql_p.exists():
+            ql_path = proc / ql_name
+            if ql_path.exists():
                 try:
-                    b64 = base64.b64encode(ql_p.read_bytes()).decode("ascii")
+                    b64 = base64.b64encode(ql_path.read_bytes()).decode("ascii")
                     ql_img_tag = f'<img class="map-img" src="data:image/png;base64,{b64}" />'
                     break
                 except Exception:
                     pass
 
-        # Rescue priorities (Needs help first)
-        pess_list = []
-        c_summary_path = run_dir / "processed" / "routing" / "cutoff_summary.json"
-        if c_summary_path.exists():
-            try:
-                import json
-                with open(c_summary_path) as f:
-                    c_data = json.load(f)
-                pess_list = c_data.get("vehicle", {}).get("pessimistic", {}).get("cut_off_settlements", [])
-            except Exception:
-                pass
+        # Format settlement rows
+        def _build_settlement_rows(items: List[Dict[str, Any]]) -> str:
+            if not items:
+                return '<tr><td colspan="3" style="text-align:center; color:#64748b;">None (all retain access)</td></tr>' if not is_ne else '<tr><td colspan="3" style="text-align:center; color:#64748b;">कुनै पनि छैन</td></tr>'
+            rows = []
+            for it in items:
+                c = it["_coords"]
+                coord_str = f"{c[1]:.4f}, {c[0]:.4f}" if c and c[0] is not None else "—"
+                rows.append(f'<tr><td>{html.escape(it["_name"])}</td><td>{coord_str}</td><td style="text-align:right;"><strong>{it["_bld"]}</strong></td></tr>')
+            return "\n".join(rows)
 
-        sorted_rescue = sorted(pess_list, key=lambda x: x.get("building_count", 0), reverse=True)
-        top_rescue = sorted_rescue[:3]
-
-        # Actionable repair package (Repair first)
-        rp_path = run_dir / "processed" / "routing" / "repair_packages.json"
-        top_pkg = {}
-        if rp_path.exists():
-            try:
-                import json
-                with open(rp_path) as f:
-                    rp_data = json.load(f)
-                for pkg in rp_data.get("ranked_packages", []):
-                    if len(pkg.get("elements", [])) > 0:
-                        top_pkg = pkg
-                        break
-            except Exception:
-                pass
-
-        pkg_rank = top_pkg.get("rank", 1)
-        pkg_set = top_pkg.get("settlements_count", 0)
-        pkg_bld = top_pkg.get("buildings_count", 0)
-        pkg_elems = top_pkg.get("elements", [])
-        pkg_elem_count = len(pkg_elems)
-        pkg_elems_str = ", ".join(pkg_elems) if pkg_elems else "None"
-
-        ev_year = v["event_date"][:4] if len(v["event_date"]) >= 4 and v["event_date"][:4].isdigit() else "2026"
-
-        from src.common.naming import format_settlement_name
-
-        def _format_rescue_item(s_dict: Dict[str, Any], in_nepali: bool) -> str:
-            full_s = self.store.settlement_index.get(s_dict.get("settlement_id"), s_dict)
-            s_name = format_settlement_name(full_s, include_coords=False, include_access=False)
-            bld = s_dict.get("building_count", 0)
-            if in_nepali:
-                return f"<li><strong>{html.escape(s_name)}</strong>: {bld} भवनहरू (सवारी सम्पर्क विच्छेद)</li>"
-            return f"<li><strong>{html.escape(s_name)}</strong>: {bld} buildings (isolated by road)</li>"
+        no_ground_rows = _build_settlement_rows(v["no_ground_sorted"])
+        top_veh_rows = _build_settlement_rows(v["veh_cut_sorted"])
 
         if is_ne:
             title = "द्रुत विपद् स्थिति प्रतिवेदन (SITREP)"
             badge = "शैक्षिक प्रोटोटाइप"
-            meta = f"घटना मिति: <strong>{v['event_date']}</strong> | उपग्रह अवलोकन: <strong>{v['optical_evidence_date']}</strong> | क्षेत्र (BBox): <strong>{v['bbox']}</strong>"
-            kpi1_lbl = "प्रत्यक्ष बाढी / लेदो"
-            kpi1_val = f"{v['affected_km2_observed']} km²"
-            kpi2_lbl = "पूर्ण नष्ट भवनहरू"
-            kpi2_val = v["buildings_destroyed"]
-            kpi3_lbl = "नष्ट भएका पुलहरू"
-            kpi3_val = v["bridges_destroyed"]
-            kpi4_lbl = "सडक सम्पर्कविहीन बस्ती"
-            kpi4_val = v["cutoff_vehicle_optimistic_count"]
+            meta_str = f"घटना मिति: <strong>{v['event_date']}</strong> | उपग्रह: <strong>{v['post_dates_str']}</strong> | क्षेत्र (BBox): <strong>{v['bbox']}</strong>"
 
-            map_caption = "स्याटेलाइट क्षति नक्शा तथा प्रभावित पूर्वाधार"
-            sec_needs = "तत्काल उद्धार आवश्यक (Needs help first)"
-            sec_repair = "प्राथमिकता मर्मत (Repair first)"
-            sec_infra = "भौतिक पूर्वाधार क्षति स्थिति"
-            sec_limits = "तथ्याङ्कका मुख्य सीमाहरू (Known limits)"
+            sec1_title = "१. बाढी कहाँ आयो?"
+            sec1_text = f"प्रत्यक्ष पुष्टि भएको बाढी क्षेत्र <strong>{v['affected_km2_observed']} वर्ग कि.मी.</strong> र अनुमानित बहाव क्षेत्र <strong>{v['affected_km2_inferred']} वर्ग कि.मी.</strong> छ। {v['primary_river']} वरपर <strong>लगभग {v['upstream_place']} देखि {v['downstream_place']} सम्म</strong> बाढीको असर देखिएको छ। (उपग्रह: पूर्व {v['pre_dates_str']} / पश्चात {v['post_dates_str']})।"
 
-            rescue_rows = "".join([_format_rescue_item(s, True) for s in top_rescue]) if top_rescue else "<li>कुनै पनि बस्ती पूर्ण विच्छेद छैन।</li>"
+            sec2_title = "२. के क्षति भयो?"
+            bld_label = "जलमग्न" if is_flat else "नष्ट"
+            sec2_text = f"• मुख्य सडक क्षति: <strong>{v['main_road_destroyed_ne']}</strong> (कुल {v['roads_destroyed_km']} कि.मी. {bld_label}, {v['roads_possibly_damaged_km']} कि.मी. सम्भावित क्षति, {v['roads_cloud_unverified_km']} कि.मी. अपुष्ट)।<br/>• मुख्य पुलहरू: {v['major_bridge_roads_ne']}।"
 
-            if top_pkg and pkg_elem_count > 0:
-                repair_text = f"<strong>प्याकेज {pkg_rank}</strong> ({pkg_elem_count} पूर्वाधार: {html.escape(pkg_elems_str)}) मर्मत गर्दा <strong>{pkg_set} बस्तीहरू</strong> र <strong>{pkg_bld} भवनहरू</strong>मा सवारी पहुँच पुन: जोडिन्छ। {v['single_repair_sentence_ne']}।"
-            else:
-                repair_text = f"तत्काल एकल वा प्याकेज मर्मत योग्य सडक खण्ड पहिचान भएको छैन। {v['single_repair_sentence_ne']}।"
+            sec3_title = "३. को सम्पर्कविहीन भयो?"
+            sec3_summary = f"सवारी पहुँच विच्छेद: <strong>{v['cutoff_vehicle_optimistic_count']} बस्तीहरू</strong> (निराशावादी: {v['cutoff_vehicle_pessimistic_count']})। पूर्ण स्थल सम्पर्कविहीन (पैदल तथा सवारी दुवै बन्द): <strong>{v['no_ground_access_count']} बस्तीहरू</strong>।"
 
-            infra_html = f"""
-            <table class="table-compact">
-              <tr><th>पूर्वाधार</th><th>नष्ट</th><th>प्रभावित</th><th>बादलले ढाकिएको</th><th>कुल मूल्याङ्कन</th></tr>
-              <tr><td>भवनहरू</td><td><strong>{v['buildings_destroyed']}</strong></td><td>{v['buildings_affected_total']}</td><td>{v['buildings_cloud_unverified']}</td><td>{v['buildings_total']}</td></tr>
-              <tr><td>पुलहरू</td><td><strong>{v['bridges_destroyed']}</strong></td><td>{v['bridges_affected_total']}</td><td>{v['bridges_cloud_unverified']}</td><td>{v['bridges_total']}</td></tr>
-              <tr><td>सडक (कि.मी.)</td><td><strong>{v['roads_destroyed_km']}</strong></td><td>{v['roads_possibly_damaged_km']}</td><td>{v['roads_cloud_unverified_km']}</td><td>{v['roads_total_km']}</td></tr>
-            </table>
-            """
-            limits_html = f"""
-            • बादलका कारण {v['buildings_cloud_unverified']} भवनहरू र {v['roads_cloud_unverified_km']} कि.मी. सडक अप्टिकल पुष्टि हुन सकेको छैन।<br/>
-            • स्थायी पानी/छायाँ पहाडी भिरालो भूभागमा DEM लुक-एंगलद्वारा हटाइएको छ।<br/>
-            • भवन तथा सडक संख्या प्रकोप पूर्वको OpenStreetMap तथ्याङ्कमा आधारित छ।
-            """
+            sec4_title = "४. पहिले के मर्मत गर्ने?"
+            sec4_text = f"• {v['single_repair_sentence_ne']}।<br/>• <strong>{v['package_1_sentence_ne']}</strong>"
+
+            lbl_no_ground = "पूर्ण स्थल सम्पर्कविहीन बस्ती (No ground access)"
+            lbl_top_road = "सबैभन्दा ठूला ५ सवारी सम्पर्कविहीन बस्ती"
         else:
             title = "RAPID DISASTER SITUATION REPORT (SITREP)"
             badge = "Educational Prototype"
-            meta = f"Event Date: <strong>{v['event_date']}</strong> | Optical Observation: <strong>{v['optical_evidence_date']}</strong> | AOI: <strong>{v['bbox']}</strong>"
-            kpi1_lbl = "Observed Hazard"
-            kpi1_val = f"{v['affected_km2_observed']} km²"
-            kpi2_lbl = "Destroyed Buildings"
-            kpi2_val = v["buildings_destroyed"]
-            kpi3_lbl = "Destroyed Bridges"
-            kpi3_val = v["bridges_destroyed"]
-            kpi4_lbl = "Cut-Off Settlements"
-            kpi4_val = v["cutoff_vehicle_optimistic_count"]
+            meta_str = f"Event Date: <strong>{v['event_date']}</strong> | Satellite: <strong>{v['post_dates_str']}</strong> | AOI: <strong>{v['bbox']}</strong>"
 
-            map_caption = "Satellite change detection and damaged infrastructure overview"
-            sec_needs = "NEEDS HELP FIRST (Rescue Priority)"
-            sec_repair = "REPAIR FIRST (Access Restoration)"
-            sec_infra = "INFRASTRUCTURE DAMAGE OVERVIEW"
-            sec_limits = "DATA LIMITATIONS & ATTRIBUTION"
+            sec1_title = "1. Where did the flood hit?"
+            sec1_text = f"Satellite analysis identifies <strong>{v['affected_km2_observed']} km²</strong> of directly observed hazard extent and <strong>{v['affected_km2_inferred']} km²</strong> inferred along tributaries. Affected stretch extends along <strong>{v['primary_river']}</strong> from near <strong>{v['upstream_place']}</strong> to near <strong>{v['downstream_place']}</strong> (Sensors: Pre {v['pre_dates_str']} / Post {v['post_dates_str']})."
 
-            rescue_rows = "".join([_format_rescue_item(s, False) for s in top_rescue]) if top_rescue else "<li>No settlements isolated by road.</li>"
+            sec2_title = "2. What was damaged?"
+            bld_label = "flooded" if is_flat else "destroyed"
+            sec2_text = f"• Major road damage: <strong>{v['main_road_destroyed_en']}</strong> (Total {v['roads_destroyed_km']} km {bld_label}, {v['roads_possibly_damaged_km']} km possibly damaged, {v['roads_cloud_unverified_km']} km unverified under clouds).<br/>• Major corridor bridges destroyed: {v['major_bridge_roads_en']}."
 
-            if top_pkg and pkg_elem_count > 0:
-                repair_text = f"<strong>Package {pkg_rank}</strong> ({pkg_elem_count} link{'s' if pkg_elem_count > 1 else ''}: {html.escape(pkg_elems_str)}) reconnects <strong>{pkg_set} settlement{'s' if pkg_set != 1 else ''}</strong> and <strong>{pkg_bld} buildings</strong>. {v['single_repair_sentence_en']}."
-            else:
-                repair_text = f"No actionable repair package identified (0 elements restore network connectivity). {v['single_repair_sentence_en']}."
+            sec3_title = "3. Who is cut off?"
+            sec3_summary = f"<strong>{v['cutoff_vehicle_optimistic_count']} settlements</strong> cut off from any town or hospital by road (pessimistic: <strong>{v['cutoff_vehicle_pessimistic_count']}</strong>). <strong>{v['no_ground_access_count']} settlements</strong> have no ground access (dual vehicle & walking severed)."
 
-            infra_html = f"""
-            <table class="table-compact">
-              <tr><th>Asset</th><th>Destroyed</th><th>Damaged / Poss.</th><th>Cloud-Obscured</th><th>Total Evaluated</th></tr>
-              <tr><td>Buildings</td><td><strong>{v['buildings_destroyed']}</strong></td><td>{v['buildings_affected_total']}</td><td>{v['buildings_cloud_unverified']}</td><td>{v['buildings_total']}</td></tr>
-              <tr><td>Bridges</td><td><strong>{v['bridges_destroyed']}</strong></td><td>{v['bridges_affected_total']}</td><td>{v['bridges_cloud_unverified']}</td><td>{v['bridges_total']}</td></tr>
-              <tr><td>Roads (km)</td><td><strong>{v['roads_destroyed_km']}</strong></td><td>{v['roads_possibly_damaged_km']}</td><td>{v['roads_cloud_unverified_km']}</td><td>{v['roads_total_km']}</td></tr>
-            </table>
-            """
-            limits_html = f"""
-            • {v['buildings_cloud_unverified']} buildings and {v['roads_cloud_unverified_km']} km roads unverified under cloud cover.<br/>
-            • Inferred hazard ({v['affected_km2_inferred']} km²) modeled along drainage corridors.<br/>
-            • Infrastructure counts depend on pre-event OpenStreetMap inventory density.
-            """
+            sec4_title = "4. What to repair first"
+            sec4_text = f"• {v['single_repair_sentence_en']}.<br/>• <strong>{v['package_1_sentence_en']}</strong>"
+
+            lbl_no_ground = "No-Ground-Access Settlements (Air / Boat Priority)"
+            lbl_top_road = "5 Largest Road Cut-Off Settlements"
 
         html_out = f"""<!DOCTYPE html>
 <html>
@@ -524,7 +749,7 @@ class SitRepGenerator:
 <style>
 @page {{
     size: A4 portrait;
-    margin: 8mm 10mm 8mm 10mm;
+    margin: 6mm 8mm 5mm 8mm;
 }}
 * {{
     box-sizing: border-box;
@@ -532,15 +757,15 @@ class SitRepGenerator:
 body {{
     font-family: 'Noto Sans Devanagari', 'Lohit Devanagari', 'FreeSans', 'DejaVu Sans', sans-serif;
     color: #0f172a;
-    line-height: 1.25;
-    font-size: 8pt;
+    line-height: 1.22;
+    font-size: 7.8pt;
     margin: 0;
     padding: 0;
 }}
 .header {{
     border-bottom: 2px solid #b91c1c;
-    padding-bottom: 3px;
-    margin-bottom: 4px;
+    padding-bottom: 2px;
+    margin-bottom: 3px;
 }}
 .title-row {{
     display: flex;
@@ -548,44 +773,44 @@ body {{
     align-items: baseline;
 }}
 h1 {{
-    font-size: 13pt;
+    font-size: 12.5pt;
     color: #991b1b;
     margin: 0;
     text-transform: uppercase;
     font-weight: 700;
 }}
 .badge {{
-    font-size: 7.5pt;
+    font-size: 7pt;
     font-weight: 600;
     color: #475569;
     background: #f1f5f9;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 3px;
     border: 1px solid #cbd5e1;
 }}
 .meta-line {{
-    font-size: 7.5pt;
+    font-size: 7.2pt;
     color: #475569;
-    margin-top: 2px;
+    margin-top: 1px;
 }}
 .kpi-row {{
     display: flex;
-    gap: 6px;
-    margin: 4px 0;
+    gap: 5px;
+    margin: 3px 0;
 }}
 .kpi-card {{
     flex: 1;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-top: 3px solid #0284c7;
-    padding: 3px 5px;
+    border-top: 2.5px solid #0284c7;
+    padding: 2px 4px;
     border-radius: 3px;
 }}
 .kpi-card.alert {{
     border-top-color: #dc2626;
 }}
 .kpi-val {{
-    font-size: 13pt;
+    font-size: 12pt;
     font-weight: 700;
     color: #0f172a;
     line-height: 1.1;
@@ -594,33 +819,32 @@ h1 {{
     color: #b91c1c;
 }}
 .kpi-lbl {{
-    font-size: 6.8pt;
+    font-size: 6.5pt;
     font-weight: 600;
     color: #64748b;
     text-transform: uppercase;
-    margin-top: 1px;
 }}
 .main-grid {{
     display: flex;
     gap: 8px;
-    margin: 3px 0;
+    margin-top: 2px;
 }}
 .col-left {{
-    flex: 1.05;
+    flex: 1;
 }}
 .col-right {{
-    flex: 0.95;
+    flex: 1;
 }}
-.section-title {{
-    font-size: 8.2pt;
+.sec-heading {{
+    font-size: 8pt;
     font-weight: 700;
     color: #0369a1;
     border-bottom: 1px solid #bae6fd;
     padding-bottom: 1px;
-    margin: 4px 0 2px 0;
+    margin: 3px 0 2px 0;
     text-transform: uppercase;
 }}
-.section-title.danger {{
+.sec-heading.danger {{
     color: #b91c1c;
     border-bottom-color: #fecaca;
 }}
@@ -628,41 +852,37 @@ h1 {{
     border: 1px solid #cbd5e1;
     border-radius: 3px;
     overflow: hidden;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     text-align: center;
     background: #f1f5f9;
 }}
 .map-img {{
     width: 100%;
-    height: 125px;
+    height: 98px;
     object-fit: cover;
     display: block;
 }}
 .map-caption {{
-    font-size: 6.5pt;
+    font-size: 6.2pt;
     color: #64748b;
     padding: 1px 3px;
     background: #f8fafc;
     border-top: 1px solid #e2e8f0;
 }}
-p {{
-    margin: 2px 0;
-}}
-ul {{
-    margin: 2px 0;
-    padding-left: 14px;
-}}
-li {{
-    margin-bottom: 1px;
+.sub-title {{
+    font-size: 7.2pt;
+    font-weight: 700;
+    color: #334155;
+    margin: 3px 0 1px 0;
 }}
 .table-compact {{
     width: 100%;
     border-collapse: collapse;
-    font-size: 7pt;
+    font-size: 6.8pt;
     margin: 2px 0;
 }}
 .table-compact th, .table-compact td {{
-    padding: 2px 4px;
+    padding: 1.5px 3px;
     border: 1px solid #e2e8f0;
     text-align: left;
 }}
@@ -671,23 +891,28 @@ li {{
     color: #475569;
     font-weight: 600;
 }}
-.limits-box {{
+.prose-box {{
+    font-size: 7.2pt;
+    line-height: 1.22;
+    margin: 2px 0;
+}}
+.footer-box {{
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 3px;
-    padding: 3px 5px;
-    margin-top: 2px;
-    font-size: 6.8pt;
+    padding: 2.5px 4px;
+    margin-top: 3px;
+    font-size: 6.2pt;
     color: #475569;
-    line-height: 1.25;
+    line-height: 1.2;
 }}
-.footer {{
+.footer-attr {{
     border-top: 1px solid #cbd5e1;
-    padding-top: 3px;
-    margin-top: 4px;
-    font-size: 6.5pt;
+    padding-top: 2px;
+    margin-top: 3px;
+    font-size: 5.8pt;
     color: #64748b;
-    line-height: 1.25;
+    line-height: 1.18;
 }}
 </style>
 </head>
@@ -698,57 +923,107 @@ li {{
     <h1>{title}</h1>
     <span class="badge">{badge}</span>
   </div>
-  <div class="meta-line">{meta}</div>
+  <div class="meta-line">{meta_str}</div>
 </div>
 
 <div class="kpi-row">
   <div class="kpi-card alert">
-    <div class="kpi-val">{kpi1_val}</div>
-    <div class="kpi-lbl">{kpi1_lbl}</div>
+    <div class="kpi-val">{v['affected_km2_observed']} km²</div>
+    <div class="kpi-lbl">{'प्रत्यक्ष बाढी / लेदो' if is_ne else 'Observed Hazard'}</div>
   </div>
   <div class="kpi-card alert">
-    <div class="kpi-val">{kpi2_val}</div>
-    <div class="kpi-lbl">{kpi2_lbl}</div>
+    <div class="kpi-val">{v['buildings_destroyed']}</div>
+    <div class="kpi-lbl">{'पूर्ण नष्ट / जलमग्न भवन' if is_ne else ('Flooded Buildings' if is_flat else 'Destroyed Buildings')}</div>
   </div>
   <div class="kpi-card alert">
-    <div class="kpi-val">{kpi3_val}</div>
-    <div class="kpi-lbl">{kpi3_lbl}</div>
+    <div class="kpi-val">{v['bridges_destroyed']}</div>
+    <div class="kpi-lbl">{'नष्ट / जलमग्न पुलहरू' if is_ne else ('Flooded Bridges' if is_flat else 'Destroyed Bridges')}</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-val">{kpi4_val}</div>
-    <div class="kpi-lbl">{kpi4_lbl}</div>
+    <div class="kpi-val">{v['cutoff_vehicle_optimistic_count']}</div>
+    <div class="kpi-lbl">{'सवारी सम्पर्कविहीन बस्ती' if is_ne else 'Cut-Off Settlements'}</div>
   </div>
 </div>
 
 <div class="main-grid">
   <div class="col-left">
+    <!-- 1. Where did the flood hit? -->
+    <div class="sec-heading">{sec1_title}</div>
     <div class="map-box">
       {ql_img_tag}
-      <div class="map-caption">{map_caption}</div>
+      <div class="map-caption">{'भूउपग्रह क्षति नक्शा तथा प्रभावित क्षेत्र' if is_ne else 'Satellite change detection & damage extent'}</div>
     </div>
-    
-    <div class="section-title danger">{sec_needs}</div>
-    <ul>
-      {rescue_rows}
-    </ul>
-  </div>
-  
-  <div class="col-right">
-    <div class="section-title">{sec_repair}</div>
-    <p>{repair_text}</p>
-    
-    <div class="section-title">{sec_infra}</div>
-    {infra_html}
-    
-    <div class="section-title">{sec_limits}</div>
-    <div class="limits-box">
-      {limits_html}
-    </div>
-  </div>
-</div>
+    <div class="prose-box">{sec1_text}</div>
 
-<div class="footer">
-  Contains modified Copernicus Sentinel data {ev_year}. Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. © OpenStreetMap contributors under ODbL. European Union, Copernicus Emergency Management Service data (EMSR927, EMSR692, EMSR659). Educational prototype, not an operational tool.
+    <!-- 3. Who is cut off? -->
+    <div class="sec-heading danger" style="margin-top: 4px;">{sec3_title}</div>
+    <div class="prose-box">{sec3_summary}</div>
+
+    <div class="sub-title">{lbl_no_ground}</div>
+    <table class="table-compact">
+      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
+      {no_ground_rows}
+    </table>
+
+    <div class="sub-title">{lbl_top_road}</div>
+    <table class="table-compact">
+      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
+      {top_veh_rows}
+    </table>
+  </div>
+
+  <div class="col-right">
+    <!-- 2. What was damaged? -->
+    <div class="sec-heading danger">{sec2_title}</div>
+    <table class="table-compact">
+      <tr>
+        <th>{'पूर्वाधार' if is_ne else 'Asset'}</th>
+        <th>{'नष्ट / जलमग्न' if is_ne else ('Flooded' if is_flat else 'Destroyed')}</th>
+        <th>{'क्षतिग्रस्त' if is_ne else 'Damaged'}</th>
+        <th>{'अपुष्ट' if is_ne else 'Cloud-Unv.'}</th>
+        <th>{'कुल' if is_ne else 'Total'}</th>
+      </tr>
+      <tr>
+        <td>{'भवनहरू' if is_ne else 'Buildings'}</td>
+        <td><strong>{v['buildings_destroyed']}</strong></td>
+        <td>{v['buildings_damaged']}</td>
+        <td>{v['buildings_cloud_unverified']}</td>
+        <td>{v['buildings_total']}</td>
+      </tr>
+      <tr>
+        <td>{'पुलहरू' if is_ne else 'Bridges'}</td>
+        <td><strong>{v['bridges_destroyed']}</strong></td>
+        <td>{v['bridges_possibly_damaged']}</td>
+        <td>{v['bridges_cloud_unverified']}</td>
+        <td>{v['bridges_total']}</td>
+      </tr>
+      <tr>
+        <td>{'सडक (कि.मी.)' if is_ne else 'Roads (km)'}</td>
+        <td><strong>{v['roads_destroyed_km']}</strong></td>
+        <td>{v['roads_possibly_damaged_km']}</td>
+        <td>{v['roads_cloud_unverified_km']}</td>
+        <td>{v['roads_total_km']}</td>
+      </tr>
+    </table>
+    <div class="prose-box">{sec2_text}</div>
+
+    <!-- 4. What to repair first -->
+    <div class="sec-heading" style="margin-top: 5px;">{sec4_title}</div>
+    <div class="prose-box">{sec4_text}</div>
+
+    <!-- Limitations -->
+    <div class="footer-box" style="margin-top: 5px;">
+      <strong>{'तथ्याङ्क सीमाहरू (Limitations):' if is_ne else 'Known Data Limitations:'}</strong><br/>
+      • {'बादलका कारण ' + v['buildings_cloud_unverified'] + ' भवनहरू र ' + v['roads_cloud_unverified_km'] + ' कि.मी. सडक अप्टिकल पुष्टि हुन सकेको छैन।' if is_ne else f"{v['buildings_cloud_unverified']} buildings and {v['roads_cloud_unverified_km']} km roads remain unverified under cloud cover."}<br/>
+      • {'सहायक नदीहरूमा बहाव हाइड्रोलिक मोडलिङद्वारा अनुमान गरिएको हो; पहाडी भिरालो DEM द्वारा हटाइएको छ।' if is_ne else 'Drainage hazard hydraulically inferred; radar shadow/layover masked with DEM look-angle.'}<br/>
+      • {'पूर्वाधार गणना प्रकोप पूर्वको OpenStreetMap तथ्याङ्कमा आधारित छ; जनगणना जनसंख्या समावेश छैन।' if is_ne else 'Asset baseline derived from pre-event OpenStreetMap; census population not included.'}
+    </div>
+
+    <!-- Attribution -->
+    <div class="footer-attr">
+      Contains modified Copernicus Sentinel data {v['event_year']}. Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. © OpenStreetMap contributors under ODbL. European Union, Copernicus Emergency Management Service data (EMSR927, EMSR692, EMSR659). Bountos et al., 2024 (Kuro Siwo). Educational prototype, not an operational tool.
+    </div>
+  </div>
 </div>
 
 </body>

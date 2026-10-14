@@ -22,10 +22,12 @@ def test_key_failover_and_hot_reload() -> None:
     print("TEST: Key Pool Automatic Failover & Hot Reload")
     print("=" * 60)
 
-    # Use run directory for FactStore
-    run_dir = Path("/home/zeus/Downloads/project1/runs/test_A_cold_final2_run1")
-    if not run_dir.exists():
-        run_dir = Path("outputs/runs/test_A_cold_final2_run1")
+    repo_root = Path(__file__).resolve().parent.parent
+    candidate_runs = [
+        repo_root / "runs" / "test_A_cold_verify",
+        repo_root / "runs" / "test_A_cold_final2_run1",
+    ]
+    run_dir = next((p for p in candidate_runs if p.exists()), candidate_runs[0])
     store = FactStore(run_dir)
 
     # 1. Read real keys from current .env

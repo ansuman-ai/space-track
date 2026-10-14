@@ -1285,14 +1285,15 @@ class CopilotTools:
             if p_cur.name == "runs" and p_cur.exists():
                 return p_cur
             p_cur = p_cur.parent
+        repo_root = Path(__file__).resolve().parent.parent.parent
         for cand in [
-            Path("/home/zeus/Downloads/project1/runs"),
-            Path.cwd().parent / "project1" / "runs",
+            repo_root / "runs",
             Path.cwd() / "runs",
+            Path.cwd().parent / "project1" / "runs",
         ]:
             if cand.resolve().exists():
                 return cand.resolve()
-        return Path("/home/zeus/Downloads/project1/runs")
+        return repo_root / "runs"
 
     def list_runs(self) -> Dict[str, Any]:
         """List all available disaster event runs in the pipeline runs directory, with human labels derived purely from data."""
