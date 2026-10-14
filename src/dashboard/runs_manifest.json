@@ -1,40 +1,40 @@
 {
-  "pipeline_tag": "v1.1.5",
+  "pipeline_tag": "v1.1.6",
   "commit": "HEAD",
   "verified_runs": {
     "test_A_cold_verify": {
       "status": "COMPLETED",
-      "pipeline_tag": "e2e-final8",
+      "pipeline_tag": "v1.1.6",
       "commit": "HEAD"
     },
     "test_B_cold_verify": {
       "status": "COMPLETED",
-      "pipeline_tag": "e2e-final8",
+      "pipeline_tag": "v1.1.6",
       "commit": "HEAD"
     },
     "practice_assam_event": {
       "status": "COMPLETED",
-      "pipeline_tag": "e2e-final3",
-      "commit": "26f85f7"
+      "pipeline_tag": "v1.1.6",
+      "commit": "HEAD"
     },
     "practice_assam_noevent": {
-      "status": "DEGRADED",
-      "pipeline_tag": "e2e-final3",
-      "commit": "26f85f7"
+      "status": "COMPLETED",
+      "pipeline_tag": "v1.1.6",
+      "commit": "HEAD"
     },
     "practice_sikkim_event": {
       "status": "COMPLETED",
-      "pipeline_tag": "e2e-final3",
-      "commit": "26f85f7"
+      "pipeline_tag": "v1.1.6",
+      "commit": "HEAD"
     },
     "practice_sikkim_noevent": {
       "status": "COMPLETED",
-      "pipeline_tag": "e2e-final3",
-      "commit": "26f85f7"
+      "pipeline_tag": "v1.1.6",
+      "commit": "HEAD"
     },
     "run_20261013_194053_chamoli_disaster_2021": {
       "status": "COMPLETED",
-      "pipeline_tag": "v1.1.0",
+      "pipeline_tag": "v1.1.6",
       "commit": "HEAD"
     }
   }

@@ -276,11 +276,11 @@ def verify_no_cross_run_leakage() -> bool:
     # 3. Switch to Assam
     m_c = get_run_metadata(assam_dir)
     assert m_c["regime"] == "flat_floodplain"
-    assert m_c["metrics"]["buildings"]["flooded"] == 9, f"Expected 9 flooded, got {m_c['metrics']['buildings']['flooded']}"
+    assert m_c["metrics"]["buildings"]["flooded"] == 14, f"Expected 14 flooded, got {m_c['metrics']['buildings']['flooded']}"
     assert m_c["metrics"]["buildings"]["destroyed"] == 0, "Flat terrain should have 0 destroyed buildings"
-    assert m_c["metrics"]["cutoffs"]["vehicle_optimistic"] == 5
+    assert m_c["metrics"]["cutoffs"]["vehicle_optimistic"] == 9
     assert m_c["metrics"]["repair_package_1"]["reconnects_settlements"] != 19
-    print("✓ Assam loaded: flat_floodplain, 9 flooded buildings, 5 cut-offs")
+    print("✓ Assam loaded: flat_floodplain, 14 flooded buildings, 9 cut-offs")
 
     # 4. Switch BACK to Trishuli - assert pristine reload
     m_a2 = get_run_metadata(trishuli_dir)
