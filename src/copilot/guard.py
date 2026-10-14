@@ -791,22 +791,45 @@ class NumberGuard:
             set_rec = top_pkg.get("settlements_reconnected", "not computed")
             bld_rec = top_pkg.get("buildings_reconnected", "not computed")
 
+            s_sentence = tool_output.get("single_repair_sentence", "")
+            s_restores = tool_output.get("single_repair_restores_access", False)
+            best_single = tool_output.get("best_single_repair") or {}
+            osm_id = best_single.get("osm_id", "")
+            len_m = best_single.get("total_destroyed_length_m", 0.0)
+            s_rec = best_single.get("settlements_regained_if_only_repaired", 0)
+            b_rec = best_single.get("buildings_regained_if_only_repaired", 0)
+
             if lang == "ne":
+                ne_single = (
+                    f"सबैभन्दा प्रभावकारी एकल मर्मत: {osm_id}, {len_m:.1f} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
+                    if s_restores
+                    else "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"
+                )
                 return (
                     f"सडक मर्मत प्राथमिकता (प्याकेजहरू):\n"
-                    f"- कुनै पनि एकल मर्मतले एक्लै कुनै बस्तीमा पहुँच पुनर्स्थापित गर्न सक्दैन (० बस्ती)।\n"
+                    f"- {ne_single}।\n"
                     f"- मर्मत प्याकेज १ ({el_cnt} सडक खण्डहरू: {elems_str}) ले {set_rec} बस्तीहरू र {bld_rec} भवनहरूमा सवारी पहुँच पुनर्स्थापित गर्दछ।"
                 )
             elif lang == "hi":
+                hi_single = (
+                    f"सर्वश्रेष्ठ एकल मरम्मत: {osm_id}, {len_m:.1f} मी -> {s_rec} बस्तियाँ ({b_rec} भवन)"
+                    if s_restores
+                    else "कोई भी एकल मरम्मत अकेले किसी बस्ती तक पहुँच बहाल नहीं करती"
+                )
                 return (
                     f"सड़क मरम्मत प्राथमिकता (पैकेज):\n"
-                    f"- कोई भी एकल मरम्मत अकेले किसी बस्ती तक पहुँच बहाल नहीं करती (० बस्तियाँ)।\n"
-                    f"- मरम्मत पैकेज १ ({el_cnt} सड़क खंड: {elems_str}) १९ बस्तियों ({set_rec}) और ९३९ भवनों ({bld_rec}) में पहुँच बहाल करता है।"
+                    f"- {hi_single}।\n"
+                    f"- मरम्मत पैकेज १ ({el_cnt} सड़क खंड: {elems_str}) ले {set_rec} बस्तियों और {bld_rec} भवनों में पहुँच बहाल करता है।"
                 )
             else:
+                en_single = s_sentence or (
+                    f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+                    if s_restores
+                    else "No single repair reconnects a settlement on its own"
+                )
                 return (
                     f"Road Repair Prioritization (Packages):\n"
-                    f"- No single repair restores access to any isolated settlement (0 settlements reconnected individually).\n"
+                    f"- {en_single}.\n"
                     f"- Package 1 ({el_cnt} elements: {elems_str}) restores vehicle access to {set_rec} cut-off settlements and {bld_rec} buildings."
                 )
 

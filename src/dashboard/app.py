@@ -483,6 +483,33 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
         pkg1_element_count = 0
         has_actionable = False
 
+    # Ground-truth: repair_priority.json (single repair ranking)
+    single_repair_sentence = "No single repair reconnects a settlement on its own"
+    best_single_repair = None
+    if (routing / "repair_priority.json").exists():
+        try:
+            rp_data = json.loads((routing / "repair_priority.json").read_text())
+            single_ranking = rp_data.get("single_element_repair_ranking", [])
+            if single_ranking:
+                top_single = single_ranking[0]
+                s_rec = top_single.get("settlements_regained_if_only_repaired", 0)
+                b_rec = top_single.get("buildings_regained_if_only_repaired", 0)
+                osm_id = top_single.get("osm_id", "")
+                m_len = top_single.get("total_destroyed_length_m", 0.0)
+                best_single_repair = {
+                    "osm_id": osm_id,
+                    "length_m": m_len,
+                    "settlements_reconnected": s_rec,
+                    "buildings_reconnected": b_rec,
+                    "reconnects_settlements": s_rec > 0,
+                }
+                if s_rec > 0:
+                    single_repair_sentence = f"Best single repair: {osm_id}, {m_len:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+                else:
+                    single_repair_sentence = "No single repair reconnects a settlement on its own"
+        except Exception:
+            pass
+
     # 6. S2 Scenes & Date Range Extraction
     s2_scenes = summary.get("s2_scenes_used", [])
     pre_dates = set()
@@ -558,7 +585,9 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             }
             for p in actionable_pkgs
         ],
-        "validation_metrics": val_meta.get("metrics") if val_status_file.exists() else None
+        "validation_metrics": val_meta.get("metrics") if val_status_file.exists() else None,
+        "best_single_repair": best_single_repair,
+        "best_single_repair_sentence": single_repair_sentence,
     }
 
     # Check layer availability

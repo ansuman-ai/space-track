@@ -39,6 +39,10 @@ Adding `place=town/city` inside the 30 km pre-event buffer to health facilities 
   - Walking cut-off count (opt/pess): 4 -> **4** / 4 -> **4**
   - No ground access count (opt/pess): 4 -> **4** / 4 -> **4**
   - Top repair package: 19 settlements reconnected, 939 buildings, 4 elements (unchanged)
+  - **Best Single Repair Evolution**:
+    - `processed/routing/repair_priority.json`: Best single repair is now `way/248705796` (primary, 264.9 m destroyed) reconnecting **2 settlements** and **38 buildings**. The prior statement *"No single repair reconnects a settlement"* is FALSE for Trishuli.
+  - **Repair Package 2 Evolution**:
+    - `processed/routing/repair_packages.json`: Package 2 is now **4 elements** (`way/245248456`, `way/248705796`, `way/342026948`, `way/784420806`) reconnecting **9 settlements** and **213 buildings** (previously 9 elements). Package 1 remains unchanged: 4 elements (`way/84566285`, `way/245248450`, `way/332122791`, `way/1266396385`) reconnecting 19 settlements and 939 buildings.
 
 - **Test B (Melamchi)**:
   - Destination Count: 585 -> **610** (+25 towns)

@@ -61,7 +61,7 @@ Access to **{{cutoff_vehicle_optimistic_count}} settlements** is severed for mot
 
 ### 3. ROUTING & REPAIR PRIORITIZATION
 - **Cut-Off Settlements:** **{{cutoff_vehicle_optimistic_count}} settlements** cut off from any town or hospital by vehicle (pessimistic: **{{cutoff_vehicle_pessimistic_count}}**). Pedestrian cut-off: **{{cutoff_walking_optimistic_count}} settlements**.
-- **Repair Priority:** Repair **Package 1** ({{package_1_element_count}} road elements: {{package_1_elements_list}}, total length: **{{package_1_length_m}} m**) restores vehicle access to **{{package_1_reconnected_settlements}} cut-off settlements** and **{{package_1_reconnected_buildings}} buildings**.
+- **Repair Priority:** Repair **Package 1** ({{package_1_element_count}} road elements: {{package_1_elements_list}}, total length: **{{package_1_length_m}} m**) restores vehicle access to **{{package_1_reconnected_settlements}} cut-off settlements** and **{{package_1_reconnected_buildings}} buildings**. {{single_repair_sentence_en}}.
 
 ---
 
@@ -113,7 +113,7 @@ SITREP_TEMPLATE_PROSE_NE = """# द्रुत विपद् स्थित�
 
 ### ३. यातायात पहुँच तथा मर्मत प्राथमिकता
 - **सम्पर्कविहीन बस्तीहरू:** सवारी पहुँचका आधारमा **{{cutoff_vehicle_optimistic_count}} बस्तीहरू** कुनै पनि सहर वा अस्पतालबाट विच्छेद छन् (निराशावादी अवस्था: **{{cutoff_vehicle_pessimistic_count}}**)। पैदल मार्ग अवरुद्ध: **{{cutoff_walking_optimistic_count}} बस्तीहरू**।
-- **मर्मत प्राथमिकता:** **मर्मत प्याकेज १** ({{package_1_element_count}} सडक खण्डहरू: {{package_1_elements_list}}, कुल लम्बाइ: **{{package_1_length_m}} मिटर**) ले **{{package_1_reconnected_settlements}} सम्पर्कविहीन बस्तीहरू** र **{{package_1_reconnected_buildings}} भवनहरू**मा सवारी पहुँच पुनर्स्थापित गर्दछ।
+- **मर्मत प्राथमिकता:** **मर्मत प्याकेज १** ({{package_1_element_count}} सडक खण्डहरू: {{package_1_elements_list}}, कुल लम्बाइ: **{{package_1_length_m}} मिटर**) ले **{{package_1_reconnected_settlements}} सम्पर्कविहीन बस्तीहरू** र **{{package_1_reconnected_buildings}} भवनहरू**मा सवारी पहुँच पुनर्स्थापित गर्दछ। {{single_repair_sentence_ne}}।
 
 ---
 
@@ -264,6 +264,28 @@ class SitRepGenerator:
         pkg1_elems_list = ", ".join(elems_arr) if isinstance(elems_arr, list) and elems_arr else str(elems_arr or "not computed")
         pkg1_length_m = str(pkg1.get("length_m", round(sum(self.store.get_value(f"repair.step_{i}.length_m", 0.0) for i in range(1, 5)), 1)))
 
+        single_ranking = []
+        rp_path = Path(self.store.run_dir) / "processed" / "routing" / "repair_priority.json"
+        if rp_path.exists():
+            try:
+                rp_data = json.loads(rp_path.read_text())
+                single_ranking = rp_data.get("single_element_repair_ranking", [])
+            except Exception:
+                pass
+
+        best_single = single_ranking[0] if single_ranking else None
+        s_rec = best_single.get("settlements_regained_if_only_repaired", 0) if best_single else 0
+        b_rec = best_single.get("buildings_regained_if_only_repaired", 0) if best_single else 0
+        osm_id = best_single.get("osm_id", "") if best_single else ""
+        len_m = best_single.get("total_destroyed_length_m", 0.0) if best_single else 0.0
+
+        if s_rec > 0:
+            single_repair_en = f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+            single_repair_ne = f"सबैभन्दा प्रभावकारी एकल मर्मत: {osm_id}, {len_m:.1f} मिटर -> {s_rec} बस्तीहरू ({b_rec} भवनहरू)"
+        else:
+            single_repair_en = "No single repair reconnects a settlement on its own"
+            single_repair_ne = "कुनै पनि एकल मर्मतले आफैंमा बस्ती जोड्न सक्दैन"
+
         values = {
             "run_dir": str(self.store.run_dir),
             "event_date": event_date,
@@ -297,6 +319,8 @@ class SitRepGenerator:
             "package_1_length_m": pkg1_length_m,
             "package_1_reconnected_settlements": pkg1_set_cnt,
             "package_1_reconnected_buildings": pkg1_bld_cnt,
+            "single_repair_sentence_en": single_repair_en,
+            "single_repair_sentence_ne": single_repair_ne,
             "attributions": attributions,
         }
         return values
@@ -410,9 +434,9 @@ class SitRepGenerator:
             rescue_rows = "".join([_format_rescue_item(s, True) for s in top_rescue]) if top_rescue else "<li>कुनै पनि बस्ती पूर्ण विच्छेद छैन।</li>"
 
             if top_pkg and pkg_elem_count > 0:
-                repair_text = f"<strong>प्याकेज {pkg_rank}</strong> ({pkg_elem_count} पूर्वाधार: {html.escape(pkg_elems_str)}) मर्मत गर्दा <strong>{pkg_set} बस्तीहरू</strong> र <strong>{pkg_bld} भवनहरू</strong>मा सवारी पहुँच पुन: जोडिन्छ।"
+                repair_text = f"<strong>प्याकेज {pkg_rank}</strong> ({pkg_elem_count} पूर्वाधार: {html.escape(pkg_elems_str)}) मर्मत गर्दा <strong>{pkg_set} बस्तीहरू</strong> र <strong>{pkg_bld} भवनहरू</strong>मा सवारी पहुँच पुन: जोडिन्छ। {v['single_repair_sentence_ne']}।"
             else:
-                repair_text = "तत्काल एकल वा प्याकेज मर्मत योग्य सडक खण्ड पहिचान भएको छैन।"
+                repair_text = f"तत्काल एकल वा प्याकेज मर्मत योग्य सडक खण्ड पहिचान भएको छैन। {v['single_repair_sentence_ne']}।"
 
             infra_html = f"""
             <table class="table-compact">
@@ -449,9 +473,9 @@ class SitRepGenerator:
             rescue_rows = "".join([_format_rescue_item(s, False) for s in top_rescue]) if top_rescue else "<li>No settlements isolated by road.</li>"
 
             if top_pkg and pkg_elem_count > 0:
-                repair_text = f"<strong>Package {pkg_rank}</strong> ({pkg_elem_count} link{'s' if pkg_elem_count > 1 else ''}: {html.escape(pkg_elems_str)}) reconnects <strong>{pkg_set} settlement{'s' if pkg_set != 1 else ''}</strong> and <strong>{pkg_bld} buildings</strong>."
+                repair_text = f"<strong>Package {pkg_rank}</strong> ({pkg_elem_count} link{'s' if pkg_elem_count > 1 else ''}: {html.escape(pkg_elems_str)}) reconnects <strong>{pkg_set} settlement{'s' if pkg_set != 1 else ''}</strong> and <strong>{pkg_bld} buildings</strong>. {v['single_repair_sentence_en']}."
             else:
-                repair_text = "No actionable repair package identified (0 elements restore network connectivity)."
+                repair_text = f"No actionable repair package identified (0 elements restore network connectivity). {v['single_repair_sentence_en']}."
 
             infra_html = f"""
             <table class="table-compact">

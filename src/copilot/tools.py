@@ -6,6 +6,7 @@ along with associated fact IDs for verification by the number guard.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from pathlib import Path
@@ -1113,22 +1114,53 @@ class CopilotTools:
                     "settlements_sample": pkg.get("settlements", [])[:5],
                 })
 
-        return {
-            "tool": "repair_priority",
-            "single_repair_restores_access": False,
-            "single_repair_reconnected_settlements": 0,
-            "explanation": (
-                "No single repair restores access; 0 settlements are reconnected by repairing any single element "
+        single_ranking = []
+        rp_path = Path(self.store.run_dir) / "processed" / "routing" / "repair_priority.json"
+        if rp_path.exists():
+            try:
+                rp_data = json.loads(rp_path.read_text())
+                single_ranking = rp_data.get("single_element_repair_ranking", [])
+            except Exception:
+                pass
+
+        best_single = single_ranking[0] if single_ranking else None
+        s_rec = best_single.get("settlements_regained_if_only_repaired", 0) if best_single else 0
+        b_rec = best_single.get("buildings_regained_if_only_repaired", 0) if best_single else 0
+        osm_id = best_single.get("osm_id", "") if best_single else ""
+        len_m = best_single.get("total_destroyed_length_m", 0.0) if best_single else 0.0
+
+        if s_rec > 0:
+            single_sentence = f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings)"
+            single_restores = True
+            explanation = (
+                f"Best single repair: {osm_id}, {len_m:.1f} m -> {s_rec} settlements ({b_rec} buildings). "
+                "Coordinated package repairs are required to restore full corridor connectivity."
+            )
+        else:
+            single_sentence = "No single repair reconnects a settlement on its own"
+            single_restores = False
+            explanation = (
+                "No single repair reconnects a settlement on its own; 0 settlements are reconnected by repairing any single element "
                 "because multiple severed road segments exist in series along the access corridor. "
                 "Coordinated package repairs are required to restore connectivity."
-            ),
+            )
+
+        summary_statement = (
+            f"{single_sentence}. Package 1 "
+            f"({packages[0]['element_count']} elements: {', '.join(packages[0]['elements'])}) "
+            f"restores {packages[0]['settlements_reconnected']} settlements and {packages[0]['buildings_reconnected']} buildings."
+        ) if packages else single_sentence
+
+        return {
+            "tool": "repair_priority",
+            "single_repair_sentence": single_sentence,
+            "single_repair_restores_access": single_restores,
+            "single_repair_reconnected_settlements": s_rec,
+            "best_single_repair": best_single,
+            "explanation": explanation,
             "top_package": packages[0] if packages else None,
             "packages": packages,
-            "summary_statement": (
-                "No single repair restores access to any settlements. Package 1 "
-                f"({packages[0]['element_count']} elements: {', '.join(packages[0]['elements'])}) "
-                f"restores {packages[0]['settlements_reconnected']} settlements and {packages[0]['buildings_reconnected']} buildings."
-            ) if packages else "No repair packages available.",
+            "summary_statement": summary_statement,
             "fact_ids": fact_ids,
         }
 

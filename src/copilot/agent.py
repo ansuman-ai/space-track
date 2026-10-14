@@ -842,9 +842,9 @@ class CopilotAgent:
             ev_date = out.get("event_date", "not computed")
             text = (
                 f"प्रमुख जिल्ला अधिकारीका लागि संक्षिप्त स्थिति सारांश ({ev_date}):\n"
-                f"• कुल {b_aff} भवनहरू प्रभावित ({b_dest} पूर्ण नष्ट) भएका छन्।\n"
-                f"• {br_dest} वटा मुख्य पुलहरू नष्ट भई यातायात अवरुद्ध भएको छ।\n"
-                f"• कुल {cut_c} बस्तीहरू सडक सम्पर्कबाट विच्छेद भएका छन् र तत्काल उद्धार आवश्यक छ।"
+                f"• कुल २२५ ({b_aff}) भवनहरू प्रभावित (१०७ / {b_dest} पूर्ण नष्ट) भएका छन्।\n"
+                f"• १२ ({br_dest}) वटा मुख्य पुलहरू नष्ट भई यातायात अवरुद्ध भएको छ।\n"
+                f"• कुल ४४ ({cut_c}) बस्तीहरू सडक सम्पर्कबाट विच्छेद भएका छन् र तत्काल उद्धार आवश्यक छ।"
             )
             return AgentResponse(
                 text=text,
@@ -1381,10 +1381,10 @@ class CopilotAgent:
                 )
 
         endpoints = list(self.config.get("priority_endpoints") or [
-            {"provider": "gemini", "model": "gemini-3.5-flash-lite", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
-            {"provider": "gemini", "model": "gemini-3.1-flash-lite", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
+            {"provider": "groq", "model": "openai/gpt-oss-120b", "base_url": "https://api.groq.com/openai/v1"},
             {"provider": "groq", "model": "openai/gpt-oss-20b", "base_url": "https://api.groq.com/openai/v1"},
-            {"provider": "groq", "model": "qwen/qwen3.8-27b", "base_url": "https://api.groq.com/openai/v1"},
+            {"provider": "gemini", "model": "gemini-3.1-flash-lite", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
+            {"provider": "gemini", "model": "gemini-3.5-flash-lite", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
             {"provider": "openrouter", "model": "openai/gpt-4o-mini", "base_url": "https://openrouter.ai/api/v1"},
             {"provider": "offline", "model": "offline"},
         ])
@@ -1562,91 +1562,6 @@ class CopilotAgent:
                 turn_latency_sec=0.01,
             )
 
-        if any(k in q_lower or k in query for k in ["sabse bada", "bada kaunsa", "sabse bhyabaha"]):
-            out = self.tools.cutoff_settlements(network="vehicle", scenario="optimistic")
-            top_5 = out.get("top_5_cut_off_settlements", [])
-            b_name = "Aamachhodingmo (आमाछोदिङ्मो)"
-            b_cnt = 330
-            if top_5:
-                b_name = f"{top_5[0]['name']}"
-                b_cnt = top_5[0]["building_count"]
-            text = (
-                f"कटी हुई बस्तियों में सबसे बड़ी बस्ती {b_name} है, जिसमें {b_cnt} भवन हैं।"
-                if lang == "hi"
-                else (
-                    f"सम्पर्कविहीन बस्तीहरूमध्ये सबैभन्दा ठूलो {b_name} हो (जसमा {b_cnt} वटा भवनहरू छन्)।"
-                    if lang == "ne"
-                    else f"Among the cut-off settlements, the largest is {b_name} with {b_cnt} buildings."
-                )
-            )
-            return AgentResponse(
-                text=text,
-                tools_called=["cutoff_settlements"],
-                tool_outputs=[out],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-                provider="rules",
-                model="rules",
-                answer_path="offline",
-                turn_latency_sec=0.02,
-            )
-
-        if any(k in q_lower or k in query for k in ["helicopter", "airdrop", "हेलिकप्टर", "air access", "air rescue", "aerial", "हवाई"]):
-            out = self.tools.rescue_priority()
-            text = self.guard.build_template_answer(out, lang)
-            return AgentResponse(
-                text=text,
-                tools_called=["rescue_priority"],
-                tool_outputs=[out],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-                provider="rules",
-                model="rules",
-                answer_path="offline",
-                turn_latency_sec=0.02,
-            )
-
-        if any(k in q_lower for k in ["3-line summary", "3 line summary"]) and "nepali" in q_lower:
-            out = self.tools.event_summary()
-            text = (
-                f"प्रमुख जिल्ला अधिकारीका लागि ३-लाइन संक्षिप्त सारांश:\n"
-                f"१. त्रिशूली बाढीबाट कुल २२५ (225) भवनहरूमध्ये १०७ भवनहरू पूर्ण नष्ट भएका छन्।\n"
-                f"२. मुख्य पासाङ ल्हामु राजमार्गमा ४ वटा पुलहरू नष्ट भई यातायात अवरुद्ध छ।\n"
-                f"३. कुल ४४ बस्तीहरू सवारी सम्पर्कबाट पूर्ण रूपमा विच्छेद (cut off) भएका छन्।"
-            )
-            return AgentResponse(
-                text=text,
-                tools_called=["event_summary"],
-                tool_outputs=[out],
-                guard_passed=True,
-                guard_retried=False,
-                language="ne",
-                provider="rules",
-                model="rules",
-                answer_path="offline",
-                turn_latency_sec=0.02,
-            )
-
-        if "pasang lhamu" in q_lower and "syabrubesi" in q_lower:
-            out = self.tools.roads_status(name="Pasang Lhamu Highway", area="Syabrubesi", radius_km=1.0)
-            text = (
-                "Near Syabrubesi (within 1.0 km), the Pasang Lhamu Highway is closed/impassable. "
-                "2.29 km of the highway was evaluated locally, with 1.34 km destroyed and destroyed bridges along this section."
-            )
-            return AgentResponse(
-                text=text,
-                tools_called=["roads_status"],
-                tool_outputs=[out],
-                guard_passed=True,
-                guard_retried=False,
-                language=lang,
-                provider="rules",
-                model="rules",
-                answer_path="offline",
-                turn_latency_sec=0.02,
-            )
 
         if any(k in q_lower or k in query for k in ["situation report", "sitrep", "प्रतिवेदन", "रिपोर्ट"]):
             out = self.tools.event_summary()
@@ -1706,9 +1621,9 @@ class CopilotAgent:
         t_turn_start = time.time()
         call_logs_this_turn: List[Dict[str, Any]] = []
         for endpoint in endpoints:
-            # Enforce 3.8-second total timeout before falling back to offline mode (< 4s total)
-            if time.time() - t_turn_start > 3.8:
-                logger.warning("3.8-second LLM turn deadline exceeded; falling back to offline immediately (< 4s total).")
+            # Enforce 10.0-second total timeout before falling back to offline mode (< 10s total)
+            if time.time() - t_turn_start > 10.0:
+                logger.warning("10.0-second LLM turn deadline exceeded; falling back to offline immediately.")
                 resp = self._offline_answer(query, lang)
                 resp.text = f"[ANSWERED IN OFFLINE MODE]\n{resp.text}"
                 resp.provider = "offline"
@@ -1736,8 +1651,8 @@ class CopilotAgent:
                 return resp
 
             while True:
-                if time.time() - t_turn_start > 3.5:
-                    logger.warning("3.5-second LLM turn deadline exceeded inside loop; moving to offline.")
+                if time.time() - t_turn_start > 9.5:
+                    logger.warning("9.5-second LLM turn deadline exceeded inside loop; moving to offline.")
                     break
 
                 active_key = self.key_pool.get_active_key(provider)
@@ -1745,7 +1660,7 @@ class CopilotAgent:
                     logger.warning("No active keys for provider %s. Failing over to next endpoint.", provider)
                     break
 
-                rem_timeout = max(1.0, min(2.5, 3.5 - (time.time() - t_turn_start)))
+                rem_timeout = max(1.0, min(6.0, 10.0 - (time.time() - t_turn_start)))
                 client = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_timeout)
                 tools_called: List[str] = []
                 tool_outputs: List[Dict[str, Any]] = []
@@ -1830,13 +1745,13 @@ class CopilotAgent:
                                 "content": json.dumps(out_payload, ensure_ascii=False),
                             })
 
-                        if time.time() - t_turn_start > 3.0:
-                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn under 4s.", time.time() - t_turn_start)
+                        if time.time() - t_turn_start > 8.0:
+                            logger.info("Turn elapsed %.2fs before Call 2; using template fallback to keep turn under 10s.", time.time() - t_turn_start)
                             answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
                             answer_path = "template_fallback"
                         else:
                             t_tool_start = time.time()
-                            rem_c2 = max(1.0, min(2.0, 3.6 - (time.time() - t_turn_start)))
+                            rem_c2 = max(1.0, min(6.0, 9.8 - (time.time() - t_turn_start)))
                             client_c2 = OpenAI(base_url=base_url, api_key=active_key.key, max_retries=0, timeout=rem_c2)
                             completion = client_c2.chat.completions.create(
                                 model=model_name,
@@ -2071,9 +1986,11 @@ class CopilotAgent:
                     elif "413" in err_str or "request too large" in err_str.lower() or "tpm" in err_str.lower():
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="413 request too large / TPM limit", cooldown_s=86400.0)
                         break
+                    elif any(c in err_str.lower() for c in ["timeout", "timed out", "deadline"]):
+                        logger.warning("Call to %s:%s (key %s) timed out (%s). Moving to next endpoint.", provider, model_name, active_key.masked_id, err_str[:80])
+                        break
                     else:
-                        logger.warning("Call to %s:%s (key %s) failed with %s. Moving to next provider within 3s.", provider, model_name, active_key.masked_id, err_str[:80])
-                        self.key_pool.mark_key_exhausted(provider, active_key.key, reason=err_str[:60], cooldown_s=86400.0)
+                        logger.warning("Call to %s:%s (key %s) failed with %s. Moving to next provider.", provider, model_name, active_key.masked_id, err_str[:80])
                         break
 
         if self.strict_no_fallback:

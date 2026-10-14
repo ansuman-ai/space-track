@@ -1468,9 +1468,13 @@ function updateSidePanel(data) {
   const rIntro = document.getElementById("repair-intro-sentence");
   const rOtherList = document.getElementById("repair-other-pkgs");
 
+  const rSingle = document.getElementById("repair-single-sentence");
   const cutPess = m.cutoffs ? (m.cutoffs.vehicle_pessimistic || 0) : 0;
   if (rIntro) {
     rIntro.textContent = `Priority road and bridge links to restore vehicle and emergency access. Computed for the pessimistic scenario: ${cutPess} settlements cut off.`;
+  }
+  if (rSingle) {
+    rSingle.textContent = m.best_single_repair_sentence || "No single repair reconnects a settlement on its own";
   }
 
   if (rp.has_actionable_package && rp.element_count > 0) {
