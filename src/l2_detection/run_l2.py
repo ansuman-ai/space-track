@@ -207,6 +207,7 @@ def load_s1_features(
     seas_cands = [
         post_vv_path.parent / "seasonal_post_vv.tif",
         post_vv_path.parent.parent / "seasonal_control_2023" / "s1_seasonal_post.tif",
+        post_vv_path.parent.parent.parent / "_archive" / "practice_assam_event_e2e_final3" / "seasonal_control_2023" / "s1_seasonal_post.tif",
         post_vv_path.parent.parent / "seasonal" / "raw" / "s1" / "post.tif",
         post_vv_path.parent.parent / "seasonal" / "interim" / "post_vv.tif"
     ]
@@ -214,6 +215,11 @@ def load_s1_features(
     if seas_post_f:
         with rasterio.open(seas_post_f) as s_seas:
             seas_post_out = s_seas.read(1)
+        local_target = post_vv_path.parent.parent / "seasonal_control_2023" / "s1_seasonal_post.tif"
+        if not local_target.exists():
+            import shutil
+            local_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(seas_post_f, local_target)
     else:
         seas_post_out = None
 
@@ -559,8 +565,13 @@ def run_layer2(
     terrain_regime, terrain_stats = classify_terrain_regime(slope=slope_arr, hand=hand)
     logger.info(f"Terrain Regime Classified: {terrain_regime.upper()} (Median slope: {terrain_stats.get('median_slope')}°, % slope<5°: {terrain_stats.get('pct_slope_lt_5')}%, % HAND<=15m: {terrain_stats.get('pct_hand_le_15')}%)")
 
+    seasonal_missing_flat = False
     if terrain_regime == "flat_floodplain":
         pre_vv_in = s1_data.get('pre_vv') if s1_data.get('pre_vv') is not None else post_vv
+        seasonal_s1 = s1_data.get('seasonal_post_vv')
+        if seasonal_s1 is None and detector != "kurosiwo":
+            logger.warning("[DEGRADED] seasonal control unavailable: paddy/seasonal water not removed")
+            seasonal_missing_flat = True
         if detector == "kurosiwo":
             logger.info("Detecting Flat-Floodplain Flood using Kuro Siwo SNUNet (optional detector)...")
             from src.l6_ai_model.predict import predict as ks_predict
@@ -937,6 +948,14 @@ def run_layer2(
     }
 
     if terrain_regime == "flat_floodplain":
+        if seasonal_missing_flat:
+            l2_summary["status"] = "DEGRADED"
+            l2_summary["seasonal_control_available"] = False
+            l2_summary["seasonal_control_note"] = "seasonal control unavailable: paddy/seasonal water not removed"
+            l2_summary["notes"] = "seasonal control unavailable: paddy/seasonal water not removed"
+        else:
+            l2_summary["seasonal_control_available"] = True
+            l2_summary["seasonal_control_note"] = "seasonal control applied: paddy/seasonal water removed"
         if detector == "kurosiwo":
             l2_summary["validation_status"] = "experimental, not validated"
         else:

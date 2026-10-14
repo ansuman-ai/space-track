@@ -731,6 +731,12 @@ def run_pipeline(
         if not s2_available or not has_s2_data:
             optical_note = f"Sentinel-2 unavailable: {s2_error or 'no clear scenes'}; results from Sentinel-1 only"
 
+    if l2_res.get("status") == "DEGRADED" or not l2_res.get("seasonal_control_available", True):
+        overall_status = "DEGRADED"
+        seas_note = l2_res.get("seasonal_control_note", "seasonal control unavailable: paddy/seasonal water not removed")
+        optical_note = f"{optical_note} ({seas_note})" if optical_note else seas_note
+        l0_notes.append(seas_note)
+
     summary_payload = {
         "status": overall_status,
         "event_name": event_name,

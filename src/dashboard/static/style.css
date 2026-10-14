@@ -86,6 +86,7 @@ html, body {
    Right: 3 buttons only: Situation report (outline), New analysis (dark filled), ⋯
    ========================================================================== */
 #top-navbar {
+  position: relative;
   height: 56px;
   background-color: var(--bg-card);
   border-bottom: 1px solid var(--border-line);
@@ -94,7 +95,7 @@ html, body {
   justify-content: space-between;
   padding: 0 18px;
   flex-shrink: 0;
-  z-index: 1000;
+  z-index: 3000;
 }
 
 .header-left {
@@ -242,44 +243,68 @@ html, body {
 
 .btn-icon-menu {
   background: #FFFFFF;
-  border: 1px solid var(--border-medium);
+  border: 1px solid #C9D0CD;
   border-radius: 4px;
-  width: 32px;
   height: 32px;
-  font-size: 16px;
-  color: var(--text-main);
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1B2326;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-icon-menu:hover {
   background: var(--bg-page);
-  border-color: var(--border-dark);
+  border-color: #1B2326;
+}
+
+.btn-icon-menu .more-dots {
+  font-size: 16px;
+  line-height: 1;
+  color: #1B2326;
+  font-weight: 700;
+}
+
+.btn-icon-menu .more-text {
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1B2326;
+}
+
+@media (min-width: 1366px) {
+  .btn-icon-menu .more-text {
+    display: inline;
+  }
 }
 
 /* More menu dropdown */
 .dropdown-wrap {
   position: relative;
   display: inline-block;
+  z-index: 3001;
 }
 
 .dropdown-menu {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  margin-top: 6px;
   background: #FFFFFF;
   border: 1px solid var(--border-line);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  min-width: 200px;
-  z-index: 2100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  min-width: 220px;
+  z-index: 3100;
   display: flex;
   flex-direction: column;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 .dropdown-menu.hidden {

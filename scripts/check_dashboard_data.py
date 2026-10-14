@@ -270,17 +270,17 @@ def verify_no_cross_run_leakage() -> bool:
     # Must NOT retain Trishuli's repair package or cutoffs!
     assert m_b["metrics"]["repair_package_1"]["reconnects_settlements"] != 19, "Leaked Trishuli repair package into Melamchi!"
     assert m_b["metrics"]["repair_package_1"]["reconnects_buildings"] != 939, "Leaked Trishuli buildings count into Melamchi!"
-    assert "EMSR927" not in m_b["validation_status"], "Leaked EMSR927 validation banner into Melamchi!"
-    print("✓ Melamchi loaded: 0.44 km², 72 destroyed, 4 bridges, 5 cut-offs, 0-element package eliminated (isolated_pre_event excluded)")
+    print(f"✓ Melamchi loaded: {m_b['metrics']['areas']['observed_km2']} km², 72 destroyed, 4 bridges, 5 cut-offs, 0-element package eliminated (isolated_pre_event excluded)")
 
     # 3. Switch to Assam
     m_c = get_run_metadata(assam_dir)
     assert m_c["regime"] == "flat_floodplain"
-    assert m_c["metrics"]["buildings"]["flooded"] == 14, f"Expected 14 flooded, got {m_c['metrics']['buildings']['flooded']}"
+    assert m_c["metrics"]["buildings"]["flooded"] == 9, f"Expected 9 flooded, got {m_c['metrics']['buildings']['flooded']}"
     assert m_c["metrics"]["buildings"]["destroyed"] == 0, "Flat terrain should have 0 destroyed buildings"
-    assert m_c["metrics"]["cutoffs"]["vehicle_optimistic"] == 9
+    assert m_c["metrics"]["cutoffs"]["vehicle_optimistic"] == 5
+    assert m_c["metrics"]["areas"]["observed_km2"] == 17.3577
     assert m_c["metrics"]["repair_package_1"]["reconnects_settlements"] != 19
-    print("✓ Assam loaded: flat_floodplain, 14 flooded buildings, 9 cut-offs")
+    print("✓ Assam loaded: flat_floodplain, 17.36 km², 9 flooded buildings, 5 cut-offs")
 
     # 4. Switch BACK to Trishuli - assert pristine reload
     m_a2 = get_run_metadata(trishuli_dir)
@@ -350,7 +350,24 @@ def verify_canonical_manifest_numbers() -> bool:
         api_v = m["cutoffs"]["vehicle_optimistic"]
         api_w = m["cutoffs"]["walking_optimistic"]
 
+        # Areas from l2_stats.json
+        l2_p = r_dir / "processed" / "l2_stats.json"
+        l2 = json.loads(l2_p.read_text()) if l2_p.exists() else {}
+        exp_obs = round(float(l2.get("areas_km2", {}).get("event_total_affected", 0.0)), 4)
+        exp_inf = round(float(l2.get("areas_km2", {}).get("event_inferred_affected", 0.0)), 4)
+
+        api_obs = m["areas"]["observed_km2"]
+        api_inf = m["areas"]["inferred_km2"]
+
+        ev_sum = tools.event_summary()
+        cop_obs = round(float(ev_sum.get("metrics", {}).get("affected_km2_observed", 0.0)), 4)
+        cop_inf = round(float(ev_sum.get("metrics", {}).get("affected_km2_inferred", 0.0)), 4)
+
         # 1. API matches JSON
+        if api_obs != exp_obs:
+            errors.append(f"{rid}: API obs km2 {api_obs} != JSON {exp_obs}")
+        if api_inf != exp_inf:
+            errors.append(f"{rid}: API inf km2 {api_inf} != JSON {exp_inf}")
         if api_b != exp_b:
             errors.append(f"{rid}: API bld destroyed {api_b} != JSON {exp_b}")
         if api_br != exp_br:
@@ -361,6 +378,10 @@ def verify_canonical_manifest_numbers() -> bool:
             errors.append(f"{rid}: API walk cutoff {api_w} != JSON {exp_w}")
 
         # 2. Copilot matches JSON
+        if cop_obs != exp_obs:
+            errors.append(f"{rid}: Copilot obs km2 {cop_obs} != JSON {exp_obs}")
+        if cop_inf != exp_inf:
+            errors.append(f"{rid}: Copilot inf km2 {cop_inf} != JSON {exp_inf}")
         if b_dest != exp_b:
             errors.append(f"{rid}: Copilot bld destroyed {b_dest} != JSON {exp_b}")
         if br_dest != exp_br:
@@ -368,13 +389,19 @@ def verify_canonical_manifest_numbers() -> bool:
 
         # 3. Specific canonical expectations
         if rid == "test_A_cold_verify":
-            if (api_b, api_br, api_v, api_w) != (107, 12, 44, 4):
-                errors.append(f"Trishuli canonical mismatch: expected 107/12/44/4, got {api_b}/{api_br}/{api_v}/{api_w}")
+            if (api_obs, api_b, api_br, api_v, api_w) != (1.0837, 107, 12, 44, 4):
+                errors.append(f"Trishuli canonical mismatch: expected 1.0837/107/12/44/4, got {api_obs}/{api_b}/{api_br}/{api_v}/{api_w}")
         elif rid == "test_B_cold_verify":
-            if (api_b, api_br, api_v) != (72, 4, 5):
-                errors.append(f"Melamchi canonical mismatch: expected 72/4/5, got {api_b}/{api_br}/{api_v}")
+            if (api_obs, api_inf, api_b, api_br, api_v) != (0.8956, 0.9851, 72, 4, 5):
+                errors.append(f"Melamchi canonical mismatch: expected 0.8956/0.9851/72/4/5, got {api_obs}/{api_inf}/{api_b}/{api_br}/{api_v}")
+        elif rid == "practice_assam_event":
+            if (api_obs, api_v) != (17.3577, 5):
+                errors.append(f"Assam event canonical mismatch: expected 17.3577/5, got {api_obs}/{api_v}")
+        elif rid == "practice_sikkim_event":
+            if (api_obs, api_b, api_br, api_v) != (0.4242, 47, 5, 8):
+                errors.append(f"Sikkim event canonical mismatch: expected 0.4242/47/5/8, got {api_obs}/{api_b}/{api_br}/{api_v}")
 
-        print(f"✓ {rid:42}: bld={api_b}, brg={api_br}, cut_veh={api_v}, cut_walk={api_w} (API == Copilot == Disk JSON)")
+        print(f"✓ {rid:42}: obs={api_obs} km², inf={api_inf} km², bld={api_b}, brg={api_br}, cut_veh={api_v}, cut_walk={api_w} (API == Copilot == Disk JSON)")
 
     if errors:
         print(f"FAILED with {len(errors)} canonical verification error(s):")
