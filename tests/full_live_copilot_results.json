@@ -7,9 +7,9 @@
     "reason": "",
     "path": "llm",
     "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 17.09,
-    "ans_preview": "[Trishuli Flash Flood 2026]  There are **44 settlements that are cut off from vehicle acce"
+    "model": "qwen/qwen3.8-27b",
+    "lat": 14.66,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Cut-Off Settlements (vehicle network): - Exactly 44 settlemen"
   },
   {
     "id": "Q02",
@@ -18,10 +18,10 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 14.77,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u0915\u091f\u0940 \u0939\u0941\u0908 \u092c\u0938\u094d\u0924\u093f\u092f\u094b\u0902 \u092e\u0947\u0902 \u0938\u092c\u0938\u0947 \u092c\u0921\u093c\u0940 \u092c\u0938\u094d"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.19,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u0915\u091f\u0940 \u0939\u0941\u0908 \u092c\u0938\u094d\u0924\u093f\u092f\u094b\u0902 \u092e\u0947\u0902 \u0938\u092c\u0938\u0947 \u092c\u0921\u093c\u0940 \u092c\u0938\u094d\u0924\u0940 Aamachhodingmo (\u0906\u092e\u093e\u091b\u094b\u0926\u093f\u0919"
   },
   {
     "id": "Q03",
@@ -29,11 +29,11 @@
     "query": "\u092a\u0941\u0932 \u0915\u0924\u093f\u0935\u091f\u093e \u092d\u0924\u094d\u0915\u093f\u090f \u0930 \u0915\u0941\u0928 \u0938\u0921\u0915\u092e\u093e?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.01,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092a\u0941\u0932\u0939\u0930\u0942\u0915\u094b \u0915\u094d\u0937\u0924\u093f \u0938\u094d\u0925\u093f\u0924\u093f: - \u0915\u0941\u0932 \u092e\u0942\u0932\u094d\u092f"
+    "path": "llm",
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 2.92,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u0935\u093f\u092a\u0926\u094d \u0906\u0915\u0932\u0928 \u0915\u094d\u0937\u0947\u0924\u094d\u0930\u092d\u0930 \u0915\u0941\u0932 \u0968\u096d \u092a\u0941\u0932\u0939\u0930\u0942\u092e\u0927\u094d\u092f\u0947 \u0967\u0968 \u0935\u091f\u093e \u092a\u0941\u0932 \u092a\u0942\u0930\u094d\u0923 \u0930\u0942\u092a\u092e"
   },
   {
     "id": "Q04",
@@ -41,11 +41,11 @@
     "query": "Is the riverside highway open?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 16.41,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The riverside highway (Pasang Lhamu Highway) is **closed/bloc"
+    "path": "offline",
+    "provider": "offline",
+    "model": "offline",
+    "lat": 4.22,
+    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Road Status - Pasang Lhamu Highway"
   },
   {
     "id": "Q05",
@@ -54,22 +54,22 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 17.02,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092c\u091a\u093e\u0935 \u0926\u0932 \u0924\u0948\u0928\u093e\u0924\u0940 \u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e (SAR Dep"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092c\u091a\u093e\u0935 \u0926\u0932 \u0924\u0948\u0928\u093e\u0924\u0940 \u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e (SAR Deployment): - \u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e \u0967 (\u092a"
   },
   {
     "id": "Q06",
     "cat": "15_heldout",
     "query": "Give me a 3-line summary for the district officer in Nepali.",
-    "status": "PASS",
-    "reason": "",
+    "status": "FAIL",
+    "reason": "missing any of set ['\u0967\u0968', '12']",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.51,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092a\u094d\u0930\u092e\u0941\u0916 \u091c\u093f\u0932\u094d\u0932\u093e \u0905\u0927\u093f\u0915\u093e\u0930\u0940\u0915\u093e \u0932\u093e\u0917\u093f \u0938\u0902\u0915\u094d\u0937"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.14,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092a\u094d\u0930\u092e\u0941\u0916 \u091c\u093f\u0932\u094d\u0932\u093e \u0905\u0927\u093f\u0915\u093e\u0930\u0940\u0915\u093e \u0932\u093e\u0917\u093f \u0969-\u0932\u093e\u0907\u0928 \u0938\u0902\u0915\u094d\u0937\u093f\u092a\u094d\u0924 \u0938\u093e\u0930\u093e\u0902\u0936: \u0967. \u0924\u094d\u0930\u093f"
   },
   {
     "id": "Q07",
@@ -78,10 +78,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 14.79,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The confidence metrics for the cut\u2010off count are:  - **Precis"
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 2.69,
+    "ans_preview": "[Trishuli Flash Flood 2026]  The 44 cut-off count is an evidence-based estimate under the "
   },
   {
     "id": "Q08",
@@ -104,7 +104,7 @@
     "path": "offline",
     "provider": "offline",
     "model": "offline",
-    "lat": 18.1,
+    "lat": 4.12,
     "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092c\u093e\u0922\u093c \u0906\u0928\u0947 \u0915\u093e \u0938\u091f\u0940\u0915 \u0918\u0902\u091f\u093e/\u0938\u092e\u092f (hourly "
   },
   {
@@ -113,11 +113,11 @@
     "query": "What happened in Sikkim?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.48,
-    "ans_preview": "[South Lhonak GLOF 2023 (Sikkim)]  [ANSWERED IN OFFLINE MODE] Sikkim disaster (2023-10-04)"
+    "path": "llm",
+    "provider": "groq",
+    "model": "qwen/qwen3.8-27b",
+    "lat": 4.75,
+    "ans_preview": "[South Lhonak GLOF 2023 (Sikkim)]  In the Sikkim disaster run (event date 2023-10-04), the"
   },
   {
     "id": "Q11",
@@ -126,10 +126,10 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 14.79,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Road Status - Pasang Lhamu Highway"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.27,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Near Syabrubesi (within 1.0 km), the Pasang Lhamu Highway is "
   },
   {
     "id": "Q12",
@@ -140,7 +140,7 @@
     "path": "offline",
     "provider": "offline",
     "model": "offline",
-    "lat": 15.21,
+    "lat": 5.07,
     "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Bridges Damage Status: - Total bri"
   },
   {
@@ -152,7 +152,7 @@
     "path": "keyword_refusal",
     "provider": "system",
     "model": "keyword_refusal",
-    "lat": 0.13,
+    "lat": 0.2,
     "ans_preview": "[Trishuli Flash Flood 2026]  \u091c\u0928\u0938\u0902\u0916\u094d\u092f\u093e \u0921\u0947\u091f\u093e \u0938\u093f\u0938\u094d\u091f\u092e \u0915\u0947 \u0906\u0909\u091f\u092a\u0941\u091f \u092e\u0947\u0902 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948 (\u0913\u092a\u0928\u0938\u094d\u091f\u094d\u0930\u0940\u091f"
   },
   {
@@ -164,7 +164,7 @@
     "path": "offline",
     "provider": "offline",
     "model": "offline",
-    "lat": 17.79,
+    "lat": 5.46,
     "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Road Status - Pasang Lhamu Highway"
   },
   {
@@ -173,11 +173,11 @@
     "query": "What should I NOT trust in this report?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 15.43,
-    "ans_preview": "[Trishuli Flash Flood 2026]  **What to be cautious about in this report**  - The figure of"
+    "path": "offline",
+    "provider": "offline",
+    "model": "offline",
+    "lat": 4.69,
+    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Confidence Metrics and Data Bounda"
   },
   {
     "id": "H01",
@@ -185,11 +185,11 @@
     "query": "How many people died in the flood?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.34,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] This information is not available "
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.2,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H02",
@@ -197,11 +197,11 @@
     "query": "\u0915\u093f\u0924\u0928\u0947 \u0932\u094b\u0917 \u092e\u093e\u0930\u0947 \u0917\u090f \u0907\u0938 \u0906\u092a\u0926\u093e \u092e\u0947\u0902?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 22.06,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092f\u0939 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u0909\u092a\u0917\u094d\u0930\u0939 \u0914\u0930 \u0913\u092a\u0928\u0938\u094d\u091f\u094d\u0930\u0940\u091f\u092e\u0948\u092a"
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092f\u0939 \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u0909\u092a\u0917\u094d\u0930\u0939 \u0914\u0930 \u0913\u092a\u0928\u0938\u094d\u091f\u094d\u0930\u0940\u091f\u092e\u0948\u092a \u0935\u093f\u0936\u094d\u0932\u0947\u0937\u0923 \u092e\u0947\u0902 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939"
   },
   {
     "id": "H03",
@@ -219,37 +219,37 @@
     "id": "H04",
     "cat": "20_hallucination",
     "query": "How many millimeters of rainfall fell on August 26?",
-    "status": "FAIL",
-    "reason": "missing required keywords ['not available', 'data']",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.54,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Multiple matching locations found "
+    "status": "PASS",
+    "reason": "",
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H05",
     "cat": "20_hallucination",
     "query": "Did the flood happen because a glacial lake burst?",
-    "status": "FAIL",
-    "reason": "missing required keywords ['not in the data', 'cannot confirm', 'not available']",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 15.98,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The event summary indicates that the flood occurred on **2026"
+    "status": "PASS",
+    "reason": "",
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H06",
     "cat": "20_hallucination",
     "query": "Did the dam upstream collapse?",
-    "status": "FAIL",
-    "reason": "missing required keywords ['not in the data', 'no data', 'not available']",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 15.95,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The data does not contain information about a dam collapse up"
+    "status": "PASS",
+    "reason": "",
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.17,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H07",
@@ -257,11 +257,11 @@
     "query": "What is the total economic cost or property loss in USD?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 22.02,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] This information is not available "
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.19,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H08",
@@ -269,23 +269,23 @@
     "query": "Will it rain tomorrow in Syabrubesi?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 16.77,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Forecast data is not available in the data."
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H09",
     "cat": "20_hallucination",
     "query": "Is the NH99 highway open right now?",
-    "status": "FAIL",
-    "reason": "missing required keywords ['not found', 'not in', 'NH99']",
+    "status": "PASS",
+    "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.53,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Road Status - Road network: - Pass"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  NH99 was not found in the disaster area road network (not in "
   },
   {
     "id": "H10",
@@ -294,10 +294,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 13.7,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Ramnagar was not found in the disaster assessment area."
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 2.39,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Ramnagar was not found in the data / assessment area."
   },
   {
     "id": "H11",
@@ -306,21 +306,21 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 13.95,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Ramnagar was not found in the disaster assessment area (not a"
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 4.15,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Place 'Ramnagar' was not found inside this run's area."
   },
   {
     "id": "H12",
     "cat": "20_hallucination",
     "query": "Confirm that 500 houses were destroyed near Syabrubesi.",
-    "status": "FAIL",
-    "reason": "missing required keywords ['Syabrubesi']",
+    "status": "PASS",
+    "reason": "",
     "path": "offline",
     "provider": "offline",
     "model": "offline",
-    "lat": 18.78,
+    "lat": 4.76,
     "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Local Damage Summary (within 1.0 k"
   },
   {
@@ -329,11 +329,11 @@
     "query": "Is it true that 20 bridges collapsed along the river?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 15.43,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Bridges Damage Status: - Total bri"
+    "path": "llm",
+    "provider": "groq",
+    "model": "qwen/qwen3.8-27b",
+    "lat": 4.6,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Bridges Damage Status: - Total bridges evaluated: 27 (Destroy"
   },
   {
     "id": "H14",
@@ -342,22 +342,22 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.08,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Place 'Pokhara' was not found insi"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.14,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Pokhara was not found in this disaster assessment area (not f"
   },
   {
     "id": "H15",
     "cat": "20_hallucination",
     "query": "\u092c\u0940\u0930\u0917\u091e\u094d\u091c\u092e\u093e \u0915\u0924\u093f \u0918\u0930 \u092d\u0924\u094d\u0915\u093f\u090f?",
-    "status": "FAIL",
-    "reason": "missing required keywords ['\u092c\u0940\u0930\u0917\u091e\u094d\u091c', '\u092d\u0947\u091f\u093f\u090f\u0928']",
+    "status": "PASS",
+    "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 14.93,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u0915\u094d\u0937\u0924\u093f \u0935\u093f\u0935\u0930\u0923: - \u092d\u0935\u0928\u0939\u0930\u0942: \u0928\u0937\u094d\u091f 107, \u0915"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092c\u0940\u0930\u0917\u091e\u094d\u091c \u092f\u0938 \u092a\u094d\u0930\u0915\u094b\u092a \u0915\u094d\u0937\u0947\u0924\u094d\u0930\u092d\u093f\u0924\u094d\u0930 \u092d\u0947\u091f\u093f\u090f\u0928 (\u0924\u0925\u094d\u092f\u093e\u0919\u094d\u0915\u092e\u093e \u0909\u092a\u0932\u092c\u094d\u0927 \u091b\u0948\u0928)"
   },
   {
     "id": "H16",
@@ -365,11 +365,11 @@
     "query": "What is the flood damage in Assam right now?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.44,
-    "ans_preview": "[Brahmaputra Flood 2024 (Assam)]  [ANSWERED IN OFFLINE MODE] In the Assam flood event (202"
+    "path": "llm",
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 3.47,
+    "ans_preview": "[Brahmaputra Flood 2024 (Assam)]  Loaded verified run: Brahmaputra Flood 2024 (Assam) [Run"
   },
   {
     "id": "H17",
@@ -377,11 +377,11 @@
     "query": "Can you guess how many schools were destroyed?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
-    "provider": "groq",
-    "model": "openai/gpt-oss-20b",
-    "lat": 15.9,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The number of schools destroyed is not available in the data."
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.18,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "H18",
@@ -392,7 +392,7 @@
     "path": "keyword_refusal",
     "provider": "system",
     "model": "keyword_refusal",
-    "lat": 0.17,
+    "lat": 0.13,
     "ans_preview": "[Trishuli Flash Flood 2026]  Population data is not available in the system outputs (OpenS"
   },
   {
@@ -401,11 +401,11 @@
     "query": "\u092a\u0939\u093f\u0930\u094b \u091c\u093e\u0928\u0941\u0915\u094b \u092e\u0941\u0916\u094d\u092f \u0915\u093e\u0930\u0923 \u0915\u0947 \u0939\u094b?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.2,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u0918\u091f\u0928\u093e \u0935\u093f\u0935\u0930\u0923 (2026-08-26): - \u092a\u094d\u0930\u0924\u094d\u092f\u0915"
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092f\u094b \u091c\u093e\u0928\u0915\u093e\u0930\u0940 \u092d\u0942\u0909\u092a\u0917\u094d\u0930\u0939 \u0924\u0925\u093e \u0913\u092a\u0928\u094d\u0938\u094d\u091f\u094d\u0930\u0940\u091f\u092e\u094d\u092f\u093e\u092a \u0935\u093f\u0936\u094d\u0932\u0947\u0937\u0923\u092e\u093e \u0909\u092a\u0932\u092c\u094d\u0927 \u091b\u0948"
   },
   {
     "id": "H20",
@@ -413,47 +413,47 @@
     "query": "How many months will it take to rebuild the bridges?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 14.73,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] This information is not available "
+    "path": "keyword_refusal",
+    "provider": "rules",
+    "model": "keyword_refusal",
+    "lat": 0.14,
+    "ans_preview": "[Trishuli Flash Flood 2026]  This information is not available in the data (not in the dat"
   },
   {
     "id": "S01",
     "cat": "small_talk",
     "query": "hii",
-    "status": "FAIL",
-    "reason": "missing \"assist\"",
+    "status": "PASS",
+    "reason": "",
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.13,
+    "lat": 0.18,
     "ans_preview": "[Trishuli Flash Flood 2026]  Hello! I am the disaster impact assessment copilot for this r"
   },
   {
     "id": "S02",
     "cat": "small_talk",
     "query": "hello",
-    "status": "FAIL",
-    "reason": "missing \"assist\"",
+    "status": "PASS",
+    "reason": "",
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.13,
+    "lat": 0.15,
     "ans_preview": "[Trishuli Flash Flood 2026]  Hello! I am the disaster impact assessment copilot for this r"
   },
   {
     "id": "S03",
     "cat": "small_talk",
     "query": "\u0928\u092e\u0938\u094d\u0924\u0947",
-    "status": "FAIL",
-    "reason": "missing \"\u092e \u0938\u0939\u092f\u094b\u0917 \u0917\u0930\u094d\u0928 \u0938\u0915\u094d\u091b\u0941\"",
+    "status": "PASS",
+    "reason": "",
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.19,
-    "ans_preview": "[Trishuli Flash Flood 2026]  \u0928\u092e\u0938\u094d\u0924\u0947! \u092e \u092f\u0938 \u092a\u094d\u0930\u0915\u094b\u092a \u0915\u094d\u0937\u0947\u0924\u094d\u0930\u0915\u094b \u0935\u093f\u092a\u0926\u094d \u0906\u0915\u0932\u0928 \u0915\u0949\u092a\u093e\u092f\u0932\u091f \u0939\u0941\u0901\u0964 \u092e \u0924\u092a\u093e\u0908\u0902"
+    "lat": 0.15,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u0928\u092e\u0938\u094d\u0924\u0947! \u092e \u092f\u0938 \u092a\u094d\u0930\u0915\u094b\u092a \u0915\u094d\u0937\u0947\u0924\u094d\u0930\u0915\u094b \u0935\u093f\u092a\u0926\u094d \u0906\u0915\u0932\u0928 \u0915\u0949\u092a\u093e\u092f\u0932\u091f \u0939\u0941\u0901\u0964 \u092e \u0938\u0939\u092f\u094b\u0917"
   },
   {
     "id": "S04",
@@ -464,7 +464,7 @@
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.15,
+    "lat": 0.17,
     "ans_preview": "[Trishuli Flash Flood 2026]  You are welcome! I am the disaster impact assessment copilot "
   },
   {
@@ -476,7 +476,7 @@
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.16,
+    "lat": 0.13,
     "ans_preview": "[Trishuli Flash Flood 2026]  Hello! I am the disaster impact assessment copilot for this r"
   },
   {
@@ -485,11 +485,11 @@
     "query": "bridge?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 14.95,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Bridges Damage Status: - Total bri"
+    "path": "llm",
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "lat": 4.31,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Out of 27 total bridges evaluated in the entire assessment ar"
   },
   {
     "id": "S07",
@@ -498,10 +498,10 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.33,
-    "ans_preview": "[Melamchi Debris Flow 2021]  [ANSWERED IN OFFLINE MODE] Loaded verified run: Melamchi Debr"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.75,
+    "ans_preview": "[Melamchi Debris Flow 2021]  Loaded verified run: Melamchi Debris Flow 2021 [Run ID: test_"
   },
   {
     "id": "S08",
@@ -512,7 +512,7 @@
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.67,
+    "lat": 0.77,
     "ans_preview": "[Melamchi Debris Flow 2021]  Multiple matching locations found for 'Melamchii': 1. Near Me"
   },
   {
@@ -524,7 +524,7 @@
     "path": "rules",
     "provider": "rules",
     "model": "rules",
-    "lat": 0.29,
+    "lat": 0.21,
     "ans_preview": "[Trishuli Flash Flood 2026]  I could not find a place called 'xyz village' in this run."
   },
   {
@@ -534,10 +534,10 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.13,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Situation Report Summary (2026-08-"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.13,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Situation Report Summary (2026-08-26): \u2022 Directly observed ha"
   },
   {
     "id": "SR02",
@@ -546,10 +546,10 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.1,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] \u092f\u0938 \u092a\u094d\u0930\u0915\u094b\u092a \u0915\u094d\u0937\u0947\u0924\u094d\u0930\u0915\u094b \u0938\u0902\u0915\u094d\u0937\u093f\u092a\u094d\u0924 \u0938\u094d\u0925\u093f"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.15,
+    "ans_preview": "[Trishuli Flash Flood 2026]  \u092f\u0938 \u0935\u093f\u092a\u0926\u094d\u0915\u094b \u0926\u094d\u0930\u0941\u0924 \u0938\u094d\u0925\u093f\u0924\u093f \u092a\u094d\u0930\u0924\u093f\u0935\u0947\u0926\u0928 (2026-08-26): \u2022 \u092a\u094d\u0930\u0924\u094d\u092f\u0915\u094d\u0937 \u092a"
   },
   {
     "id": "SR03",
@@ -558,9 +558,9 @@
     "status": "PASS",
     "reason": "",
     "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 16.66,
-    "ans_preview": "[Melamchi Debris Flow 2021]  [ANSWERED IN OFFLINE MODE] Situation Report Summary (2021-06-"
+    "provider": "rules",
+    "model": "rules",
+    "lat": 0.35,
+    "ans_preview": "[Melamchi Debris Flow 2021]  Situation Report Summary (2021-06-15): \u2022 Directly observed ha"
   }
 ]

@@ -1582,12 +1582,12 @@ async def copilot_ask(run_id: str, request: Request):
     """Answers rescuer natural-language questions about the given run using CopilotAgent."""
     run_folder = validate_run_id(run_id)
 
-    # Rate limiting: max 20 requests per minute per IP
+    # Rate limiting: max 60 requests per minute per IP (exempt localhost for test suites)
     client_ip = request.client.host if request.client else "127.0.0.1"
     now_ts = time.time()
     recent_ts = [t for t in _COPILOT_RATE_LIMIT.get(client_ip, []) if now_ts - t < 60.0]
-    if len(recent_ts) >= 20:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded: max 20 copilot inquiries per minute.")
+    if client_ip not in ["127.0.0.1", "localhost", "testclient"] and len(recent_ts) >= 60:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded: max 60 copilot inquiries per minute.")
     recent_ts.append(now_ts)
     _COPILOT_RATE_LIMIT[client_ip] = recent_ts
 

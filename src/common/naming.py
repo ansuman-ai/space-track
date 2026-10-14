@@ -35,6 +35,11 @@ def format_settlement_name(
         geom = settlement.get("geometry", {})
         if geom.get("type") == "Point" and len(geom.get("coordinates", [])) >= 2:
             coords = geom["coordinates"]
+    if not coords and "lon" in settlement and "lat" in settlement:
+        try:
+            coords = [float(settlement["lon"]), float(settlement["lat"])]
+        except Exception:
+            pass
 
     coord_str = f"({coords[1]:.4f}, {coords[0]:.4f})" if coords and len(coords) >= 2 else ""
 
@@ -53,6 +58,12 @@ def format_settlement_name(
                 main_label = f"Near {p_name} ({p_dist} km)"
         else:
             main_label = f"Near {sub.strip()}"
+
+    # Priority 1b: Extract place from 'Cluster near <place> (ID ...)'
+    elif re.match(r"^Cluster near\s+", raw_name, flags=re.IGNORECASE):
+        m = re.match(r"^Cluster near\s+([A-Za-z0-9_.\u0900-\u097F\s]+?)(?:\s*\(ID\s*\d+\))?$", raw_name, flags=re.IGNORECASE)
+        if m:
+            main_label = f"Near {m.group(1).strip()}"
 
     # Priority 2: Settlement properties nearest_named_place & dist_to_named_place_km
     elif settlement.get("nearest_named_place"):

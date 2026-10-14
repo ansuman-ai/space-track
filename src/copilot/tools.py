@@ -232,7 +232,11 @@ class CopilotTools:
                         }
                     elif m_res.status in ["exact", "fuzzy"] and m_res.match:
                         coords = m_res.match.get("coordinates")
-                        resolved_name = format_settlement_label(m_res.match)
+                        clean_label = format_settlement_label(m_res.match)
+                        if area_str and area_str.lower() not in clean_label.lower():
+                            resolved_name = f"{area_str.strip().capitalize()} ({clean_label})"
+                        else:
+                            resolved_name = clean_label
 
             if coords and self.store.graded_buildings:
                 b_grades = {"Destroyed": 0, "Damaged": 0, "Possibly damaged": 0, "Not affected": 0, "Unknown (cloud)": 0}
@@ -1579,6 +1583,7 @@ class CopilotTools:
             if coord_pt:
                 start_lat, start_lon = coord_pt
             else:
+                from src.common.naming import format_settlement_name
                 res = self.resolver.resolve(place)
                 if res.status in ["exact", "fuzzy"] and res.match:
                     coords = res.match.get("coordinates")
@@ -1587,7 +1592,8 @@ class CopilotTools:
                     else:
                         start_lon = res.match.get("lon")
                         start_lat = res.match.get("lat")
-                    resolved_name = res.match.get("name", place)
+                    clean_match_name = format_settlement_name(res.match, include_coords=False, include_access=False)
+                    resolved_name = place if (place and not any(k in place.lower() for k in ["node/", "cluster near", "unnamed settlement"])) else clean_match_name
                 elif res.candidates:
                     c0 = res.candidates[0]
                     coords0 = c0.get("coordinates")
@@ -1596,7 +1602,8 @@ class CopilotTools:
                     else:
                         start_lon = c0.get("lon")
                         start_lat = c0.get("lat")
-                    resolved_name = c0.get("name", place)
+                    clean_cand_name = format_settlement_name(c0, include_coords=False, include_access=False)
+                    resolved_name = place if (place and not any(k in place.lower() for k in ["node/", "cluster near", "unnamed settlement"])) else clean_cand_name
 
         if start_lon is None or start_lat is None:
             # Fallback to AOI centroid

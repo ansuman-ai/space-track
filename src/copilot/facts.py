@@ -346,6 +346,8 @@ class FactStore:
                     "settlement_id": sid,
                     "name": name,
                     "type": props.get("type", "settlement"),
+                    "nearest_named_place": props.get("nearest_named_place"),
+                    "dist_to_named_place_km": props.get("dist_to_named_place_km"),
                     "building_count": bldg,
                     "population": pop,
                     "vehicle_status_opt": v_opt,
@@ -439,7 +441,8 @@ class FactStore:
                             d = (((coords[0] - sc[0]) ** 2 + (coords[1] - sc[1]) ** 2) ** 0.5) * 111.0
                             if d < nearest_dist_km:
                                 nearest_dist_km = d
-                                s_label = s.get("name") or "Unnamed settlement"
+                                from src.common.naming import format_settlement_name
+                                s_label = format_settlement_name(s, include_coords=False, include_access=False)
                                 nearest_place = f"{s_label} ({d:.2f} km)"
 
                 bridge_rec = {

@@ -168,7 +168,8 @@ def find_downstream_settlements(
                 downstream_km = node["distance_downstream_km"]
 
         if min_offset_m <= buffer_distance_m:
-            name = props.get("name") or f"Settlement at ({s_lat:.4f}, {s_lon:.4f})"
+            from src.common.naming import format_settlement_name
+            name = format_settlement_name({**props, "coordinates": [s_lon, s_lat]}, include_coords=False, include_access=False)
             bldgs = props.get("building_count", 0)
             status = props.get("vehicle_status_opt", "unknown")
             found_settlements.append({

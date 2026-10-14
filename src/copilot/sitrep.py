@@ -378,6 +378,16 @@ class SitRepGenerator:
 
         ev_year = v["event_date"][:4] if len(v["event_date"]) >= 4 and v["event_date"][:4].isdigit() else "2026"
 
+        from src.common.naming import format_settlement_name
+
+        def _format_rescue_item(s_dict: Dict[str, Any], in_nepali: bool) -> str:
+            full_s = self.store.settlement_index.get(s_dict.get("settlement_id"), s_dict)
+            s_name = format_settlement_name(full_s, include_coords=False, include_access=False)
+            bld = s_dict.get("building_count", 0)
+            if in_nepali:
+                return f"<li><strong>{html.escape(s_name)}</strong>: {bld} भवनहरू (सवारी सम्पर्क विच्छेद)</li>"
+            return f"<li><strong>{html.escape(s_name)}</strong>: {bld} buildings (isolated by road)</li>"
+
         if is_ne:
             title = "द्रुत विपद् स्थिति प्रतिवेदन (SITREP)"
             badge = "शैक्षिक प्रोटोटाइप"
@@ -397,7 +407,7 @@ class SitRepGenerator:
             sec_infra = "भौतिक पूर्वाधार क्षति स्थिति"
             sec_limits = "तथ्याङ्कका मुख्य सीमाहरू (Known limits)"
 
-            rescue_rows = "".join([f"<li><strong>{html.escape(s.get('name', 'Settlement'))}</strong>: {s.get('building_count', 0)} भवनहरू (सवारी सम्पर्क विच्छेद)</li>" for s in top_rescue]) if top_rescue else "<li>कुनै पनि बस्ती पूर्ण विच्छेद छैन।</li>"
+            rescue_rows = "".join([_format_rescue_item(s, True) for s in top_rescue]) if top_rescue else "<li>कुनै पनि बस्ती पूर्ण विच्छेद छैन।</li>"
 
             if top_pkg and pkg_elem_count > 0:
                 repair_text = f"<strong>प्याकेज {pkg_rank}</strong> ({pkg_elem_count} पूर्वाधार: {html.escape(pkg_elems_str)}) मर्मत गर्दा <strong>{pkg_set} बस्तीहरू</strong> र <strong>{pkg_bld} भवनहरू</strong>मा सवारी पहुँच पुन: जोडिन्छ।"
@@ -436,7 +446,7 @@ class SitRepGenerator:
             sec_infra = "INFRASTRUCTURE DAMAGE OVERVIEW"
             sec_limits = "DATA LIMITATIONS & ATTRIBUTION"
 
-            rescue_rows = "".join([f"<li><strong>{html.escape(s.get('name', 'Settlement'))}</strong>: {s.get('building_count', 0)} buildings (isolated by road)</li>" for s in top_rescue]) if top_rescue else "<li>No settlements isolated by road.</li>"
+            rescue_rows = "".join([_format_rescue_item(s, False) for s in top_rescue]) if top_rescue else "<li>No settlements isolated by road.</li>"
 
             if top_pkg and pkg_elem_count > 0:
                 repair_text = f"<strong>Package {pkg_rank}</strong> ({pkg_elem_count} link{'s' if pkg_elem_count > 1 else ''}: {html.escape(pkg_elems_str)}) reconnects <strong>{pkg_set} settlement{'s' if pkg_set != 1 else ''}</strong> and <strong>{pkg_bld} buildings</strong>."

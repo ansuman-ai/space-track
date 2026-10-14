@@ -1,19 +1,13 @@
 copilot:
   priority_endpoints:
     - provider: "gemini"
-      model: "gemini-3.5-flash"
-      base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
-    - provider: "gemini"
       model: "gemini-3.5-flash-lite"
       base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
-    - provider: "groq"
-      model: "openai/gpt-oss-20b"
-      base_url: "https://api.groq.com/openai/v1"
     - provider: "groq"
       model: "qwen/qwen3.8-27b"
       base_url: "https://api.groq.com/openai/v1"
     - provider: "groq"
-      model: "openai/gpt-oss-120b"
+      model: "openai/gpt-oss-20b"
       base_url: "https://api.groq.com/openai/v1"
     - provider: "openrouter"
       model: "openai/gpt-4o-mini"
@@ -24,10 +18,10 @@ copilot:
     - provider: "offline"
       model: "offline"
   rate_limit:
-    max_retries: 5
-    initial_backoff: 2.0
-    backoff_factor: 2.0
-    failover_wait_threshold_s: 5.0
+    max_retries: 1
+    initial_backoff: 1.0
+    backoff_factor: 1.0
+    failover_wait_threshold_s: 2.0
   names:
     ambiguity_margin: 0.08
     match_threshold: 0.70

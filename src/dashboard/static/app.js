@@ -1623,6 +1623,28 @@ function updateAccessList() {
     `23 other settlements look connected, but only through roads under cloud (${rCloud} km obscured). They are not counted as cut off.`;
 }
 
+function formatSettlementDisplayName(p, coords) {
+  let displayName = (p && p.name) ? String(p.name).trim() : "";
+  if (/^Cluster near\s+/i.test(displayName)) {
+    const m = displayName.match(/^Cluster near\s+([^(]+)/i);
+    if (m) return `Near ${m[1].trim()}`;
+  }
+  if (p && p.nearest_named_place && p.dist_to_named_place_km !== undefined) {
+    return `Near ${p.nearest_named_place} (${Number(p.dist_to_named_place_km).toFixed(1)} km)`;
+  }
+  if (displayName.includes("nearest named place: ")) {
+    return `Near ${displayName.split("nearest named place: ")[1].replace(")", "").trim()}`;
+  }
+  const isRaw = !displayName || /^node\/\d+/i.test(displayName) || /^Place node\/\d+/i.test(displayName) || /^Cluster near/i.test(displayName) || /^Unnamed settlement/i.test(displayName) || /ID \d+/i.test(displayName);
+  if (isRaw) {
+    if (coords && coords.length >= 2) {
+      return `Settlement at (${coords[1].toFixed(4)}°N, ${coords[0].toFixed(4)}°E)`;
+    }
+    return "Settlement";
+  }
+  return displayName;
+}
+
 function createSettlementRow(feat, isNoGround) {
   const p = feat.properties;
   const coords = feat.geometry.coordinates;
@@ -1630,12 +1652,7 @@ function createSettlementRow(feat, isNoGround) {
   const lon = coords[0];
   const bldCount = p.building_count || 0;
 
-  let displayName = p.name || "Settlement";
-  if (p.nearest_named_place && p.dist_to_named_place_km !== undefined) {
-    displayName = `Near ${p.nearest_named_place} (${p.dist_to_named_place_km.toFixed(1)} km)`;
-  } else if (displayName.includes("nearest named place: ")) {
-    displayName = `Near ${displayName.split("nearest named place: ")[1].replace(")", "")}`;
-  }
+  const displayName = formatSettlementDisplayName(p, coords);
 
   const row = document.createElement("div");
   row.className = "settlement-row-item";
@@ -1866,6 +1883,17 @@ async function loadSettlementsLayer(runId) {
         return L.circleMarker(latlng, getSettlementMarkerStyle(feature.properties));
       },
       onEachFeature: (feature, l) => {
+        const p = feature.properties || {};
+        const coords = feature.geometry ? feature.geometry.coordinates : null;
+        const dispName = formatSettlementDisplayName(p, coords);
+        const bld = p.building_count || 0;
+        l.bindPopup(`
+          <div style="font-family: var(--font-sans); font-size: 13px; line-height: 1.4;">
+            <strong style="color: #1B2326;">${dispName}</strong><br>
+            <span style="color: var(--text-secondary);">Buildings:</span> <b>${bld}</b><br>
+            <span style="color: var(--text-secondary);">Vehicle access:</span> ${p.vehicle_status_opt || "unknown"}
+          </div>
+        `);
         l.on("mouseover", () => {
           highlightSettlementListItem(feature, true);
         });
@@ -2420,9 +2448,10 @@ function renderFlowpathResult(startLat, startLng, data) {
       fillOpacity: 0.85
     });
 
+    const sName = formatSettlementDisplayName(s, [s.lon, s.lat]);
     const popupContent = `
       <div style="font-family: var(--font-sans); font-size: 13px; line-height: 1.4;">
-        <strong style="color: #1B2326;">${s.name}</strong><br>
+        <strong style="color: #1B2326;">${sName}</strong><br>
         <span style="color: var(--text-secondary);">Distance downstream:</span> <b>${s.distance_downstream_km} km</b><br>
         <span style="color: var(--text-secondary);">Lateral offset:</span> ${s.lateral_offset_m} m from river<br>
         <span style="color: var(--text-secondary);">Buildings:</span> ${s.building_count}<br>
