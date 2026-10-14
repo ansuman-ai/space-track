@@ -29,9 +29,10 @@ DEVA_TO_WESTERN = str.maketrans("०१२३४५६७८९", "0123456789")
 
 
 def normalize_text(text: str) -> str:
-    """Normalize text by converting Devanagari numerals to Western digits and lowercasing."""
+    """Normalize text by converting Devanagari numerals to Western digits, normalizing spaces, and lowercasing."""
     if not text:
         return ""
+    text = text.replace("\u202f", " ").replace("\u00a0", " ")
     return text.translate(DEVA_TO_WESTERN).lower()
 
 

@@ -204,14 +204,16 @@ def load_s1_features(
         desc_lr_event = np.zeros_like(post_vv_db)
 
     # Seasonal control S1 (within current run folder only; zero reads from other runs or archives)
-    run_root = post_vv_path.parents[2] if len(post_vv_path.parents) > 2 else post_vv_path.parent
-    seas_cands = [
-        run_root / "seasonal_control_2023" / "s1_seasonal_post.tif",
-        run_root / "raw" / "s1" / "seasonal_post.tif",
-        post_vv_path.parent / "seasonal_post_vv.tif",
-        run_root / "seasonal" / "raw" / "s1" / "post.tif",
-        run_root / "seasonal" / "interim" / "post_vv.tif"
-    ]
+    seas_cands = [post_vv_path.parent / "seasonal_post_vv.tif"]
+    for p in post_vv_path.parents:
+        seas_cands.extend([
+            p / "seasonal_control" / "s1_seasonal_post.tif",
+            p / "raw" / "s1" / "seasonal_post.tif",
+            p / "seasonal" / "raw" / "s1" / "post.tif",
+            p / "seasonal" / "interim" / "post_vv.tif",
+        ])
+        if (p / "run_summary.json").exists() or (p / "raw").exists():
+            break
     seas_post_f = next((p for p in seas_cands if p and p.exists()), None)
     if seas_post_f:
         with rasterio.open(seas_post_f) as s_seas:

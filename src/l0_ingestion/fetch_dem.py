@@ -144,8 +144,8 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
         except Exception as e:
             logger.warning(f"PC STAC query failed: {e}; using direct AWS Open Data Copernicus DEM")
 
-    from .gdal_env import get_shared_gdal_env, log_worker_gdal_env
-    for fetch_attempt in range(3):
+    from .gdal_env import get_shared_gdal_env, log_worker_gdal_env, clear_vsi_cache
+    for fetch_attempt in range(5):
         opened_datasets = []
         try:
             with get_shared_gdal_env(tag="DEM", AWS_NO_SIGN_REQUEST='YES'):
@@ -211,17 +211,19 @@ def fetch_dem(bbox: List[float], out_dir: str, buffer_km: float = 10.0, force: b
             logger.info(f"Successfully saved Copernicus DEM-30 to {target_tif}")
             return target_tif
         except Exception as e:
-            logger.warning(f"Attempt {fetch_attempt + 1}/3 fetching Copernicus DEM failed: {e}")
-            if fetch_attempt == 2:
-                logger.error(f"Error fetching/clipping Copernicus DEM after 3 attempts: {e}")
+            logger.warning(f"Attempt {fetch_attempt + 1}/5 fetching Copernicus DEM failed: {e}")
+            if fetch_attempt == 4:
+                logger.error(f"Error fetching/clipping Copernicus DEM after 5 attempts: {e}")
                 raise RuntimeError(f"Could not download and clip Copernicus DEM: {e}")
-            time.sleep(2)
+            clear_vsi_cache()
+            time.sleep(2 * (fetch_attempt + 1))
         finally:
             for ds in opened_datasets:
                 try:
                     ds.close()
                 except Exception:
                     pass
+            clear_vsi_cache()
 
 
 if __name__ == "__main__":

@@ -6,6 +6,46 @@ A dynamic, reproducible geospatial pipeline to detect flood extent, identify deb
 
 ---
 
+## Quick Start for Judges & Evaluators
+
+### 1. One-Click Setup
+```bash
+./setup.sh
+```
+*(Installs requirements, compiles the C-accelerated HAND library, and verifies environment).*
+
+### 2. Launch the Interactive Dashboard & Bilingual Copilot
+```bash
+python3 -m uvicorn src.dashboard.app:app --host 127.0.0.1 --port 8000
+```
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser:
+- Start screen displays the interactive Himalayan extent map and place search.
+- Explore any of the **7 verified disaster assessments** from the menu or start screen.
+- Interact with the bilingual SitRep Copilot (English, Nepali, Hindi) with strict number-guard verification and anti-hallucination protection.
+
+### 3. Verify All Shipped Runs (Bit-for-Bit Consistency)
+```bash
+python3 scripts/check_dashboard_data.py
+```
+*(Validates all 72 runs and proves that API, Copilot FactStore, SitRep, and raw JSON deliverables match bit-for-bit).*
+
+### 4. Run an End-to-End CLI Assessment (Cold Run)
+```bash
+python3 main.py --bbox 85.30 28.10 85.42 28.25 --event-date 2026-08-26 --out-dir runs/my_trishuli_run --no-cache
+```
+
+### 5. Run Security & Copilot Evaluation Suites
+```bash
+# Security & path-traversal audit (9/9 passed)
+PYTHONPATH=. pytest tests/test_security_audit.py -v
+
+# Copilot targeted evaluation suite (22 targeted questions live)
+python3 scripts/run_eval_v112.py
+```
+
+
+---
+
 ## Architecture & Layers Overview
 
 - **L0 Ingestion**: Dynamic ingestion of Sentinel-1 RTC pairs, Copernicus DEM-30, and historical OSM snapshots via ohsome API.
@@ -259,3 +299,11 @@ If `weights/best_segmentation.pt` is absent or checksum verification fails when 
    - In complex mountainous valley networks, intersecting arterial and feeder road segments share naming conventions. Local spatial queries clip geometries strictly to Euclidean circles and prioritize arterial classes (`primary`) over local access paths.
 4. **Offline Environment Deployment**:
    - The dashboard and Copilot operate in complete isolation without external API dependencies. All UI fonts (IBM Plex Sans, IBM Plex Mono, IBM Plex Sans Devanagari) and map assets are bundled locally. In the absence of live LLM API keys or network access, Copilot automatically falls back to deterministic rule-grounded offline synthesis with explicit UI disclosure.
+
+---
+
+## Troubleshooting
+
+- **Remote Ingestion / DNS Timeouts (HTTP Error 0 / Hanging Reads)**:
+  - If downloads hang or show HTTP error 0, check DNS speed (`curl -o /dev/null -s -w "%{time_namelookup}\n" https://planetarycomputer.microsoft.com`) and switch DNS to `1.1.1.1` / `8.8.8.8`. Slow system DNS resolution (>2s) causes curl/GDAL socket timeouts on cloud STAC endpoints before connections are established.
+

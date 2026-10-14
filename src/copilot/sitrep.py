@@ -31,8 +31,22 @@ from src.dashboard.app import extract_primary_river
 
 from .facts import FactStore
 from .guard import NumberGuard
+from .sitrep_map import generate_sitrep_overview_map
 
 logger = logging.getLogger("copilot.sitrep")
+
+
+def to_ne_near_place(place_str: str) -> str:
+    """Format English 'Near <place>' strings into standard Nepali '<place> नजिक'."""
+    if not place_str:
+        return ""
+    clean = re.sub(r"^Near\s+", "", place_str.strip(), flags=re.IGNORECASE)
+    m = re.match(r"^(.*?)(?:\s*\((.*?)\))?$", clean)
+    if m and m.group(2):
+        pname = m.group(1).strip()
+        dist = m.group(2).replace("km", "कि.मी.").replace("m", "मि.")
+        return f"{pname} नजिक ({dist})"
+    return f"{clean} नजिक"
 
 
 def haversine_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -65,13 +79,13 @@ Satellite change detection identifies **{{affected_km2_observed}} km²** of dire
   - Cloud-Covered (Unverified): **{{buildings_cloud_unverified}}**
 
 - **Bridges (Total {{bridges_total}} assessed):**
-  - Destroyed / Flooded: **{{bridges_destroyed}}** (Major road corridors: {{major_bridge_roads_en}})
+  - {{bridge_status_label}}: **{{bridges_destroyed}}** (Major road corridors: {{major_bridge_roads_en}})
   - Possibly Damaged: **{{bridges_possibly_damaged}}**
   - Total Affected: **{{bridges_affected_total}}**
   - Cloud-Covered (Unverified): **{{bridges_cloud_unverified}}**
 
 - **Road Network (Total {{roads_total_km}} km assessed; {{roads_drivable_km}} km drivable network in bbox):**
-  - Destroyed: **{{roads_destroyed_km}} km** (Main corridor damage: {{main_road_destroyed_en}})
+  - {{road_status_label}}: **{{roads_destroyed_km}} km** (Main corridor damage: {{main_road_destroyed_en}})
   - Possibly Damaged: **{{roads_possibly_damaged_km}} km**
   - Cloud-Covered (Unverified): **{{roads_cloud_unverified_km}} km**
 
@@ -81,7 +95,7 @@ Satellite change detection identifies **{{affected_km2_observed}} km²** of dire
 - **Road Cut-Off Settlements:** **{{cutoff_vehicle_optimistic_count}} settlements** cut off from any town or hospital by vehicle (pessimistic: **{{cutoff_vehicle_pessimistic_count}}**). Pedestrian cut-off: **{{cutoff_walking_optimistic_count}} settlements**.
 - **No Ground Access:** **{{no_ground_access_count}} settlements** have both vehicle and walking routes severed (air / boat priority).
 
-#### No-Ground-Access Settlements
+#### No-Ground-Access Settlements (Air / Boat Priority)
 {{no_ground_table_md_en}}
 
 #### 5 Largest Road Cut-Off Settlements
@@ -111,7 +125,7 @@ SITREP_TEMPLATE_PROSE_NE = """# द्रुत विपद् स्थित�
 ---
 
 ### १. बाढी कहाँ आयो?
-भूउपग्रह परिवर्तन पहिचान अनुसार **{{affected_km2_observed}} वर्ग कि.मी.** क्षेत्रमा प्रत्यक्ष बाढी/क्षति पुष्टि भएको छ र **{{affected_km2_inferred}} वर्ग कि.मी.** क्षेत्र खोला तथा पहिरो बहावमा अनुमानित छ। बाढीको मुख्य प्रभाव **{{primary_river}}** वरपर **लगभग {{upstream_place}} देखि {{downstream_place}} सम्म** फैलिएको छ।
+भूउपग्रह परिवर्तन पहिचान अनुसार **{{affected_km2_observed}} वर्ग कि.मी.** क्षेत्रमा प्रत्यक्ष बाढी/क्षति पुष्टि भएको छ र **{{affected_km2_inferred}} वर्ग कि.मी.** क्षेत्र खोला तथा पहिरो बहावमा अनुमानित छ। बाढीको मुख्य प्रभाव **{{primary_river}}** वरपर **लगभग {{upstream_place_ne}} देखि {{downstream_place_ne}} सम्म** फैलिएको छ।
 
 ---
 
@@ -124,13 +138,13 @@ SITREP_TEMPLATE_PROSE_NE = """# द्रुत विपद् स्थित�
   - बादलले ढाकिएका (अपुष्ट): **{{buildings_cloud_unverified}}**
 
 - **पुलहरू (कुल {{bridges_total}} मूल्याङ्कन):**
-  - पूर्ण नष्ट / जलमग्न: **{{bridges_destroyed}}** (प्रमुख सडकहरू: {{major_bridge_roads_ne}})
+  - {{bridge_status_label_ne}}: **{{bridges_destroyed}}** (प्रमुख सडकहरू: {{major_bridge_roads_ne}})
   - सम्भावित क्षति: **{{bridges_possibly_damaged}}**
   - कुल प्रभावित पुल: **{{bridges_affected_total}}**
   - बादलले ढाकिएका: **{{bridges_cloud_unverified}}**
 
 - **सडक सञ्जाल (कुल {{roads_total_km}} कि.मी. मूल्याङ्कन; कोर क्षेत्रमा {{roads_drivable_km}} कि.मी. सवारी सञ्जाल):**
-  - पूर्ण नष्ट: **{{roads_destroyed_km}} कि.मी.** (प्रमुख सडक खण्ड: {{main_road_destroyed_ne}})
+  - {{road_status_label_ne}}: **{{roads_destroyed_km}} कि.मी.** (प्रमुख सडक खण्ड: {{main_road_destroyed_ne}})
   - सम्भावित क्षति: **{{roads_possibly_damaged_km}} कि.मी.**
   - बादलले ढाकिएका: **{{roads_cloud_unverified_km}} कि.मी.**
 
@@ -138,9 +152,9 @@ SITREP_TEMPLATE_PROSE_NE = """# द्रुत विपद् स्थित�
 
 ### ३. को सम्पर्कविहीन भयो?
 - **सवारी सम्पर्कविहीन बस्तीहरू:** **{{cutoff_vehicle_optimistic_count}} बस्तीहरू** कुनै पनि सहर वा अस्पतालबाट विच्छेद छन् (निराशावादी अवस्था: **{{cutoff_vehicle_pessimistic_count}}**)। पैदल मार्ग अवरुद्ध: **{{cutoff_walking_optimistic_count}} बस्तीहरू**।
-- **पूर्ण स्थल सम्पर्कविहीन:** **{{no_ground_access_count}} बस्तीहरू**मा पैदल तथा सवारी दुवै मार्ग बन्द भएका छन् (हेलिकप्टर / डुङ्गा प्राथमिकता)।
+- **पूर्ण स्थल सम्पर्कविहीन:** **{{no_ground_access_count}} बस्तीहरू**मा पैदल तथा सवारी दुवै मार्ग बन्द भएका छन् (हवाई / डुङ्गा प्राथमिकता)।
 
-#### पूर्ण स्थल सम्पर्कविहीन बस्तीहरू (No Ground Access)
+#### पूर्ण स्थल सम्पर्कविहीन बस्तीहरू (हवाई / डुङ्गा प्राथमिकता)
 {{no_ground_table_md_ne}}
 
 #### सबैभन्दा ठूला ५ सवारी सम्पर्कविहीन बस्तीहरू
@@ -251,8 +265,11 @@ def safe_url_fetcher(url, timeout=10, ssl_context=None):
 class SitRepGenerator:
     """Generates bilingual 1-Page Situation Reports with strict numeric grounding."""
 
-    def __init__(self, fact_store: FactStore):
-        self.store = fact_store
+    def __init__(self, fact_store: FactStore | Path | str):
+        if isinstance(fact_store, (str, Path)):
+            self.store = FactStore(fact_store)
+        else:
+            self.store = fact_store
         self.guard = NumberGuard()
         self.values = self._collect_fill_values()
 
@@ -675,27 +692,28 @@ class SitRepGenerator:
         is_ne = (lang == "ne")
         is_flat = v["is_flat"]
 
-        # Quicklook image
-        ql_img_tag = ""
-        for ql_name in ["quicklook_l4.png", "quicklook_layer2.png"]:
-            ql_path = proc / ql_name
-            if ql_path.exists():
-                try:
-                    b64 = base64.b64encode(ql_path.read_bytes()).decode("ascii")
-                    ql_img_tag = f'<img class="map-img" src="data:image/png;base64,{b64}" />'
-                    break
-                except Exception:
-                    pass
+        # High-res publication-grade overview map banner
+        overview_map_png = proc / f"sitrep_overview_map_{lang}.png"
+        map_img_tag = ""
+        try:
+            generate_sitrep_overview_map(run_dir, overview_map_png, lang=lang)
+            if overview_map_png.exists():
+                b64 = base64.b64encode(overview_map_png.read_bytes()).decode("ascii")
+                map_img_tag = f'<img class="overview-map" src="data:image/png;base64,{b64}" />'
+        except Exception as e:
+            logger.warning("Could not generate overview map: %s", e)
 
-        # Format settlement rows
+        # Format settlement rows with Nepali connectors
         def _build_settlement_rows(items: List[Dict[str, Any]]) -> str:
             if not items:
-                return '<tr><td colspan="3" style="text-align:center; color:#64748b;">None (all retain access)</td></tr>' if not is_ne else '<tr><td colspan="3" style="text-align:center; color:#64748b;">कुनै पनि छैन</td></tr>'
+                return '<tr><td colspan="3" style="text-align:center; color:#64748b;">None (all retain access)</td></tr>' if not is_ne else '<tr><td colspan="3" style="text-align:center; color:#64748b;">कुनै पनि छैन (सबैमा पहुँच सुरक्षित)</td></tr>'
             rows = []
             for it in items:
                 c = it["_coords"]
                 coord_str = f"{c[1]:.4f}, {c[0]:.4f}" if c and c[0] is not None else "—"
-                rows.append(f'<tr><td>{html.escape(it["_name"])}</td><td>{coord_str}</td><td style="text-align:right;"><strong>{it["_bld"]}</strong></td></tr>')
+                raw_name = it["_name"]
+                name_str = to_ne_near_place(raw_name) if is_ne else raw_name
+                rows.append(f'<tr><td>{html.escape(name_str)}</td><td>{coord_str}</td><td style="text-align:right;"><strong>{it["_bld"]}</strong></td></tr>')
             return "\n".join(rows)
 
         no_ground_rows = _build_settlement_rows(v["no_ground_sorted"])
@@ -706,12 +724,16 @@ class SitRepGenerator:
             badge = "शैक्षिक प्रोटोटाइप"
             meta_str = f"घटना मिति: <strong>{v['event_date']}</strong> | उपग्रह: <strong>{v['post_dates_str']}</strong> | क्षेत्र (BBox): <strong>{v['bbox']}</strong>"
 
+            up_place_ne = to_ne_near_place(v["upstream_place"]) if v["upstream_place"] else "अज्ञात क्षेत्र"
+            down_place_ne = to_ne_near_place(v["downstream_place"]) if v["downstream_place"] else "अज्ञात क्षेत्र"
+
             sec1_title = "१. बाढी कहाँ आयो?"
-            sec1_text = f"प्रत्यक्ष पुष्टि भएको बाढी क्षेत्र <strong>{v['affected_km2_observed']} वर्ग कि.मी.</strong> र अनुमानित बहाव क्षेत्र <strong>{v['affected_km2_inferred']} वर्ग कि.मी.</strong> छ। {v['primary_river']} वरपर <strong>लगभग {v['upstream_place']} देखि {v['downstream_place']} सम्म</strong> बाढीको असर देखिएको छ। (उपग्रह: पूर्व {v['pre_dates_str']} / पश्चात {v['post_dates_str']})।"
+            sec1_text = f"प्रत्यक्ष पुष्टि भएको बाढी क्षेत्र <strong>{v['affected_km2_observed']} वर्ग कि.मी.</strong> र अनुमानित बहाव क्षेत्र <strong>{v['affected_km2_inferred']} वर्ग कि.मी.</strong> छ। {v['primary_river']} वरपर <strong>लगभग {up_place_ne} देखि {down_place_ne} सम्म</strong> बाढीको असर देखिएको छ। (उपग्रह: पूर्व {v['pre_dates_str']} / पश्चात {v['post_dates_str']})।"
 
             sec2_title = "२. के क्षति भयो?"
-            bld_label = "जलमग्न" if is_flat else "नष्ट"
-            sec2_text = f"• मुख्य सडक क्षति: <strong>{v['main_road_destroyed_ne']}</strong> (कुल {v['roads_destroyed_km']} कि.मी. {bld_label}, {v['roads_possibly_damaged_km']} कि.मी. सम्भावित क्षति, {v['roads_cloud_unverified_km']} कि.मी. अपुष्ट)।<br/>• मुख्य पुलहरू: {v['major_bridge_roads_ne']}।"
+            bld_label_ne = "जलमग्न" if is_flat else "नष्ट"
+            bld_sub_ne = "सम्भावित जलमग्न" if is_flat else "क्षतिग्रस्त"
+            sec2_text = f"• मुख्य सडक क्षति: <strong>{v['main_road_destroyed_ne']}</strong> (कुल {v['roads_destroyed_km']} कि.मी. {bld_label_ne}, {v['roads_possibly_damaged_km']} कि.मी. सम्भावित क्षति, {v['roads_cloud_unverified_km']} कि.मी. अपुष्ट)।<br/>• प्रमुख सडकका {bld_label_ne} पुलहरू: {v['major_bridge_roads_ne']}।"
 
             sec3_title = "३. को सम्पर्कविहीन भयो?"
             sec3_summary = f"सवारी पहुँच विच्छेद: <strong>{v['cutoff_vehicle_optimistic_count']} बस्तीहरू</strong> (निराशावादी: {v['cutoff_vehicle_pessimistic_count']})। पूर्ण स्थल सम्पर्कविहीन (पैदल तथा सवारी दुवै बन्द): <strong>{v['no_ground_access_count']} बस्तीहरू</strong>।"
@@ -719,8 +741,13 @@ class SitRepGenerator:
             sec4_title = "४. पहिले के मर्मत गर्ने?"
             sec4_text = f"• {v['single_repair_sentence_ne']}।<br/>• <strong>{v['package_1_sentence_ne']}</strong>"
 
-            lbl_no_ground = "पूर्ण स्थल सम्पर्कविहीन बस्ती (No ground access)"
+            lbl_no_ground = "पूर्ण स्थल सम्पर्कविहीन (हवाई / डुङ्गा प्राथमिकता)"
             lbl_top_road = "सबैभन्दा ठूला ५ सवारी सम्पर्कविहीन बस्ती"
+
+            kpi_hazard_lbl = "प्रत्यक्ष बाढी / जलमग्न" if is_flat else "प्रत्यक्ष बाढी / लेदो"
+            kpi_bld_lbl = "जलमग्न भवनहरू" if is_flat else "नष्ट भवनहरू"
+            kpi_br_lbl = "जलमग्न पुलहरू" if is_flat else "नष्ट पुलहरू"
+            kpi_cut_lbl = "सवारी सम्पर्कविहीन बस्ती"
         else:
             title = "RAPID DISASTER SITUATION REPORT (SITREP)"
             badge = "Educational Prototype"
@@ -730,8 +757,10 @@ class SitRepGenerator:
             sec1_text = f"Satellite analysis identifies <strong>{v['affected_km2_observed']} km²</strong> of directly observed hazard extent and <strong>{v['affected_km2_inferred']} km²</strong> inferred along tributaries. Affected stretch extends along <strong>{v['primary_river']}</strong> from near <strong>{v['upstream_place']}</strong> to near <strong>{v['downstream_place']}</strong> (Sensors: Pre {v['pre_dates_str']} / Post {v['post_dates_str']})."
 
             sec2_title = "2. What was damaged?"
-            bld_label = "flooded" if is_flat else "destroyed"
-            sec2_text = f"• Major road damage: <strong>{v['main_road_destroyed_en']}</strong> (Total {v['roads_destroyed_km']} km {bld_label}, {v['roads_possibly_damaged_km']} km possibly damaged, {v['roads_cloud_unverified_km']} km unverified under clouds).<br/>• Major corridor bridges destroyed: {v['major_bridge_roads_en']}."
+            bld_label_en = "flooded" if is_flat else "destroyed"
+            bld_col_en = "Flooded" if is_flat else "Destroyed"
+            bld_sub_en = "Possibly Flooded" if is_flat else "Damaged"
+            sec2_text = f"• Major road damage: <strong>{v['main_road_destroyed_en']}</strong> (Total {v['roads_destroyed_km']} km {bld_label_en}, {v['roads_possibly_damaged_km']} km possibly damaged, {v['roads_cloud_unverified_km']} km unverified under clouds).<br/>• Major corridor bridges {bld_label_en}: {v['major_bridge_roads_en']}."
 
             sec3_title = "3. Who is cut off?"
             sec3_summary = f"<strong>{v['cutoff_vehicle_optimistic_count']} settlements</strong> cut off from any town or hospital by road (pessimistic: <strong>{v['cutoff_vehicle_pessimistic_count']}</strong>). <strong>{v['no_ground_access_count']} settlements</strong> have no ground access (dual vehicle & walking severed)."
@@ -739,8 +768,13 @@ class SitRepGenerator:
             sec4_title = "4. What to repair first"
             sec4_text = f"• {v['single_repair_sentence_en']}.<br/>• <strong>{v['package_1_sentence_en']}</strong>"
 
-            lbl_no_ground = "No-Ground-Access Settlements (Air / Boat Priority)"
+            lbl_no_ground = "No Ground Access (Air / Boat Priority)"
             lbl_top_road = "5 Largest Road Cut-Off Settlements"
+
+            kpi_hazard_lbl = "Observed Flood Water" if is_flat else "Observed Hazard"
+            kpi_bld_lbl = "Flooded Buildings" if is_flat else "Destroyed Buildings"
+            kpi_br_lbl = "Flooded Bridges" if is_flat else "Destroyed Bridges"
+            kpi_cut_lbl = "Cut-Off Settlements"
 
         html_out = f"""<!DOCTYPE html>
 <html>
@@ -749,7 +783,7 @@ class SitRepGenerator:
 <style>
 @page {{
     size: A4 portrait;
-    margin: 6mm 8mm 5mm 8mm;
+    margin: 5mm 7mm 4mm 7mm;
 }}
 * {{
     box-sizing: border-box;
@@ -757,15 +791,15 @@ class SitRepGenerator:
 body {{
     font-family: 'Noto Sans Devanagari', 'Lohit Devanagari', 'FreeSans', 'DejaVu Sans', sans-serif;
     color: #0f172a;
-    line-height: 1.22;
-    font-size: 7.8pt;
+    line-height: 1.20;
+    font-size: 7.6pt;
     margin: 0;
     padding: 0;
 }}
 .header {{
     border-bottom: 2px solid #b91c1c;
-    padding-bottom: 2px;
-    margin-bottom: 3px;
+    padding-bottom: 1.5px;
+    margin-bottom: 2px;
 }}
 .title-row {{
     display: flex;
@@ -773,44 +807,44 @@ body {{
     align-items: baseline;
 }}
 h1 {{
-    font-size: 12.5pt;
+    font-size: 11.5pt;
     color: #991b1b;
     margin: 0;
     text-transform: uppercase;
     font-weight: 700;
 }}
 .badge {{
-    font-size: 7pt;
+    font-size: 6.8pt;
     font-weight: 600;
     color: #475569;
     background: #f1f5f9;
-    padding: 1px 5px;
+    padding: 1px 4px;
     border-radius: 3px;
     border: 1px solid #cbd5e1;
 }}
 .meta-line {{
-    font-size: 7.2pt;
+    font-size: 7.0pt;
     color: #475569;
     margin-top: 1px;
 }}
 .kpi-row {{
     display: flex;
-    gap: 5px;
-    margin: 3px 0;
+    gap: 4px;
+    margin: 2px 0 3px 0;
 }}
 .kpi-card {{
     flex: 1;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-top: 2.5px solid #0284c7;
-    padding: 2px 4px;
+    padding: 1.5px 3.5px;
     border-radius: 3px;
 }}
 .kpi-card.alert {{
     border-top-color: #dc2626;
 }}
 .kpi-val {{
-    font-size: 12pt;
+    font-size: 11pt;
     font-weight: 700;
     color: #0f172a;
     line-height: 1.1;
@@ -819,15 +853,31 @@ h1 {{
     color: #b91c1c;
 }}
 .kpi-lbl {{
-    font-size: 6.5pt;
+    font-size: 6.2pt;
     font-weight: 600;
     color: #64748b;
     text-transform: uppercase;
 }}
+.map-box {{
+    width: 100%;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 3px 0 4px 0;
+    text-align: center;
+    background: #f8fafc;
+}}
+.overview-map {{
+    width: 100%;
+    height: 285px;
+    object-fit: cover;
+    display: block;
+    margin: 0 auto;
+}}
 .main-grid {{
     display: flex;
-    gap: 8px;
-    margin-top: 2px;
+    gap: 7px;
+    margin-top: 1px;
 }}
 .col-left {{
     flex: 1;
@@ -836,53 +886,32 @@ h1 {{
     flex: 1;
 }}
 .sec-heading {{
-    font-size: 8pt;
+    font-size: 7.8pt;
     font-weight: 700;
     color: #0369a1;
     border-bottom: 1px solid #bae6fd;
     padding-bottom: 1px;
-    margin: 3px 0 2px 0;
+    margin: 2px 0 1.5px 0;
     text-transform: uppercase;
 }}
 .sec-heading.danger {{
     color: #b91c1c;
     border-bottom-color: #fecaca;
 }}
-.map-box {{
-    border: 1px solid #cbd5e1;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 3px;
-    text-align: center;
-    background: #f1f5f9;
-}}
-.map-img {{
-    width: 100%;
-    height: 98px;
-    object-fit: cover;
-    display: block;
-}}
-.map-caption {{
-    font-size: 6.2pt;
-    color: #64748b;
-    padding: 1px 3px;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
-}}
 .sub-title {{
-    font-size: 7.2pt;
+    font-size: 7.0pt;
     font-weight: 700;
     color: #334155;
-    margin: 3px 0 1px 0;
+    margin: 2.5px 0 1px 0;
 }}
 .table-compact {{
     width: 100%;
     border-collapse: collapse;
-    font-size: 6.8pt;
-    margin: 2px 0;
+    font-size: 6.6pt;
+    margin: 1.5px 0;
 }}
 .table-compact th, .table-compact td {{
-    padding: 1.5px 3px;
+    padding: 1.2px 2.5px;
     border: 1px solid #e2e8f0;
     text-align: left;
 }}
@@ -892,27 +921,27 @@ h1 {{
     font-weight: 600;
 }}
 .prose-box {{
-    font-size: 7.2pt;
-    line-height: 1.22;
-    margin: 2px 0;
+    font-size: 7.0pt;
+    line-height: 1.20;
+    margin: 1.5px 0;
 }}
 .footer-box {{
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 3px;
-    padding: 2.5px 4px;
+    padding: 2px 3.5px;
     margin-top: 3px;
-    font-size: 6.2pt;
+    font-size: 6.0pt;
     color: #475569;
-    line-height: 1.2;
+    line-height: 1.18;
 }}
 .footer-attr {{
     border-top: 1px solid #cbd5e1;
-    padding-top: 2px;
-    margin-top: 3px;
-    font-size: 5.8pt;
+    padding-top: 1.5px;
+    margin-top: 2px;
+    font-size: 5.6pt;
     color: #64748b;
-    line-height: 1.18;
+    line-height: 1.15;
 }}
 </style>
 </head>
@@ -929,57 +958,39 @@ h1 {{
 <div class="kpi-row">
   <div class="kpi-card alert">
     <div class="kpi-val">{v['affected_km2_observed']} km²</div>
-    <div class="kpi-lbl">{'प्रत्यक्ष बाढी / लेदो' if is_ne else 'Observed Hazard'}</div>
+    <div class="kpi-lbl">{kpi_hazard_lbl}</div>
   </div>
   <div class="kpi-card alert">
     <div class="kpi-val">{v['buildings_destroyed']}</div>
-    <div class="kpi-lbl">{'पूर्ण नष्ट / जलमग्न भवन' if is_ne else ('Flooded Buildings' if is_flat else 'Destroyed Buildings')}</div>
+    <div class="kpi-lbl">{kpi_bld_lbl}</div>
   </div>
   <div class="kpi-card alert">
     <div class="kpi-val">{v['bridges_destroyed']}</div>
-    <div class="kpi-lbl">{'नष्ट / जलमग्न पुलहरू' if is_ne else ('Flooded Bridges' if is_flat else 'Destroyed Bridges')}</div>
+    <div class="kpi-lbl">{kpi_br_lbl}</div>
   </div>
   <div class="kpi-card">
     <div class="kpi-val">{v['cutoff_vehicle_optimistic_count']}</div>
-    <div class="kpi-lbl">{'सवारी सम्पर्कविहीन बस्ती' if is_ne else 'Cut-Off Settlements'}</div>
+    <div class="kpi-lbl">{kpi_cut_lbl}</div>
   </div>
+</div>
+
+<div class="map-box">
+  {map_img_tag}
 </div>
 
 <div class="main-grid">
   <div class="col-left">
     <!-- 1. Where did the flood hit? -->
     <div class="sec-heading">{sec1_title}</div>
-    <div class="map-box">
-      {ql_img_tag}
-      <div class="map-caption">{'भूउपग्रह क्षति नक्शा तथा प्रभावित क्षेत्र' if is_ne else 'Satellite change detection & damage extent'}</div>
-    </div>
     <div class="prose-box">{sec1_text}</div>
 
-    <!-- 3. Who is cut off? -->
-    <div class="sec-heading danger" style="margin-top: 4px;">{sec3_title}</div>
-    <div class="prose-box">{sec3_summary}</div>
-
-    <div class="sub-title">{lbl_no_ground}</div>
-    <table class="table-compact">
-      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
-      {no_ground_rows}
-    </table>
-
-    <div class="sub-title">{lbl_top_road}</div>
-    <table class="table-compact">
-      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
-      {top_veh_rows}
-    </table>
-  </div>
-
-  <div class="col-right">
     <!-- 2. What was damaged? -->
-    <div class="sec-heading danger">{sec2_title}</div>
+    <div class="sec-heading danger" style="margin-top: 3.5px;">{sec2_title}</div>
     <table class="table-compact">
       <tr>
         <th>{'पूर्वाधार' if is_ne else 'Asset'}</th>
-        <th>{'नष्ट / जलमग्न' if is_ne else ('Flooded' if is_flat else 'Destroyed')}</th>
-        <th>{'क्षतिग्रस्त' if is_ne else 'Damaged'}</th>
+        <th>{bld_label_ne if is_ne else bld_col_en}</th>
+        <th>{bld_sub_ne if is_ne else bld_sub_en}</th>
         <th>{'अपुष्ट' if is_ne else 'Cloud-Unv.'}</th>
         <th>{'कुल' if is_ne else 'Total'}</th>
       </tr>
@@ -1006,13 +1017,31 @@ h1 {{
       </tr>
     </table>
     <div class="prose-box">{sec2_text}</div>
+  </div>
+
+  <div class="col-right">
+    <!-- 3. Who is cut off? -->
+    <div class="sec-heading danger">{sec3_title}</div>
+    <div class="prose-box">{sec3_summary}</div>
+
+    <div class="sub-title">{lbl_no_ground}</div>
+    <table class="table-compact">
+      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
+      {no_ground_rows}
+    </table>
+
+    <div class="sub-title">{lbl_top_road}</div>
+    <table class="table-compact">
+      <tr><th>{'बस्तीको नाम' if is_ne else 'Settlement'}</th><th>{'निर्देशाङ्क' if is_ne else 'Lat, Lon'}</th><th style="text-align:right;">{'भवन' if is_ne else 'Bld'}</th></tr>
+      {top_veh_rows}
+    </table>
 
     <!-- 4. What to repair first -->
-    <div class="sec-heading" style="margin-top: 5px;">{sec4_title}</div>
+    <div class="sec-heading" style="margin-top: 3.5px;">{sec4_title}</div>
     <div class="prose-box">{sec4_text}</div>
 
     <!-- Limitations -->
-    <div class="footer-box" style="margin-top: 5px;">
+    <div class="footer-box" style="margin-top: 3.5px;">
       <strong>{'तथ्याङ्क सीमाहरू (Limitations):' if is_ne else 'Known Data Limitations:'}</strong><br/>
       • {'बादलका कारण ' + v['buildings_cloud_unverified'] + ' भवनहरू र ' + v['roads_cloud_unverified_km'] + ' कि.मी. सडक अप्टिकल पुष्टि हुन सकेको छैन।' if is_ne else f"{v['buildings_cloud_unverified']} buildings and {v['roads_cloud_unverified_km']} km roads remain unverified under cloud cover."}<br/>
       • {'सहायक नदीहरूमा बहाव हाइड्रोलिक मोडलिङद्वारा अनुमान गरिएको हो; पहाडी भिरालो DEM द्वारा हटाइएको छ।' if is_ne else 'Drainage hazard hydraulically inferred; radar shadow/layover masked with DEM look-angle.'}<br/>

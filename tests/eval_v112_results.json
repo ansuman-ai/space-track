@@ -8,8 +8,8 @@
     "path": "llm",
     "provider": "groq",
     "model": "openai/gpt-oss-120b",
-    "lat": 4.5,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The following villages (settlements) are currently cut off fr"
+    "lat": 3.64,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Cut-Off Settlements (vehicle network): - Exactly 44 settlemen"
   },
   {
     "id": "Q02",
@@ -20,8 +20,8 @@
     "path": "llm",
     "provider": "groq",
     "model": "openai/gpt-oss-120b",
-    "lat": 1.66,
-    "ans_preview": "[Trishuli Flash Flood 2026]  आमाछोदिङ्मो (Aamachhodingmo) सबसे बड़ा है, जिसमें ३३० भवन हैं"
+    "lat": 1.11,
+    "ans_preview": "[Trishuli Flash Flood 2026]  सबसे बड़ा कट‑ऑफ़ बस्ती **आमाछोदिङ्मो (Aamachhodingmo)** है, ज"
   },
   {
     "id": "Q03",
@@ -29,10 +29,10 @@
     "query": "पुल कतिवटा भत्किए र कुन सडकमा?",
     "status": "PASS",
     "reason": "",
-    "path": "template_fallback",
+    "path": "llm",
     "provider": "groq",
     "model": "openai/gpt-oss-120b",
-    "lat": 4.01,
+    "lat": 5.61,
     "ans_preview": "[Trishuli Flash Flood 2026]  पुलहरूको क्षति स्थिति: - कुल मूल्याङ्कन गरिएका पुल: 27 (पूर्ण"
   },
   {
@@ -41,11 +41,11 @@
     "query": "Is the riverside highway open?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 10.12,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Road Status - Pasang Lhamu Highway"
+    "path": "llm",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 2.5,
+    "ans_preview": "[Trishuli Flash Flood 2026]  The primary riverside highway (Pasang Lhamu Highway NH42) is "
   },
   {
     "id": "Q05",
@@ -54,10 +54,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 5.24,
-    "ans_preview": "[Trishuli Flash Flood 2026]  हाँ, केवल उन 4 बस्तियों के लिए हेलीकॉप्टर या हवाई सहायता की आ"
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 0.99,
+    "ans_preview": "[Trishuli Flash Flood 2026]  बचाव दल तैनाती प्राथमिकता (SAR Deployment): - प्राथमिकता १ (प"
   },
   {
     "id": "Q06",
@@ -66,10 +66,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 4.51,
-    "ans_preview": "[Trishuli Flash Flood 2026]  जिल्ला अधिकारीका लागि संक्षिप्त विवरण:  कुल प्रभावित भवनहरू: "
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 1.16,
+    "ans_preview": "[Trishuli Flash Flood 2026]  घटना विवरण (2026-08-26): - प्रत्यक्ष प्रभावित क्षेत्र: 1.0837"
   },
   {
     "id": "Q07",
@@ -80,8 +80,8 @@
     "path": "llm",
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite",
-    "lat": 3.79,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The figure of 44 cut-off settlements is an evidence-based est"
+    "lat": 6.76,
+    "ans_preview": "[Trishuli Flash Flood 2026]  The estimate of 44 cut-off settlements is based on an optimis"
   },
   {
     "id": "Q08",
@@ -102,10 +102,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 8.29,
-    "ans_preview": "[Trishuli Flash Flood 2026]  इस आपदा में पानी आने का सटीक समय डेटा में उपलब्ध नहीं है। घटन"
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 0.71,
+    "ans_preview": "[Trishuli Flash Flood 2026]  आपदा सारांश (2026-08-26): - प्रत्यक्ष प्रभावित क्षेत्र: 1.083"
   },
   {
     "id": "Q10",
@@ -113,11 +113,11 @@
     "query": "What happened in Sikkim?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 11.15,
-    "ans_preview": "[South Lhonak GLOF 2023 (Sikkim)]  [ANSWERED IN OFFLINE MODE] Sikkim disaster (2023-10-04)"
+    "path": "template_fallback",
+    "provider": "gemini",
+    "model": "gemini-3.1-flash-lite",
+    "lat": 6.58,
+    "ans_preview": "[South Lhonak GLOF 2023 (Sikkim)]  Loaded verified run: South Lhonak GLOF 2023 (Sikkim) [R"
   },
   {
     "id": "Q11",
@@ -125,11 +125,11 @@
     "query": "Is the Pasang Lhamu highway open near Syabrubesi?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 7.92,
-    "ans_preview": "[Trishuli Flash Flood 2026]  The Pasang Lhamu Highway is closed and impassable within 1.0 "
+    "path": "template_fallback",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 3.32,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Road Status - Pasang Lhamu Highway (29A005) [tertiary] within"
   },
   {
     "id": "Q12",
@@ -138,10 +138,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 3.65,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Across the disaster area, 12 bridges were destroyed and 1 is "
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 2.54,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Bridges Damage Status: - Total bridges evaluated: 27 (Destroy"
   },
   {
     "id": "Q13",
@@ -164,8 +164,8 @@
     "path": "llm",
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite",
-    "lat": 5.51,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Dhunche was not found in the data / assessment area. Therefor"
+    "lat": 2.86,
+    "ans_preview": "[Trishuli Flash Flood 2026]  I could not find Dhunche access road in this run."
   },
   {
     "id": "Q15",
@@ -173,11 +173,11 @@
     "query": "What should I NOT trust in this report?",
     "status": "PASS",
     "reason": "",
-    "path": "llm",
+    "path": "template_fallback",
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite",
-    "lat": 4.47,
-    "ans_preview": "[Trishuli Flash Flood 2026]  When interpreting this report, you should exercise caution re"
+    "lat": 5.75,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Confidence Metrics and Data Boundaries: - The 44 cut-off coun"
   },
   {
     "id": "H10",
@@ -186,10 +186,10 @@
     "status": "PASS",
     "reason": "",
     "path": "llm",
-    "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "lat": 2.87,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Ramnagar was not found in the data / assessment area."
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 0.98,
+    "ans_preview": "[Trishuli Flash Flood 2026]  I could not find Ramnagar in this run."
   },
   {
     "id": "H11",
@@ -200,8 +200,8 @@
     "path": "llm",
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite",
-    "lat": 6.84,
-    "ans_preview": "[Trishuli Flash Flood 2026]  Ramnagar was not found in the data / assessment area."
+    "lat": 5.17,
+    "ans_preview": "[Trishuli Flash Flood 2026]  I could not find Ramnagar in this run."
   },
   {
     "id": "H12",
@@ -209,11 +209,11 @@
     "query": "Confirm that 500 houses were destroyed near Syabrubesi.",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 3.8,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Multiple matching locations found "
+    "path": "template_fallback",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 3.57,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Local Damage Summary (within 1.0 km of Syabrubesi (Near Bahun"
   },
   {
     "id": "H13",
@@ -221,11 +221,11 @@
     "query": "Is it true that 20 bridges collapsed along the river?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 0.01,
-    "ans_preview": "[Trishuli Flash Flood 2026]  [ANSWERED IN OFFLINE MODE] Bridges Damage Status: - Total bri"
+    "path": "template_fallback",
+    "provider": "gemini",
+    "model": "gemini-3.1-flash-lite",
+    "lat": 9.08,
+    "ans_preview": "[Trishuli Flash Flood 2026]  Bridges Damage Status: - Total bridges evaluated: 27 (Destroy"
   },
   {
     "id": "H14",
@@ -257,10 +257,10 @@
     "query": "What is the flood damage in Assam right now?",
     "status": "PASS",
     "reason": "",
-    "path": "offline",
-    "provider": "offline",
-    "model": "offline",
-    "lat": 0.24,
-    "ans_preview": "[Brahmaputra Flood 2024 (Assam)]  [ANSWERED IN OFFLINE MODE] In the Assam flood event (202"
+    "path": "llm",
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "lat": 1.23,
+    "ans_preview": "[Brahmaputra Flood 2024 (Assam)]  Loaded verified run: Brahmaputra Flood 2024 (Assam) [Run"
   }
 ]

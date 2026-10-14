@@ -415,35 +415,45 @@ class NumberGuard:
             m = tool_output.get("metrics", {})
             dt = tool_output.get("event_date", "unknown")
             obs_km2 = m.get("affected_km2_observed", "not computed")
+            bldg_tot = m.get("buildings_affected_total", "not computed")
             bldg_dest = m.get("buildings_destroyed", "not computed")
             br_dest = m.get("bridges_destroyed", "not computed")
             cut_count = m.get("cut_off_settlements", "not computed")
+
+            opt_note = tool_output.get("optical_evidence_note")
+            opt_ne = f"\n- अप्टिकल स्याटेलाइट प्रमाण: {opt_note}" if opt_note else ""
+            opt_hi = f"\n- ऑप्टिकल उपग्रह साक्ष्य: {opt_note}" if opt_note else ""
+            opt_en = f"\n- Optical satellite verification: {opt_note}" if opt_note else ""
+
+            bldg_str_ne = f"कुल {bldg_tot} (नष्ट: {bldg_dest})" if bldg_tot != "not computed" and bldg_tot > 0 else f"{bldg_dest}"
+            bldg_str_hi = f"कुल {bldg_tot} (नष्ट: {bldg_dest})" if bldg_tot != "not computed" and bldg_tot > 0 else f"{bldg_dest}"
+            bldg_str_en = f"{bldg_tot} total ({bldg_dest} destroyed)" if bldg_tot != "not computed" and bldg_tot > 0 else f"{bldg_dest}"
 
             if lang == "ne":
                 return (
                     f"घटना विवरण ({dt}):\n"
                     f"- प्रत्यक्ष प्रभावित क्षेत्र: {obs_km2} वर्ग किलोमिटर\n"
-                    f"- पूर्ण रूपमा नष्ट भएका भवनहरू: {bldg_dest}\n"
+                    f"- प्रभावित भवनहरू: {bldg_str_ne}\n"
                     f"- नष्ट भएका पुलहरू: {br_dest}\n"
-                    f"- सडक सम्पर्क विच्छेद भएका बस्तीहरू: {cut_count}\n"
+                    f"- सडक सम्पर्क विच्छेद भएका बस्तीहरू: {cut_count}{opt_ne}\n"
                     f"टिप्पणी: सबै तथ्याङ्क स्याटेलाइट र ओपन्स्ट्रीटम्याप विश्लेषणमा आधारित छन्।"
                 )
             elif lang == "hi":
                 return (
                     f"आपदा सारांश ({dt}):\n"
                     f"- प्रत्यक्ष प्रभावित क्षेत्र: {obs_km2} वर्ग किमी\n"
-                    f"- नष्ट हुए भवन: {bldg_dest}\n"
+                    f"- प्रभावित भवन: {bldg_str_hi}\n"
                     f"- नष्ट हुए पुल: {br_dest}\n"
-                    f"- संपर्क विहीन बस्तियाँ: {cut_count}\n"
+                    f"- संपर्क विहीन बस्तियाँ: {cut_count}{opt_hi}\n"
                     f"नोट: सभी आंकड़े उपग्रह और ओपनस्ट्रीटमैप डेटा पर आधारित हैं।"
                 )
             else:
                 return (
                     f"Disaster Event Summary ({dt}):\n"
                     f"- Directly observed affected area: {obs_km2} km²\n"
-                    f"- Destroyed buildings: {bldg_dest}\n"
+                    f"- Affected buildings: {bldg_str_en}\n"
                     f"- Destroyed bridges: {br_dest}\n"
-                    f"- Cut-off settlements (vehicle access): {cut_count}\n"
+                    f"- Cut-off settlements (vehicle access): {cut_count}{opt_en}\n"
                     f"Data source: Sentinel-1/2 satellite analysis and OpenStreetMap."
                 )
 

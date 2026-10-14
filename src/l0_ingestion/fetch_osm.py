@@ -35,17 +35,23 @@ OSM_QUERIES = {
 }
 
 
+import re
+
 def get_latest_ohsome_timestamp() -> str:
     """Fetch maximum available timestamp from ohsome API metadata."""
-    try:
-        resp = http_client.get(f"{OHSOME_BASE_URL}/metadata", timeout=15)
-        if resp.status_code == 200:
-            to_ts = resp.json().get("extractRegion", {}).get("temporalExtent", {}).get("toTimestamp")
-            if to_ts:
-                return to_ts
-    except Exception as e:
-        logger.warning(f"Could not query ohsome metadata: {e}")
-    return datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    for attempt in range(3):
+        try:
+            resp = http_client.get(f"{OHSOME_BASE_URL}/metadata", timeout=30)
+            if resp.status_code == 200:
+                to_ts = resp.json().get("extractRegion", {}).get("temporalExtent", {}).get("toTimestamp")
+                if to_ts:
+                    return to_ts
+        except Exception as e:
+            logger.warning(f"Could not query ohsome metadata (attempt {attempt+1}/3): {e}")
+            time.sleep(2)
+    # Safe fallback to known stable ohsome database horizon (2026-07-27T09:00Z) instead of future datetime
+    logger.warning("Using fallback ohsome horizon: 2026-07-27T09:00Z")
+    return "2026-07-27T09:00Z"
 
 
 import concurrent.futures
@@ -89,6 +95,18 @@ def query_ohsome_layer(
                 )
                 res["features"] = sorted_feats
                 return res
+            elif resp.status_code == 404 and "within the timeframe" in resp.text:
+                m = re.search(r"to\s+([0-9T:\-]+Z?)\)", resp.text)
+                if m:
+                    clamped_time = m.group(1)
+                    logger.warning(f"ohsome returned 404 timeframe bounds, auto-clamping to {clamped_time} and retrying")
+                    t_end = datetime.fromisoformat(clamped_time.replace("Z", "+00:00"))
+                    t_start = (t_end - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    data_hist["time"] = f"{t_start},{clamped_time}"
+                    continue
+                else:
+                    logger.error(f"elementsFullHistory/geometry 404: {resp.text[:200]}")
+                    raise RuntimeError(f"ohsome geometry query failed: 404 timeframe")
             elif resp.status_code >= 500:
                 time.sleep(2)
                 continue

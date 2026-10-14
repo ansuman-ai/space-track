@@ -402,7 +402,18 @@ def fetch_s2(
                     if k is not None and v is not None:
                         bands[k] = v
                 except concurrent.futures.TimeoutError:
-                    logger.warning(f"Planetary Computer slow/hanging on band read for scene {scene_id[:30]}.")
+                    dns_diag = ""
+                    try:
+                        import subprocess
+                        probe = subprocess.run(
+                            ["curl", "-o", "/dev/null", "-s", "-w", "DNS: %{time_namelookup}s, Connect: %{time_connect}s", "https://planetarycomputer.microsoft.com"],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if probe.stdout.strip():
+                            dns_diag = f" ({probe.stdout.strip()})"
+                    except Exception:
+                        pass
+                    logger.warning(f"Planetary Computer slow/hanging on band read for scene {scene_id[:30]}.{dns_diag}")
         finally:
             b_ex.shutdown(wait=False, cancel_futures=True)
 

@@ -23,12 +23,28 @@ SHARED_GDAL_CONFIG: Dict[str, str] = {
     "CPL_VSIL_CURL_CHUNK_SIZE": "2097152",      # 2 MB chunk cache
     "GDAL_INGESTED_BYTES_AT_OPEN": "131072",   # 128 KB initial header read
     "CURL_CA_BUNDLE": "/etc/ssl/certs/ca-certificates.crt",
-    "GDAL_HTTP_CONNECTTIMEOUT": "30",
-    "GDAL_HTTP_TIMEOUT": "60",
+    "GDAL_HTTP_CONNECTTIMEOUT": "60",
+    "GDAL_HTTP_TIMEOUT": "300",
     "GDAL_HTTP_MAX_RETRY": "5",
     "GDAL_HTTP_RETRY_DELAY": "2",
-    "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504,0"
+    "GDAL_HTTP_RETRY_CODES": "429,500,502,503,504,0",
+    "GDAL_HTTP_TCP_KEEPALIVE": "YES"
 }
+
+
+def clear_vsi_cache() -> None:
+    """Clear GDAL /vsicurl/ cache so retries do not replay cached network errors."""
+    try:
+        import ctypes, rasterio
+        rasterio_dir = Path(rasterio.__file__).parent
+        gdal_so = list((rasterio_dir.parent / "rasterio.libs").glob("libgdal*.so*")) or list(rasterio_dir.glob("libs/libgdal*.so*"))
+        if gdal_so:
+            lib = ctypes.CDLL(str(gdal_so[0]))
+            if hasattr(lib, 'VSICurlClearCache'):
+                lib.VSICurlClearCache()
+    except Exception:
+        pass
+
 
 
 def log_effective_gdal_config(tag: str, cfg: Dict[str, Any]) -> None:

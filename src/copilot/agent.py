@@ -134,6 +134,10 @@ class AgentResponse:
     rate_limit_waits: float = 0.0
     turn_latency_sec: float = 0.0
 
+    def __post_init__(self):
+        if self.text and isinstance(self.text, str):
+            self.text = self.text.replace("\u202f", " ").replace("\u00a0", " ")
+
 
 class CopilotAgent:
     """Provider-agnostic conversational agent with guard verification and offline fallback."""
@@ -302,6 +306,21 @@ class CopilotAgent:
             self.tools = CopilotTools(self.store)
             self.resolver = self.tools.resolver
         self._turn_run_label = self.primary_run_label
+
+        # If user explicitly references another disaster event by name, pre-switch active run
+        q_norm = user_query.lower()
+        if "sikkim" in q_norm or "सिक्किम" in user_query:
+            _lres = self.tools.load_run("sikkim")
+            if _lres.get("status") == "success":
+                self._turn_run_label = _lres.get("label", self._turn_run_label)
+        elif "melamchi" in q_norm or "मेलम्ची" in user_query:
+            _lres = self.tools.load_run("melamchi")
+            if _lres.get("status") == "success":
+                self._turn_run_label = _lres.get("label", self._turn_run_label)
+        elif "assam" in q_norm or "आसाम" in user_query or "असम" in user_query:
+            _lres = self.tools.load_run("assam")
+            if _lres.get("status") == "success":
+                self._turn_run_label = _lres.get("label", self._turn_run_label)
 
         # Hot reload keys command
         if user_query.strip().lower() == "reload_keys":
@@ -2054,15 +2073,41 @@ class CopilotAgent:
                         )
 
                     if "429" in err_str or "rate limit" in err_str.lower() or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
-                        logger.warning(
-                            "Rate limit / Quota on %s:%s (key %s). Marking exhausted for 24h.",
-                            provider, model_name, active_key.masked_id
-                        )
-                        self.key_pool.mark_key_exhausted(provider, active_key.key, reason="429 rate limit or quota exceeded", cooldown_s=86400.0)
+                        cooldown_s = 60.0
+                        m_retry = re.search(r"try again in ([\d\.]+)s", err_str, re.IGNORECASE)
+                        if not m_retry:
+                            m_retry = re.search(r"retry[- ]after[:\s]+([\d\.]+)", err_str, re.IGNORECASE)
+                        if m_retry:
+                            try:
+                                cooldown_s = max(5.0, min(float(m_retry.group(1)) + 1.0, 300.0))
+                            except Exception:
+                                cooldown_s = 60.0
+                        else:
+                            low_err = err_str.lower()
+                            if any(q in low_err for q in ["daily limit", "daily quota", "exceeded your current quota", "billing", "insufficient_quota"]):
+                                if not ("per minute" in low_err or "tpm" in low_err or "rpm" in low_err):
+                                    cooldown_s = 86400.0
+                            elif "tpm" in low_err or "rpm" in low_err or "rate limit" in low_err or "429" in low_err:
+                                cooldown_s = 60.0
+
+                        if cooldown_s >= 86400.0:
+                            logger.warning(
+                                "Daily Quota exceeded on %s:%s (key %s). Marking exhausted for 24h.",
+                                provider, model_name, active_key.masked_id
+                            )
+                            reason_msg = "daily quota exceeded"
+                        else:
+                            logger.warning(
+                                "Per-minute rate limit on %s:%s (key %s). Cooldown %.1fs.",
+                                provider, model_name, active_key.masked_id, cooldown_s
+                            )
+                            reason_msg = f"rate limit (cooldown {cooldown_s:.1f}s)"
+
+                        self.key_pool.mark_key_exhausted(provider, active_key.key, reason=reason_msg, cooldown_s=cooldown_s)
                         if self.key_pool.get_active_key(provider):
                             logger.info("Rotating immediately to next active key for provider %s.", provider)
                             continue
-                        logger.warning("All keys for provider %s exhausted. Failing over to next provider.", provider)
+                        logger.warning("All keys for provider %s currently in cooldown/exhausted. Failing over to next provider.", provider)
                         break
                     elif any(c in err_str.lower() for c in ["401", "invalid api key", "invalid auth key", "api_key_invalid", "unauthorized"]):
                         self.key_pool.mark_key_exhausted(provider, active_key.key, reason="401 Invalid API Key")
@@ -2080,7 +2125,15 @@ class CopilotAgent:
                         logger.warning("Model %s on provider %s returned 503 high demand. Failing over immediately to next endpoint.", model_name, provider)
                         break
                     elif "413" in err_str or "request too large" in err_str.lower() or "tpm" in err_str.lower():
-                        self.key_pool.mark_key_exhausted(provider, active_key.key, reason="413 request too large / TPM limit", cooldown_s=86400.0)
+                        cooldown_s = 60.0
+                        m_retry = re.search(r"try again in ([\d\.]+)s", err_str, re.IGNORECASE)
+                        if m_retry:
+                            try:
+                                cooldown_s = max(5.0, min(float(m_retry.group(1)) + 1.0, 300.0))
+                            except Exception:
+                                cooldown_s = 60.0
+                        logger.warning("TPM limit on %s:%s (key %s). Cooldown %.1fs.", provider, model_name, active_key.masked_id, cooldown_s)
+                        self.key_pool.mark_key_exhausted(provider, active_key.key, reason=f"TPM limit (cooldown {cooldown_s:.1f}s)", cooldown_s=cooldown_s)
                         if self.key_pool.get_active_key(provider):
                             logger.info("Rotating immediately to next active key for provider %s.", provider)
                             continue

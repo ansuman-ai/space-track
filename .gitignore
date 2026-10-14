@@ -1,6 +1,7 @@
 # Data directory
 data
 data/
+data_backup_cache/
 
 # Python cache & build
 __pycache__/

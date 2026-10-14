@@ -414,7 +414,7 @@ def fetch_pair(
     if selected_seasonal:
         logger.info(f"Found matched seasonal control scene: {selected_seasonal['id']} ({selected_seasonal['datetime']})")
         download_and_clip_bands(selected_seasonal, bbox, seasonal_tif, token)
-        legacy_seas_dir = out_path.parent.parent / "seasonal_control_2023"
+        legacy_seas_dir = out_path.parent.parent / "seasonal_control"
         legacy_seas_dir.mkdir(parents=True, exist_ok=True)
         import shutil
         shutil.copy2(seasonal_tif, legacy_seas_dir / "s1_seasonal_post.tif")
