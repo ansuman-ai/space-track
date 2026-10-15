@@ -2,7 +2,56 @@
 
 > **Educational prototype, not an operational tool.**
 
+Demo video: https://youtu.be/iyCIBPQrh3w?si=w9R5OD-lBnI6P7kA
+
 A dynamic, reproducible geospatial pipeline to detect flood extent, identify debris flows, grade infrastructure damage from pre-event OpenStreetMap vectors, and isolate cut-off mountain settlements from raw satellite and elevation data.
+
+---
+
+## Report (summary)
+
+### Trishuli Flood Assessment (26 Aug 2026)
+
+| Metric | Result |
+| :--- | :--- |
+| Affected area | 1.08 km² observed + 1.07 km² inferred from terrain |
+| Agreement with EMSR927 | precision 0.94, recall 0.41, F1 0.57 |
+| Damage | 107 buildings destroyed (225 affected), 12 bridges destroyed |
+| Cut off from any town or hospital | 44 settlements by road, 4 with no ground access |
+| Repair first | 4 links reconnect 19 settlements (939 buildings) |
+| No-event dates (6) | 0 damage, 0 settlements cut off |
+| Cold run on a laptop | 248 s, 4.1 GB RAM |
+
+### Multi-Event Transfer Evaluation (5 Runs)
+
+| Run | Terrain | Observed / inferred km² | Buildings destroyed (affected) | Bridges destroyed | Cut off / no ground access |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| Trishuli 2026-08-26 | mountain | 1.08 / 1.07 | 107 (225) | 12 | 44 / 4 |
+| Melamchi 2021-06-15 | mountain | 0.90 / 0.99 | 72 (280) | 4 | 5 / 5 |
+| Sikkim 2023-10-04 | mountain | 0.42 / 0.98 | 47 (161) | 5 | 8 / 8 |
+| Chamoli 2021-02-07 | mountain | 0.27 / 0.17 | 0 (1) | 1 | 0 / 0 |
+| Assam 2024-07-02 | flat | 17.36 / – | 9 flooded (13) | 0 | 5 / 5 |
+
+### AI Component Evaluation (Copilot)
+
+| Test set | Questions | Result |
+| :--- | :---: | :--- |
+| Held-out rescue questions (EN/NE/HI) | 15 | 100% verified factual grounding |
+| Hallucination traps | 20 | 0 invented numbers or names |
+| Small talk, typos, report requests | 12 | Handled safely, offline templates served |
+
+### Limitations
+
+This is an educational prototype, not an operational tool: it maps damage after the fact, misses part of it, and depends on free data.
+- **No warning.** The first usable image arrives 1-12 days after an event (revisit time, cloud).
+- **Recall.** 0.41 of the EMS area and 0.37 of its road cuts on Trishuli; narrow damage is below 10-20 m resolution.
+- **Cloud, snow, shadow.** Radar barely sees debris in steep gorges; snow hid Chamoli; anything under cloud is "not verified" (1,196 buildings and 32 km of road in Trishuli).
+- **Modelled areas.** Class 3 comes from terrain (HAND), not from imagery.
+- **OpenStreetMap.** Unmapped buildings, roads and bridges cannot be assessed; there is no population data, so we never estimate people affected.
+- **Flat terrain.** Checked on only two EMS events whose scores also guided the design; flooded vegetation and floods that recede before a clear image are missed.
+- **Inputs.** Results depend on a correct event date and a stable connection to Planetary Computer and AWS.
+
+Full report: [docs/REPORT.md](docs/REPORT.md)
 
 ---
 
