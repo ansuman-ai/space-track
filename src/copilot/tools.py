@@ -825,72 +825,126 @@ class CopilotTools:
         # 2. Filter roads by name, ref, or type
         matched_roads = list(all_roads)
         road_label = "Road network"
+        corridors_summary = []
 
-        if name:
+        is_generic = False
+        if not name or not str(name).strip():
+            is_generic = True
+        else:
             clean_name = str(name).strip().lower()
-            # Ambiguous query when user asks generically for "highway" or "road"
-            if clean_name in ["highway", "road", "sadak", "सडक", "राजमार्ग"]:
-                road_groups: Dict[Tuple[str, str, Optional[str]], float] = {}
-                for r in all_roads:
-                    rn = r.get("name")
-                    rf = r.get("ref")
-                    rh = r.get("highway") or "road"
-                    disp = rn or rf
-                    if disp:
-                        k = (disp, rh, rf)
-                        road_groups[k] = road_groups.get(k, 0.0) + r.get("length_m", 0.0)
+            generic_exact = {
+                "main road", "main highway", "highway", "riverside highway", "the road",
+                "the highway", "the main road", "the main highway", "main", "road", "roads",
+                "highways", "sadak", "sarak", "corridor", "riverside", "riverside corridor",
+                "river road", "river highway", "मुख्य सडक", "मुख्य सड़क", "राजमार्ग", "सडक",
+                "सड़क", "मार्ग", "प्रमुख सडक", "प्रमुख सड़क"
+            }
+            generic_tokens = {
+                "main", "highway", "highways", "road", "roads", "the", "a", "an", "is", "open",
+                "passable", "sadak", "sarak", "riverside", "corridor", "river", "प्रमुख", "मुख्य",
+                "सडक", "सड़क", "राजमार्ग", "मार्ग", "सड़क", "खुला", "चालु", "के", "को"
+            }
+            q_words = [w for w in re.findall(r"[\w\u0900-\u097F]+", clean_name) if len(w) >= 2]
+            if clean_name in generic_exact or (q_words and all(w in generic_tokens for w in q_words)):
+                is_generic = True
 
-                sorted_candidates = sorted(
-                    road_groups.items(),
-                    key=lambda item: (HIGHWAY_CLASS_RANK.get(item[0][1], 0), item[1]),
-                    reverse=True,
-                )
+        if is_generic:
+            # Generic road phrases: resolve to highest-class road corridor(s) in the run (trunk/primary, else secondary, else tertiary)
+            has_trunk_or_primary = any(r.get("highway") in {"motorway", "trunk", "primary"} for r in all_roads)
+            has_secondary = any(r.get("highway") == "secondary" for r in all_roads)
+            has_tertiary = any(r.get("highway") in {"tertiary", "tertiary_link"} for r in all_roads)
 
-                seen_names = set()
-                candidate_list = []
-                for (c_name, c_hwy, c_ref), c_len in sorted_candidates:
-                    if c_name not in seen_names:
-                        seen_names.add(c_name)
-                        candidate_list.append({
-                            "name": f"{c_name} ({c_hwy})",
-                            "ref": c_ref,
-                            "type": c_hwy,
-                            "length_km": round(c_len / 1000.0, 1),
-                        })
-                    if len(candidate_list) >= 3:
-                        break
-
-                if len(candidate_list) > 1:
-                    prompt_items = [f"{i+1}. {c['name']}" for i, c in enumerate(candidate_list)]
-                    return {
-                        "tool": "roads_status",
-                        "status": "ambiguous",
-                        "query": name,
-                        "candidates": candidate_list,
-                        "clarification_prompt": (
-                            f"Multiple roads exist in the disaster area: {', '.join(prompt_items)}. "
-                            "Which road would you like passability details for?"
-                        ),
-                        "fact_ids": [],
-                    }
-
-            is_riverside_query = any(kw in clean_name for kw in ["river", "riverside", "corridor", "खोला", "नदी"])
-
-            if is_riverside_query:
-                # For riverside / river corridor queries, select the primary highway corridor
-                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in all_roads), default=0)
-                primary_segments = [r for r in all_roads if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
-                rep_name = next((r.get("name") for r in primary_segments if r.get("name")), None)
-                rep_ref = next((r.get("ref") for r in primary_segments if r.get("ref")), None)
-                # Expand to all contiguous corridor segments sharing the corridor name or ref
-                matched_roads = [
-                    r for r in all_roads
-                    if (rep_name and r.get("name") == rep_name)
-                    or (rep_ref and r.get("ref") == rep_ref)
-                    or (r.get("highway") == "primary")
-                ]
-                road_label = f"{rep_name or rep_ref or 'Pasang Lhamu Highway'} (NH42, primary riverside highway)"
+            if has_trunk_or_primary:
+                matched_roads = [r for r in all_roads if r.get("highway") in {"motorway", "trunk", "primary"}]
+                target_desc = "trunk / primary highway"
+            elif has_secondary:
+                matched_roads = [r for r in all_roads if r.get("highway") == "secondary"]
+                target_desc = "secondary road"
+            elif has_tertiary:
+                matched_roads = [r for r in all_roads if r.get("highway") in {"tertiary", "tertiary_link"}]
+                target_desc = "tertiary road"
             else:
+                max_rank = max((HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) for r in all_roads), default=0)
+                matched_roads = [r for r in all_roads if HIGHWAY_CLASS_RANK.get(r.get("highway"), 0) == max_rank]
+                target_desc = "road corridor"
+
+            # Group the highest-class segments by name/ref
+            corridor_groups: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+            for r in matched_roads:
+                rn = r.get("name")
+                rf = r.get("ref")
+                rh = r.get("highway") or "road"
+                grp_key = (rn or "Unnamed", rf or "", rh)
+                if grp_key not in corridor_groups:
+                    corridor_groups[grp_key] = {
+                        "name": rn or (rf or f"Unnamed {rh}"),
+                        "ref": rf,
+                        "highway": rh,
+                        "length_m": 0.0,
+                        "destroyed_m": 0.0,
+                        "possibly_damaged_m": 0.0,
+                        "not_affected_m": 0.0,
+                        "cloud_m": 0.0,
+                        "segments": 0,
+                    }
+                g = corridor_groups[grp_key]
+                g["segments"] += 1
+                lm = r.get("length_m", 0.0)
+                g["length_m"] += lm
+                gr = r.get("damage_grade")
+                if gr == "Destroyed": g["destroyed_m"] += lm
+                elif gr == "Possibly damaged": g["possibly_damaged_m"] += lm
+                elif gr == "Not affected": g["not_affected_m"] += lm
+                elif gr == "Unknown (cloud)": g["cloud_m"] += lm
+
+            for (rn, rf, rh), g in sorted(corridor_groups.items(), key=lambda x: x[1]["length_m"], reverse=True):
+                tot_km = round(g["length_m"] / 1000.0, 2)
+                dest_km = round(g["destroyed_m"] / 1000.0, 2)
+                poss_km = round(g["possibly_damaged_m"] / 1000.0, 2)
+                clear_km = round(g["not_affected_m"] / 1000.0, 2)
+                cloud_km = round(g["cloud_m"] / 1000.0, 2)
+                c_status = (
+                    "CLOSED / BLOCKED" if dest_km > 0.0
+                    else ("UNCERTAIN / CAUTION" if poss_km > 0.0
+                    else ("UNVERIFIED (cloud obscured)" if cloud_km > 0.0
+                    else "OPEN / PASSABLE"))
+                )
+                c_label = f"{g['name']} ({rf})" if rf and rf not in g['name'] else g['name']
+                corridors_summary.append({
+                    "name": c_label,
+                    "ref": rf,
+                    "highway": rh,
+                    "passability": c_status,
+                    "total_km": tot_km,
+                    "destroyed_km": dest_km,
+                    "possibly_damaged_km": poss_km,
+                    "not_affected_km": clear_km,
+                    "cloud_unverified_km": cloud_km,
+                })
+
+            sorted_groups = sorted(corridor_groups.values(), key=lambda x: x["length_m"], reverse=True)
+            distinct_names = []
+            for g in sorted_groups:
+                n = g["name"]
+                if n and not n.startswith("Unnamed") and n not in distinct_names:
+                    distinct_names.append(n)
+            distinct_refs = []
+            for g in sorted_groups:
+                r = g["ref"]
+                if r and r not in distinct_refs:
+                    distinct_refs.append(r)
+            label_parts = []
+            if distinct_names:
+                label_parts.append("/".join(distinct_names[:2]))
+            if distinct_refs:
+                label_parts.append(f"({'/'.join(distinct_refs[:2])})")
+            if not label_parts:
+                label_parts.append(f"Main {target_desc} network")
+            else:
+                label_parts.append(f"[{target_desc}]")
+            road_label = " ".join(label_parts)
+
+        else:
                 # Generic matching against OSM name and ref tags
                 stop_words = {"highway", "road", "sadak", "सडक", "राजमार्ग", "the", "trail", "path", "corridor", "मार्ग", "way"}
                 q_tokens = [t for t in re.findall(r"[\w\u0900-\u097F]+", clean_name) if t not in stop_words and len(t) >= 2]
@@ -961,8 +1015,12 @@ class CopilotTools:
 
         if type:
             type_str = str(type).strip().lower()
-            matched_roads = [r for r in matched_roads if str(r.get("highway", "")).lower() == type_str]
-            road_label += f" ({type_str})"
+            filtered = [r for r in matched_roads if str(r.get("highway", "")).lower() == type_str]
+            if filtered:
+                matched_roads = filtered
+                road_label += f" ({type_str})"
+            elif not is_generic:
+                matched_roads = []
 
         # 3. Apply spatial filter and geometric clipping if area/coords given
         unclipped_total_m = 0.0
@@ -1094,6 +1152,7 @@ class CopilotTools:
             "cloud_unverified_km": cloud_km,
             "total_segments": total_segments,
             "destroyed_segments": dest_segments,
+            "corridors": corridors_summary,
             "statement": stmt,
             "fact_ids": fact_ids,
         }
@@ -1764,12 +1823,12 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
         },
         {
             "name": "roads_status",
-            "description": "Passability and damage for a road, highway corridor, or local area.",
+            "description": "Passability and damage for a road, highway corridor, or local area. For 'Is the main road open?' or general highway status, pass name='main road' and omit type.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": ["string", "null"], "description": "Road or highway name (e.g. primary arterial road or local highway name)."},
-                    "type": {"type": ["string", "null"], "description": "Highway classification (e.g. 'primary')."},
+                    "name": {"type": ["string", "null"], "description": "Road or highway name (e.g. 'main road' for the main corridor in the active run, or specific name like 'Pasang Lhamu Highway')."},
+                    "type": {"type": ["string", "null"], "description": "Optional specific highway classification filter (e.g. 'secondary', 'tertiary'). Leave null for 'main road' queries."},
                     "area": {"type": ["string", "null"], "description": "Optional local area or coordinates."},
                     "radius_km": {"type": ["number", "null"], "description": "Radius in km."},
                 },

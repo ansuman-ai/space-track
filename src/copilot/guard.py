@@ -720,30 +720,43 @@ class NumberGuard:
             rad = tool_output.get("radius_km")
             area = tool_output.get("area_name")
 
+            corridors = tool_output.get("corridors") or []
             if lang == "ne":
                 loc_txt = f" ({area} वरिपरि {rad} कि.मी. भित्र)" if area else ""
-                return (
+                base_txt = (
                     f"सडक अवस्था - {rd}{loc_txt}:\n"
                     f"- स्थिति: {passability}\n"
                     f"- नष्ट खण्ड: {dest_km} कि.मी. (मूल्याङ्कन गरिएको {tot_km} कि.मी. मध्ये)\n"
                     f"- सम्भावित क्षति: {poss_km} कि.मी., अप्रभावित: {clear_km} कि.मी., बादलले अपुष्ट: {cloud_km} कि.मी."
                 )
+                if corridors and len(corridors) > 1:
+                    c_lines = [f"  • {c['name']}: {c['passability']} ({c['total_km']} कि.मी. मध्ये {c['destroyed_km']} कि.मी. नष्ट)" for c in corridors[:4]]
+                    base_txt += "\n- मुख्य सडक खण्डहरू:\n" + "\n".join(c_lines)
+                return base_txt
             elif lang == "hi":
                 loc_txt = f" ({area} के {rad} किमी दायरे में)" if area else ""
-                return (
+                base_txt = (
                     f"सड़क स्थिति - {rd}{loc_txt}:\n"
                     f"- स्थिति: {passability}\n"
                     f"- नष्ट: {dest_km} किमी (कुल {tot_km} किमी में से)\n"
                     f"- संभावित क्षति: {poss_km} किमी, अप्रभावित: {clear_km} किमी, बादल से अज्ञात: {cloud_km} किमी"
                 )
+                if corridors and len(corridors) > 1:
+                    c_lines = [f"  • {c['name']}: {c['passability']} ({c['total_km']} किमी में से {c['destroyed_km']} किमी नष्ट)" for c in corridors[:4]]
+                    base_txt += "\n- मुख्य सड़क खंड:\n" + "\n".join(c_lines)
+                return base_txt
             else:
                 loc_txt = f" (within {rad} km of {area})" if area else ""
-                return (
+                base_txt = (
                     f"Road Status - {rd}{loc_txt}:\n"
                     f"- Passability: {passability}\n"
                     f"- Destroyed length: {dest_km} km (out of {tot_km} km evaluated)\n"
                     f"- Possibly damaged: {poss_km} km, Intact/Clear: {clear_km} km, Cloud-unverified: {cloud_km} km"
                 )
+                if corridors and len(corridors) > 1:
+                    c_lines = [f"  • {c['name']}: {c['passability']} ({c['destroyed_km']} km destroyed out of {c['total_km']} km)" for c in corridors[:4]]
+                    base_txt += "\n- Key Corridors:\n" + "\n".join(c_lines)
+                return base_txt
 
         elif tool_name == "confidence_and_limits":
             opt_c = tool_output.get("optimistic_cut_off_settlements", "not computed")

@@ -50,7 +50,7 @@ logger = logging.getLogger("copilot.agent")
 SYSTEM_PROMPT = """Himalayan Disaster SitRep Copilot.
 1. ZERO FABRICATION: Output numbers and place names strictly from tool results this turn. If data requested is absent, state that only the requested information is 'not available in the data' (तथ्याङ्कमा उपलब्ध छैन / डेटा में उपलब्ध नहीं है). If a requested road, bridge, place, or entity is not found in the run data (or a tool returns status 'not_found' for entity <x>), state: 'I could not find <x> in this run.' (in Nepali: '<x> यस प्रकोप क्षेत्रभित्र भेटिएन', in Hindi: '<x> इस आपदा क्षेत्र में नहीं मिला'). NEVER append unrelated disclaimers about casualties or weather to questions that did not ask for them. Only state casualty or forecast absence when the user specifically asked for casualties or forecasts.
 2. LANGUAGE: Reply strictly in user's query language (English -> English; Hindi -> Hindi Devanagari; Nepali -> Nepali Devanagari).
-3. LOCAL DAMAGE & ROADS: Call damage_summary(area=..., radius_km=1.0) or roads_status(name=..., area=..., radius_km=1.0) for local places/coords; you MUST state the radius in your answer (e.g. 'within 1.0 km of [Place]'). When asked about a highway corridor (e.g. 'Is the main road open?' or 'Pasang Lhamu Highway'), quote the corridor fields from roads_status (e.g. 4.42 km destroyed out of 36.62 km evaluated on the main highway corridor), NEVER quoting whole-AOI road length (5.98 km) as the corridor figure.
+3. LOCAL DAMAGE & ROADS: Call damage_summary(area=..., radius_km=1.0) or roads_status(name=..., area=..., radius_km=1.0) for local places/coords; you MUST state the radius in your answer (e.g. 'within 1.0 km of [Place]'). When asked about the main road or highway passability (e.g. 'Is the main road open?'), call roads_status(name='main road') without assuming any specific road name, and quote the corridor fields from roads_status (e.g. destroyed length and passability on the main road corridor), NEVER quoting whole-AOI road length as the corridor figure.
 4. CUT-OFFS: Call cutoff_settlements. Cloud-unverified routes are CONNECTED and NOT in cut-offs.
 5. BRIDGES & ROADS: For regional or overall bridge questions (e.g. 'पुल कतिवटा भत्किए र कुन सडकमा?'), call bridges_status() without an area to get AOI-wide totals (12 destroyed, 1 possibly damaged out of 27 total bridges).
 6. CONFIDENCE & VALIDATION: Call confidence_and_limits(). Quote the validated value: precision 0.94 (94.0%) and F1 0.57 citing processed/validation_status.json [validation_status]. Exactly 44 settlements are cut off under the optimistic scenario; the 23 settlements passing through cloud cover are OTHER connected settlements (separate from the 44 cut-offs), connected only via unverified road segments. NEVER say '23 of those 44'.
@@ -474,17 +474,21 @@ class CopilotAgent:
         q_lower = query.lower()
         q_tokens = re.findall(r"[a-z0-9]+", q_lower)
 
-        # Helper for fuzzy token matching
+        # Helper for token / phrase matching
         def _has_kw(keywords: List[str]) -> bool:
             for kw in keywords:
-                if kw in q_lower or kw in query:
-                    return True
-                # Check fuzzy token distance for typos
-                for t in q_tokens:
-                    if len(t) >= 4 and len(kw) >= 4:
-                        from .names import similarity_ratio
-                        if similarity_ratio(t, kw) >= 0.70:
-                            return True
+                if " " in kw:
+                    if kw in q_lower or kw in query:
+                        return True
+                else:
+                    if kw in q_tokens or kw in query:
+                        return True
+                    # Check fuzzy token distance for typos only on longer words
+                    for t in q_tokens:
+                        if len(t) >= 5 and len(kw) >= 5:
+                            from .names import similarity_ratio
+                            if similarity_ratio(t, kw) >= 0.85:
+                                return True
             return False
 
         # 1. Unanswerable topics check
@@ -1486,7 +1490,8 @@ class CopilotAgent:
             "ne": "CRITICAL LANGUAGE DIRECTIVE: The user asked in Nepali. You MUST reply STRICTLY in Nepali (नेपाली) using Devanagari script.",
         }
         lang_instruction = lang_prompt_map.get(lang, "CRITICAL LANGUAGE DIRECTIVE: Reply in the language of the user query.")
-        conv_messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n====================\n{lang_instruction}\n===================="}]
+        run_ctx = f"ACTIVE DISASTER RUN: {self._turn_run_label} (directory: {self.store.run_dir.name}). When answering about the active event, resolve entities within this run."
+        conv_messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n====================\n{run_ctx}\n{lang_instruction}\n===================="}]
         for m in self.messages[-2:]:
             conv_messages.append({"role": m["role"], "content": m["content"]})
 
@@ -1817,6 +1822,7 @@ class CopilotAgent:
                                 completion = client_c2.chat.completions.create(
                                     model=model_name,
                                     messages=messages_copy,
+                                    tools=openai_tools,
                                     temperature=0.1,
                                     max_tokens=800,
                                 )
@@ -1840,7 +1846,12 @@ class CopilotAgent:
                                 self.api_call_logs.append(call_logs_this_turn[-1])
                                 active_key.failure_count = 0
                                 setattr(active_key, "tpm_retries", 0)
-                                answer_text = completion.choices[0].message.content or ""
+                                choice_c2 = completion.choices[0]
+                                if choice_c2.message.content and choice_c2.message.content.strip():
+                                    answer_text = choice_c2.message.content
+                                else:
+                                    answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
+                                    answer_path = "template_fallback"
                             except Exception as c2_err:
                                 logger.warning("Call 2 failed or timed out (%s). Falling back immediately to template answer.", c2_err)
                                 answer_text = self.guard.build_template_answer(tool_outputs[0], lang)
@@ -2227,7 +2238,8 @@ class CopilotAgent:
             "ne": "CRITICAL LANGUAGE DIRECTIVE: The user asked in Nepali. You MUST reply STRICTLY in Nepali (नेपाली) using Devanagari script.",
         }
         lang_instruction = lang_prompt_map.get(lang, "CRITICAL LANGUAGE DIRECTIVE: Reply in the language of the user query.")
-        conv_messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n====================\n{lang_instruction}\n===================="}]
+        run_ctx = f"ACTIVE DISASTER RUN: {self._turn_run_label} (directory: {self.store.run_dir.name}). When answering about the active event, resolve entities within this run."
+        conv_messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\n====================\n{run_ctx}\n{lang_instruction}\n===================="}]
         for m in self.messages[-2:]:
             conv_messages.append({"role": m["role"], "content": m["content"]})
 
