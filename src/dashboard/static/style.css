@@ -1488,6 +1488,108 @@ body.start-screen-active #attr-sentinel {
   color: var(--text-main);
 }
 
+.s2-divider-v {
+  width: 1px;
+  height: 22px;
+  background: var(--border-line);
+  margin: 0 4px;
+}
+
+.s2-layers-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+  margin-right: 4px;
+}
+
+.s2-layers-toggle input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #1B2326;
+  width: 14px;
+  height: 14px;
+}
+
+/* S2 Swipe Map Overlay */
+.s2-swipe-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0px;
+  z-index: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.s2-swipe-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #FFFFFF;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.75), 0 0 1px rgba(0, 0, 0, 0.9);
+}
+
+.s2-swipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2px solid #1B2326;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1B2326;
+  cursor: ew-resize;
+  pointer-events: auto;
+  user-select: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.s2-swipe-handle:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+
+.s2-swipe-handle:active {
+  transform: translate(-50%, -50%) scale(0.96);
+}
+
+.s2-swipe-badge {
+  position: absolute;
+  top: 60px;
+  padding: 3px 8px;
+  background: rgba(27, 35, 38, 0.88);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.s2-badge-before {
+  right: 14px;
+}
+
+.s2-badge-after {
+  left: 14px;
+}
+
 /* Narrow screens: Copilot window becomes a bottom sheet */
 @media (max-width: 640px) {
   .copilot-window {

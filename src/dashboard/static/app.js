@@ -2118,13 +2118,60 @@ async function loadRepairPackagesLayer(runId) {
 // S2 Slider: Before / After Sentinel-2 Comparison
 // ==========================================================================
 let preS2SavedBounds = null;
+let s2HiddenAnalysisLayers = [];
+
+function updateS2SwipePosition() {
+  const range = document.getElementById("s2-range-slider");
+  const divider = document.getElementById("s2-swipe-divider");
+  if (!s2PostOverlay || !range || !divider) return;
+  const el = s2PostOverlay.getElement();
+  const val = Number(range.value);
+  const mapContainer = map.getContainer();
+  if (!mapContainer) return;
+
+  const mapRect = mapContainer.getBoundingClientRect();
+  const splitX = mapRect.width * (val / 100);
+
+  divider.style.left = `${splitX}px`;
+  divider.classList.remove("hidden");
+
+  if (el) {
+    const imgRect = el.getBoundingClientRect();
+    const clipLeftPx = Math.max(0, Math.min(imgRect.width, splitX - (imgRect.left - mapRect.left)));
+    el.style.clipPath = `inset(0 0 0 ${clipLeftPx}px)`;
+  }
+}
+
+function toggleS2AnalysisLayers() {
+  const chkHide = document.getElementById("chk-hide-analysis-layers");
+  const hide = chkHide && chkHide.checked;
+  if (hide && s2HiddenAnalysisLayers.length === 0) {
+    Object.keys(geojsonLayers).forEach(k => {
+      const l = geojsonLayers[k];
+      if (l && map.hasLayer(l)) {
+        s2HiddenAnalysisLayers.push(k);
+        map.removeLayer(l);
+      }
+    });
+  } else if (!hide && s2HiddenAnalysisLayers.length > 0) {
+    s2HiddenAnalysisLayers.forEach(k => {
+      const l = geojsonLayers[k];
+      if (l && !map.hasLayer(l)) {
+        l.addTo(map);
+      }
+    });
+    s2HiddenAnalysisLayers = [];
+  }
+}
 
 async function toggleS2Slider(activate) {
   const bar = document.getElementById("s2-slider-bar");
   const range = document.getElementById("s2-range-slider");
+  const divider = document.getElementById("s2-swipe-divider");
   const btnMapS2 = document.getElementById("btn-toggle-s2-comparison");
   const lblPre = document.getElementById("s2-date-pre");
   const lblPost = document.getElementById("s2-date-post");
+  const chkHide = document.getElementById("chk-hide-analysis-layers");
   s2OverlayActive = activate;
 
   if (btnMapS2) {
@@ -2133,7 +2180,19 @@ async function toggleS2Slider(activate) {
   }
 
   if (!activate) {
-    bar.classList.add("hidden");
+    if (bar) bar.classList.add("hidden");
+    if (divider) divider.classList.add("hidden");
+
+    // Restore analysis layers if they were hidden
+    if (chkHide && chkHide.checked) {
+      chkHide.checked = false;
+      toggleS2AnalysisLayers();
+    }
+
+    map.off("move", updateS2SwipePosition);
+    map.off("zoom", updateS2SwipePosition);
+    map.off("resize", updateS2SwipePosition);
+
     if (s2PreOverlay) { map.removeLayer(s2PreOverlay); s2PreOverlay = null; }
     if (s2PostOverlay) { map.removeLayer(s2PostOverlay); s2PostOverlay = null; }
 
@@ -2174,18 +2233,60 @@ async function toggleS2Slider(activate) {
   s2PreOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=pre`, bounds, { pane: "s2Pane", zIndex: 1 }).addTo(map);
   s2PostOverlay = L.imageOverlay(`/api/runs/${currentRunId}/s2-image?type=post`, bounds, { pane: "s2Pane", zIndex: 2 }).addTo(map);
 
-  const applyClip = () => {
-    if (!s2PostOverlay) return;
-    const el = s2PostOverlay.getElement();
-    if (el) el.style.clipPath = `inset(0 0 0 ${range.value}%)`;
-  };
-
-  s2PostOverlay.on("load", applyClip);
+  s2PostOverlay.on("load", () => {
+    updateS2SwipePosition();
+  });
   s2PostOverlay.on("error", () => {
     showToast("Satellite before/after imagery not included with this run. Run analysis to fetch raw scenes.");
   });
-  range.oninput = applyClip;
-  setTimeout(applyClip, 100);
+
+  range.oninput = updateS2SwipePosition;
+
+  // Map movement synchronization for the swipe divider
+  map.on("move", updateS2SwipePosition);
+  map.on("zoom", updateS2SwipePosition);
+  map.on("resize", updateS2SwipePosition);
+
+  // Setup draggable divider handle on the map
+  const handle = document.getElementById("s2-swipe-handle");
+  if (handle && !handle._dragBound) {
+    let isDragging = false;
+    handle._dragBound = true;
+
+    handle.addEventListener("pointerdown", (e) => {
+      isDragging = true;
+      handle.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+      e.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", (e) => {
+      const mapContainer = map.getContainer();
+      if (!mapContainer) return;
+      const mapRect = mapContainer.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, ((e.clientX - mapRect.left) / mapRect.width) * 100));
+      range.value = Math.round(pct);
+      updateS2SwipePosition();
+    });
+
+    const endDrag = (e) => {
+      if (isDragging) {
+        isDragging = false;
+        try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+    };
+    handle.addEventListener("pointerup", endDrag);
+    handle.addEventListener("pointercancel", endDrag);
+  }
+
+  // Setup Hide Analysis Layers toggle
+  if (chkHide) {
+    chkHide.checked = false;
+    chkHide.onchange = toggleS2AnalysisLayers;
+  }
+
+  setTimeout(updateS2SwipePosition, 100);
+  setTimeout(updateS2SwipePosition, 350);
 
   document.getElementById("btn-close-s2-slider").onclick = () => toggleS2Slider(false);
 }

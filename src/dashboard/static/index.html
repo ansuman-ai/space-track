@@ -230,15 +230,32 @@
         <!-- Before/After Slider Overlay Bar -->
         <div id="s2-slider-bar" class="slider-bar-overlay hidden">
           <div class="s2-slider-label-block">
-            <span class="s2-label-title">Pre-event</span>
+            <span class="s2-label-title">Before</span>
             <span id="s2-date-pre" class="s2-date-sub font-mono">—</span>
           </div>
           <input type="range" id="s2-range-slider" min="0" max="100" value="50" style="width: 160px;" />
           <div class="s2-slider-label-block">
-            <span class="s2-label-title">Post-event</span>
+            <span class="s2-label-title">After</span>
             <span id="s2-date-post" class="s2-date-sub font-mono">—</span>
           </div>
+          <div class="s2-divider-v"></div>
+          <label class="s2-layers-toggle" title="Toggle analysis layers visibility to inspect satellite imagery">
+            <input type="checkbox" id="chk-hide-analysis-layers" />
+            <span>Hide analysis layers</span>
+          </label>
           <button id="btn-close-s2-slider" class="btn-slider-close" title="Close before/after view">✕</button>
+        </div>
+
+        <!-- Swipe Divider Line, Handle and Badges -->
+        <div id="s2-swipe-divider" class="s2-swipe-divider hidden">
+          <div class="s2-swipe-line"></div>
+          <div id="s2-swipe-handle" class="s2-swipe-handle" title="Drag to swipe">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M8 7l-5 5 5 5V7zm8 0v10l5-5-5-5z" />
+            </svg>
+          </div>
+          <div class="s2-swipe-badge s2-badge-before">Before</div>
+          <div class="s2-swipe-badge s2-badge-after">After</div>
         </div>
 
         <!-- Floating Copilot Button (Bottom-Right, 44px, dark #1B2326) -->
