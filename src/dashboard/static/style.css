@@ -525,6 +525,21 @@ body.start-screen-active #attr-sentinel {
   border-color: var(--border-dark);
 }
 
+.map-action-note {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
 .btn-map-action.active {
   background: var(--text-main);
   border-color: var(--text-main);
@@ -782,6 +797,16 @@ body.start-screen-active #attr-sentinel {
   height: 8px;
   border-radius: 50%;
   background: #B6C0C4;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.sym-unverified-circle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #B6C0C4;
+  border: 1px dashed #6B747A;
   display: inline-block;
   flex-shrink: 0;
 }

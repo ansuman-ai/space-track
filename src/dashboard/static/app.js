@@ -219,6 +219,10 @@ function initHeaderControls() {
   if (optSlider) {
     optSlider.addEventListener("click", () => {
       if (moreMenu) moreMenu.classList.add("hidden");
+      if (currentRunData && currentRunData.layers_available && !currentRunData.layers_available.s2_before_after) {
+        showToast("No clear before/after imagery for this event");
+        return;
+      }
       toggleS2Slider(!s2OverlayActive);
     });
   }
@@ -364,6 +368,13 @@ function initLegendControls() {
   const chkIntact = document.getElementById("layer-intact-buildings");
   if (chkIntact) {
     chkIntact.addEventListener("change", () => {
+      if (currentRunId) loadBuildingsLayer(currentRunId);
+    });
+  }
+
+  const chkUnverifiedB = document.getElementById("chk-layer-unverified-buildings");
+  if (chkUnverifiedB) {
+    chkUnverifiedB.addEventListener("change", () => {
       if (currentRunId) loadBuildingsLayer(currentRunId);
     });
   }
@@ -1039,6 +1050,9 @@ async function loadRun(runId) {
     // 2. Update Side Panel
     updateSidePanel(data);
 
+    // Update S2 Before/After button/note availability
+    updateS2Availability(data);
+
     // Reset Copilot assistant for this run
     resetCopilotForNewRun(data);
 
@@ -1148,6 +1162,36 @@ function updateHeader(data) {
   const btnSitrep = document.getElementById("btn-download-sitrep");
   if (btnSitrep) {
     btnSitrep.style.display = "";
+  }
+}
+
+function updateS2Availability(data) {
+  const btnMapS2 = document.getElementById("btn-toggle-s2-comparison");
+  const noteS2 = document.getElementById("note-s2-comparison");
+  const optSlider = document.getElementById("menu-opt-slider");
+  const hasS2 = !!(data && data.layers_available && data.layers_available.s2_before_after);
+  const noteText = (data && data.layers_available && data.layers_available.s2_before_after_note) || "No clear before/after imagery for this event";
+
+  if (hasS2) {
+    if (btnMapS2) btnMapS2.classList.remove("hidden");
+    if (noteS2) noteS2.classList.add("hidden");
+    if (optSlider) {
+      optSlider.classList.remove("disabled");
+      optSlider.removeAttribute("title");
+    }
+  } else {
+    if (btnMapS2) btnMapS2.classList.add("hidden");
+    if (noteS2) {
+      noteS2.classList.remove("hidden");
+      const span = noteS2.querySelector("span");
+      if (span) span.textContent = noteText;
+      else noteS2.textContent = noteText;
+      noteS2.setAttribute("title", noteText);
+    }
+    if (optSlider) {
+      optSlider.classList.add("disabled");
+      optSlider.setAttribute("title", noteText);
+    }
   }
 }
 
@@ -1821,8 +1865,9 @@ async function loadHazardsLayer(runId) {
 
 async function loadBuildingsLayer(runId) {
   try {
-    const showIntact = document.getElementById("layer-intact-buildings").checked;
-    const url = showIntact
+    const showIntact = document.getElementById("layer-intact-buildings")?.checked;
+    const showUnverified = document.getElementById("chk-layer-unverified-buildings")?.checked;
+    const url = (showIntact || showUnverified)
       ? `/api/runs/${runId}/layer/buildings`
       : `/api/runs/${runId}/layer/buildings?affected_only=true`;
     const res = await fetch(url);
@@ -1837,6 +1882,7 @@ async function loadBuildingsLayer(runId) {
       filter: (feature) => {
         const grade = feature.properties.damage_grade || "Not affected";
         if (grade === "Not affected" && !showIntact) return false;
+        if ((grade === "Unknown (cloud)" || grade.includes("cloud")) && !showUnverified) return false;
         return true;
       },
       style: (feature) => {
@@ -2173,6 +2219,13 @@ async function toggleS2Slider(activate) {
   const lblPost = document.getElementById("s2-date-post");
   const chkHide = document.getElementById("chk-hide-analysis-layers");
   s2OverlayActive = activate;
+
+  if (activate && currentRunData && currentRunData.layers_available && !currentRunData.layers_available.s2_before_after) {
+    showToast(currentRunData.layers_available.s2_before_after_note || "No clear before/after imagery for this event");
+    s2OverlayActive = false;
+    if (btnMapS2) btnMapS2.classList.remove("active");
+    return;
+  }
 
   if (btnMapS2) {
     if (activate) btnMapS2.classList.add("active");

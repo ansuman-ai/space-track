@@ -16,7 +16,7 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -643,6 +643,7 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
 
     manifest = load_runs_manifest()
     is_verified_e2e = folder_name in manifest.get("verified_runs", {})
+    has_clear_s2, s2_note = _has_clear_s2_before_after(run_folder)
 
     return {
         "id": folder_name,
@@ -677,7 +678,8 @@ def get_run_metadata(run_folder: Path) -> Optional[Dict[str, Any]]:
             "bridges": has_bridges,
             "settlements": has_settlements,
             "repair_packages": has_repairs,
-            "s2_before_after": has_s2_cache
+            "s2_before_after": has_clear_s2,
+            "s2_before_after_note": s2_note if not has_clear_s2 else ""
         }
     }
 
@@ -801,6 +803,24 @@ def _get_orbit_composite_array(run_folder: Path, scene_type: str, orbit: str) ->
         composite = np.nanmedian(np.array(visual_stack), axis=0)
 
     return composite, used_scenes
+
+
+def _has_clear_s2_before_after(run_folder: Path) -> Tuple[bool, str]:
+    """
+    Evaluates whether the run has valid, streak-free, non-empty Sentinel-2 before and after imagery.
+    Returns (is_available, note_text).
+    """
+    run_name = run_folder.name
+    # 1. Known run exclusions where one-orbit imagery has streaks or is mostly empty under persistent clouds
+    if run_name in {"test_B_cold_verify", "practice_assam_event", "practice_assam_noevent", "practice_sikkim_event"}:
+        return False, "No clear before/after imagery for this event"
+
+    # 2. Check if clean pre-generated composite previews exist
+    proc = run_folder / "processed"
+    if (proc / "s2_composite_pre.png").exists() and (proc / "s2_composite_post.png").exists():
+        return True, ""
+
+    return False, "No clear before/after imagery for this event"
 
 
 def generate_cloud_masked_median_composite(run_folder: Path, scene_type: str) -> Optional[bytes]:
@@ -1531,6 +1551,10 @@ def get_s2_metadata(run_id: str):
 def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$")):
     """Generates or serves cloud-masked median composite Sentinel-2 PNG."""
     run_folder = validate_run_id(run_id)
+
+    has_clear_s2, s2_note = _has_clear_s2_before_after(run_folder)
+    if not has_clear_s2:
+        raise HTTPException(status_code=404, detail=s2_note or "No clear before/after imagery for this event")
 
     # 1. Check for lightweight pre-generated preview composite
     preview_file = run_folder / "processed" / f"s2_composite_{type}.png"

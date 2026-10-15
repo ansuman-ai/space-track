@@ -374,5 +374,35 @@ Full git commit history (`git log --all -S`) scanned for sensitive credential pa
 ### 12.3 10 Largest Tracked Files
 All tracked files remain strictly below GitHub's 100 MB file limit (and below 50 MB warning threshold). The largest tracked file in the entire repository is `14.55 MB` (`runs/test_B_cold_verify/processed/buildings_graded.geojson`).
 
+---
+
+## 13. Release v1.2.5-final: Before/After Imagery Audit & Cloud-Unverified Building Clutter Fix
+
+### 13.1 Single-Orbit Sentinel-2 Composite Inspection Across 7 Verified Runs
+Audited all 7 verified runs with the single-orbit cloud-masked median composite engine:
+- `test_A_cold_verify` (Trishuli): Orbit R119, Pre: 98.3% clear, Post: 43.1% clear -> Streak-free, sharp pre/post imagery. Before/After button active.
+- `test_B_cold_verify` (Melamchi): Persistent cloud cover; orbit R119 pre is a resampled swath-edge artifact with streaks, R076 post is a swath-edge sliver with streaks. Broken preview PNGs removed. Before/After button hidden with note: `"No clear before/after imagery for this event"`.
+- `practice_assam_event`: Orbit R133, Post is 0.0% clear (100% cloud hatch / empty). Before/After button hidden with note: `"No clear before/after imagery for this event"`.
+- `practice_assam_noevent`: No post-event orbit scenes. Before/After button hidden with note: `"No clear before/after imagery for this event"`.
+- `practice_sikkim_event`: Orbit R033, Post is 4.6% clear (95.4% cloud hatch / empty). Before/After button hidden with note: `"No clear before/after imagery for this event"`.
+- `practice_sikkim_noevent`: Orbit R033, Pre: 70.8%, Post: 65.5% clear -> Clean, streak-free composite. Before/After button active.
+- `run_20261013_194053_chamoli_disaster_2021`: Orbit R062, Pre: 30.3%, Post: 45.7% clear -> Clean, streak-free disaster valley. Before/After button active.
+
+### 13.2 Cloud-Unverified Buildings Clutter Resolution
+- On runs with heavy cloud cover (e.g. Melamchi with 17,212 unverified building polygons), buildings with `damage_grade: "Unknown (cloud)"` are filtered out from default rendering.
+- Added toggle `"Buildings not verified (cloud)"` in the legend under "More layers", unchecked by default. Cloud-unverified buildings remain hidden unless explicitly toggled on by the user.
+
+### 13.3 Canonical Deliverables MD5 Verification
+Deliverable JSON files remain 100% bit-for-bit identical:
+- `runs/test_A_cold_verify/processed/damage_summary.json`: `ff08fa1cc30b2fd6f2ca45327d99d0aa`
+- `runs/test_A_cold_verify/processed/routing/cutoff_summary.json`: `d0d5721b07de6f46a272eff0a051e8b2`
+- `runs/test_A_cold_verify/processed/routing/repair_packages.json`: `44384776e3755638758719a541905f2d`
+- `runs/test_A_cold_verify/processed/routing/repair_priority.json`: `592faec5df33e508b701b2fc5fe79af9`
+- `runs/test_B_cold_verify/processed/damage_summary.json`: `28dac2e0721c47b83e4c9ef3f08a4052`
+- `runs/test_B_cold_verify/processed/routing/cutoff_summary.json`: `e0dd6480778ea0617331f4c0e0079e2e`
+- `runs/test_B_cold_verify/processed/routing/repair_packages.json`: `481c781969fac8fd2d048ad85bda765c`
+- `runs/test_B_cold_verify/processed/routing/repair_priority.json`: `a3bb3add4dfbb48aac537220ec1e5377`
+
+
 
 
