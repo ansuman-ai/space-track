@@ -1,0 +1,18 @@
+{
+  "event_date": "2023-10-04",
+  "snapshot_time": "2023-10-03T00:00:00Z",
+  "bbox": [
+    88.58,
+    27.53,
+    88.72,
+    27.67
+  ],
+  "feature_counts": {
+    "waterways": 36,
+    "roads": 50,
+    "bridges": 13,
+    "buildings": 826,
+    "hospitals": 0,
+    "places": 1
+  }
+}

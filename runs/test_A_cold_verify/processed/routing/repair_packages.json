@@ -1,0 +1,479 @@
+{
+  "metadata": {
+    "description": "Minimal Repair Packages for Cut-Off Settlements",
+    "total_cut_off_settlements": 44,
+    "unique_packages_count": 10
+  },
+  "ranked_packages": [
+    {
+      "elements": [
+        "way/1266396385",
+        "way/332122791",
+        "way/84566285",
+        "way/84566287"
+      ],
+      "element_count": 4,
+      "settlements_count": 19,
+      "buildings_count": 939,
+      "settlements": [
+        "Aamachhodingmo (आमाछोदिङ्मो)",
+        "Bahun Danda (बाहुनडाँडा)",
+        "Brimdang (ब्रिमडाङ)",
+        "Unnamed settlement at 28.1631, 85.3359 (nearest named place: Bahun Danda (बाहुनडाँडा), 1.4 km)",
+        "Unnamed settlement at 28.1833, 85.3019 (nearest named place: Bhrajam (भ्रजम), 1.6 km)",
+        "Unnamed settlement at 28.1807, 85.3062 (nearest named place: Aamachhodingmo (आमाछोदिङ्मो), 1.3 km)",
+        "Unnamed settlement at 28.1661, 85.3412 (nearest named place: Bhanjyang (भञ्ज्याङ), 1.4 km)",
+        "Unnamed settlement at 28.1617, 85.3321 (nearest named place: Bahun Danda (बाहुनडाँडा), 1.1 km)",
+        "Unnamed settlement at 28.1685, 85.3054 (nearest named place: Aamachhodingmo (आमाछोदिङ्मो), 0.8 km)",
+        "Unnamed settlement at 28.1609, 85.3298 (nearest named place: Bahun Danda (बाहुनडाँडा), 1.0 km)",
+        "Cluster near Pajung (पाजुङ) (ID 37)",
+        "Unnamed settlement at 28.1651, 85.3391 (nearest named place: Bhanjyang (भञ्ज्याङ), 1.6 km)",
+        "Unnamed settlement at 28.2130, 85.3017 (nearest named place: Brimdang (ब्रिमडाङ), 1.3 km)",
+        "Cluster near Brimdang (ब्रिमडाङ) (ID 44)",
+        "Unnamed settlement at 28.1806, 85.3180 (nearest named place: Bhrajam (भ्रजम), 0.8 km)",
+        "Cluster near Pajung (पाजुङ) (ID 46)",
+        "Unnamed settlement at 28.1654, 85.3278 (nearest named place: Bahun Danda (बाहुनडाँडा), 0.6 km)",
+        "Unnamed settlement at 28.1815, 85.3042 (nearest named place: Bhrajam (भ्रजम), 1.4 km)",
+        "Unnamed settlement at 28.1684, 85.3074 (nearest named place: Aamachhodingmo (आमाछोदिङ्मो), 0.6 km)"
+      ],
+      "rank": 1
+    },
+    {
+      "elements": [
+        "way/245248456",
+        "way/248705796",
+        "way/342026948",
+        "way/784420806"
+      ],
+      "element_count": 4,
+      "settlements_count": 9,
+      "buildings_count": 213,
+      "settlements": [
+        "Lingling (लिङलिङ)",
+        "Unnamed settlement at 28.1991, 85.3667 (nearest named place: Lingling (लिङलिङ), 1.6 km)",
+        "Cluster near Lingling (लिङलिङ) (ID 10)",
+        "Cluster near Lingling (लिङलिङ) (ID 16)",
+        "Unnamed settlement at 28.2008, 85.3682 (nearest named place: Lingling (लिङलिङ), 1.5 km)",
+        "Cluster near Lingling (लिङलिङ) (ID 33)",
+        "Cluster near Lingling (लिङलिङ) (ID 48)",
+        "Cluster near Lingling (लिङलिङ) (ID 54)",
+        "Unnamed settlement at 28.1991, 85.3684 (nearest named place: Lingling (लिङलिङ), 1.7 km)"
+      ],
+      "rank": 2
+    },
+    {
+      "elements": [
+        "way/332122791",
+        "way/83925854",
+        "way/84566285",
+        "way/84566287",
+        "way/84792450"
+      ],
+      "element_count": 5,
+      "settlements_count": 5,
+      "buildings_count": 114,
+      "settlements": [
+        "Pajung (पाजुङ)",
+        "Bhrajam (भ्रजम)",
+        "Place node/3510164368",
+        "Unnamed settlement at 28.1918, 85.3108 (nearest named place: Bhrajam (भ्रजम), 0.8 km)",
+        "Unnamed settlement at 28.1761, 85.3473 (nearest named place: Bhanjyang (भञ्ज्याङ), 1.1 km)"
+      ],
+      "rank": 3
+    },
+    {
+      "elements": [
+        "way/1017959927",
+        "way/1017959928",
+        "way/332122791",
+        "way/643869488",
+        "way/83925854",
+        "way/84566285",
+        "way/84566287"
+      ],
+      "element_count": 7,
+      "settlements_count": 2,
+      "buildings_count": 46,
+      "settlements": [
+        "Tiwari (तिवारी)",
+        "Unnamed settlement at 28.1645, 85.3431 (nearest named place: Bhanjyang (भञ्ज्याङ), 1.3 km)"
+      ],
+      "rank": 4
+    },
+    {
+      "elements": [
+        "way/248705796"
+      ],
+      "element_count": 1,
+      "settlements_count": 2,
+      "buildings_count": 38,
+      "settlements": [
+        "Unnamed settlement at 28.2419, 85.3586 (nearest named place: Dalphedi (डाल्फेडी), 1.5 km)",
+        "Unnamed settlement at 28.2377, 85.3588 (nearest named place: Dalphedi (डाल्फेडी), 1.1 km)"
+      ],
+      "rank": 5
+    },
+    {
+      "elements": [
+        "way/332122791",
+        "way/341557602",
+        "way/83925854",
+        "way/84566285",
+        "way/84566287",
+        "way/84792450"
+      ],
+      "element_count": 6,
+      "settlements_count": 2,
+      "buildings_count": 27,
+      "settlements": [
+        "Unnamed settlement at 28.1915, 85.3432 (nearest named place: Pajung (पाजुङ), 1.7 km)",
+        "Unnamed settlement at 28.1890, 85.3428 (nearest named place: Pajung (पाजुङ), 1.5 km)"
+      ],
+      "rank": 6
+    },
+    {
+      "elements": [
+        "way/248705796",
+        "way/342026948"
+      ],
+      "element_count": 2,
+      "settlements_count": 2,
+      "buildings_count": 15,
+      "settlements": [
+        "Unnamed settlement at 28.2341, 85.3585 (nearest named place: Dalphedi (डाल्फेडी), 0.8 km)",
+        "Unnamed settlement at 28.2362, 85.3583 (nearest named place: Dalphedi (डाल्फेडी), 0.9 km)"
+      ],
+      "rank": 7
+    },
+    {
+      "elements": [
+        "way/1422414757",
+        "way/1422414758",
+        "way/248705796",
+        "way/853616355"
+      ],
+      "element_count": 4,
+      "settlements_count": 1,
+      "buildings_count": 16,
+      "settlements": [
+        "Unnamed settlement at 28.2391, 85.3577 (nearest named place: Dalphedi (डाल्फेडी), 1.2 km)"
+      ],
+      "rank": 8
+    },
+    {
+      "elements": [
+        "way/1017959927",
+        "way/1017959928",
+        "way/332122791",
+        "way/643869488",
+        "way/643869491",
+        "way/83925854",
+        "way/84566285",
+        "way/84566287",
+        "way/934964427",
+        "way/934964430"
+      ],
+      "element_count": 10,
+      "settlements_count": 1,
+      "buildings_count": 8,
+      "settlements": [
+        "Domen (डोमेन)"
+      ],
+      "rank": 9
+    },
+    {
+      "elements": [
+        "way/245248450",
+        "way/245248456",
+        "way/248705796",
+        "way/341557602",
+        "way/342026948"
+      ],
+      "element_count": 5,
+      "settlements_count": 1,
+      "buildings_count": 6,
+      "settlements": [
+        "Unnamed settlement at 28.1962, 85.3463 (nearest named place: Lingling (लिङलिङ), 2.0 km)"
+      ],
+      "rank": 10
+    }
+  ],
+  "settlement_packages": {
+    "node/10833649292": [
+      "way/332122791",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "node/11186154603": [
+      "way/1017959927",
+      "way/1017959928",
+      "way/332122791",
+      "way/643869488",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "node/13242877442": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "node/2554587303": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "node/269569477": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "node/2772174479": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "node/2857841832": [
+      "way/1017959927",
+      "way/1017959928",
+      "way/332122791",
+      "way/643869488",
+      "way/643869491",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/934964427",
+      "way/934964430"
+    ],
+    "node/3495754793": [
+      "way/332122791",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "node/3510164368": [
+      "way/332122791",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "cluster_0": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_2": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_3": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_6": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_7": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_8": [
+      "way/1017959927",
+      "way/1017959928",
+      "way/332122791",
+      "way/643869488",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_10": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_14": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_15": [
+      "way/248705796"
+    ],
+    "cluster_16": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_17": [
+      "way/332122791",
+      "way/341557602",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "cluster_18": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_23": [
+      "way/1422414757",
+      "way/1422414758",
+      "way/248705796",
+      "way/853616355"
+    ],
+    "cluster_24": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_26": [
+      "way/332122791",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "cluster_29": [
+      "way/248705796"
+    ],
+    "cluster_31": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_33": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_34": [
+      "way/248705796",
+      "way/342026948"
+    ],
+    "cluster_37": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_39": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_40": [
+      "way/332122791",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "cluster_43": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_44": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_45": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_46": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_48": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_54": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ],
+    "cluster_62": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_63": [
+      "way/332122791",
+      "way/341557602",
+      "way/83925854",
+      "way/84566285",
+      "way/84566287",
+      "way/84792450"
+    ],
+    "cluster_64": [
+      "way/245248450",
+      "way/245248456",
+      "way/248705796",
+      "way/341557602",
+      "way/342026948"
+    ],
+    "cluster_70": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_71": [
+      "way/1266396385",
+      "way/332122791",
+      "way/84566285",
+      "way/84566287"
+    ],
+    "cluster_76": [
+      "way/248705796",
+      "way/342026948"
+    ],
+    "cluster_78": [
+      "way/245248456",
+      "way/248705796",
+      "way/342026948",
+      "way/784420806"
+    ]
+  }
+}

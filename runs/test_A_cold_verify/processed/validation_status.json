@@ -1,0 +1,12 @@
+{
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "official_benchmark": "EMSR927 AOI01 Syabru Besi",
+  "metrics": {
+    "f1": 0.57,
+    "precision": 0.94,
+    "recall": 0.41,
+    "iou": 0.4
+  },
+  "source_file": "processed/validation_status.json",
+  "source_field": "validation_status"
+}

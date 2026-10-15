@@ -1,0 +1,674 @@
+{
+  "attribution": {
+    "url": "https://ohsome.org/copyrights",
+    "text": "\u00a9 OpenStreetMap contributors"
+  },
+  "apiVersion": "1.10.4",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6510041,
+          30.4840721
+        ]
+      },
+      "properties": {
+        "@changesetId": 16853184,
+        "@osmId": "node/2376466284",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Rini",
+        "nga:ufi": "-2109465",
+        "place": "hamlet",
+        "source": "Bing, USGS, 2013-05-16; NGA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7316006,
+          30.5190206
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759691,
+        "@osmId": "node/2386907495",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "name": "Balgaon",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.752224,
+          30.5239133
+        ]
+      },
+      "properties": {
+        "@changesetId": 88295659,
+        "@osmId": "node/2386907509",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "name": "Tolma",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.618965,
+          30.4780383
+        ]
+      },
+      "properties": {
+        "@changesetId": 17129675,
+        "@osmId": "node/245770322",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "AND_a_nosr_p": "10010830",
+        "name": "Ringi",
+        "place": "village",
+        "source": "AND"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.74152,
+          30.53101
+        ]
+      },
+      "properties": {
+        "@changesetId": 28845876,
+        "@osmId": "node/342104904",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "name": "Suraithota",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.70719,
+          30.49667
+        ]
+      },
+      "properties": {
+        "@changesetId": 16861915,
+        "@osmId": "node/342104914",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "name": "Lata",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6113429,
+          30.498861
+        ]
+      },
+      "properties": {
+        "@changesetId": 57702020,
+        "@osmId": "node/5519535106",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Dhak",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6102059,
+          30.4779429
+        ]
+      },
+      "properties": {
+        "@changesetId": 87626988,
+        "@osmId": "node/7690199371",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Raighadi",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6077382,
+          30.4830375
+        ]
+      },
+      "properties": {
+        "@changesetId": 87626988,
+        "@osmId": "node/7690199372",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Karchi",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6331412,
+          30.4764781
+        ]
+      },
+      "properties": {
+        "@changesetId": 88284754,
+        "@osmId": "node/7733346070",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Rangeli",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6295181,
+          30.4703129
+        ]
+      },
+      "properties": {
+        "@changesetId": 88284754,
+        "@osmId": "node/7733346071",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Rikhulti",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.626319,
+          30.4634951
+        ]
+      },
+      "properties": {
+        "@changesetId": 88284754,
+        "@osmId": "node/7733346072",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Dhurkunda",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7553134,
+          30.5517287
+        ]
+      },
+      "properties": {
+        "@changesetId": 88295659,
+        "@osmId": "node/7733873626",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Panwarsa",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7758162,
+          30.5566439
+        ]
+      },
+      "properties": {
+        "@changesetId": 88295659,
+        "@osmId": "node/7733873627",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Pagti",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6196412,
+          30.4952734
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070511",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Bilagarh",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6321168,
+          30.4956893
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070512",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Bhangyul",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6252673,
+          30.488531
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070513",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Tapoban",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.666307,
+          30.4876073
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070514",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Saldhar",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6662528,
+          30.483051
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070515",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Chanchri",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6743167,
+          30.4931218
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070516",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Juwagwar",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6903319,
+          30.4902886
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070517",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Jugju",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6923066,
+          30.4848887
+        ]
+      },
+      "properties": {
+        "@changesetId": 89760939,
+        "@osmId": "node/7833070518",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 2,
+        "name": "Rini",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6768841,
+          30.4782325
+        ]
+      },
+      "properties": {
+        "@changesetId": 89758579,
+        "@osmId": "node/7833070519",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Subhain",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6190808,
+          30.5416843
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759035,
+        "@osmId": "node/7833130309",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Aira",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6089889,
+          30.5136333
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759035,
+        "@osmId": "node/7833130311",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Chormi",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6061622,
+          30.5018638
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759035,
+        "@osmId": "node/7833130312",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Kunj",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6167121,
+          30.5001965
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759035,
+        "@osmId": "node/7833130313",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Chamtoli",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.6243512,
+          30.5008874
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759035,
+        "@osmId": "node/7833130314",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Garghaniya",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7252943,
+          30.5195944
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759691,
+        "@osmId": "node/7833167610",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Suki",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7203934,
+          30.5147004
+        ]
+      },
+      "properties": {
+        "@changesetId": 89759691,
+        "@osmId": "node/7833167611",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Kuraipani",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7137972,
+          30.4946997
+        ]
+      },
+      "properties": {
+        "@changesetId": 89760939,
+        "@osmId": "node/7833216682",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Lata",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.7030888,
+          30.4694786
+        ]
+      },
+      "properties": {
+        "@changesetId": 89760939,
+        "@osmId": "node/7833216683",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Murunna",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          79.713102,
+          30.472931
+        ]
+      },
+      "properties": {
+        "@changesetId": 89760939,
+        "@osmId": "node/7833216684",
+        "@osmType": "node",
+        "@validFrom": "2021-02-05T00:00:00Z",
+        "@validTo": "2021-02-06T00:00:00Z",
+        "@version": 1,
+        "name": "Paing",
+        "place": "hamlet"
+      }
+    }
+  ]
+}

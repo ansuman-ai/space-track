@@ -1,0 +1,168 @@
+{
+  "attribution": {
+    "url": "https://ohsome.org/copyrights",
+    "text": "\u00a9 OpenStreetMap contributors"
+  },
+  "apiVersion": "1.10.4",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          92.926113,
+          26.6014498
+        ]
+      },
+      "properties": {
+        "@changesetId": 149344666,
+        "@osmId": "node/11773337352",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 1,
+        "name": "Silghat",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          92.9369717,
+          26.6776696
+        ]
+      },
+      "properties": {
+        "@changesetId": 12096881,
+        "@osmId": "node/1810911323",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 1,
+        "name": "Panpur",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          92.930826,
+          26.7230372
+        ]
+      },
+      "properties": {
+        "@changesetId": 80053346,
+        "@osmId": "node/245751784",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 4,
+        "alt_name": "Jamuguri",
+        "name": "Jamugurihat",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          93.03635,
+          26.73798
+        ]
+      },
+      "properties": {
+        "@changesetId": 5473594,
+        "@osmId": "node/342099566",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 2,
+        "name": "Chutia",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          93.0876839,
+          26.5742693
+        ]
+      },
+      "properties": {
+        "@changesetId": 95984642,
+        "@osmId": "node/8236685977",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          93.0915785,
+          26.567917
+        ]
+      },
+      "properties": {
+        "@changesetId": 95984642,
+        "@osmId": "node/8236685978",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          93.0961489,
+          26.5653452
+        ]
+      },
+      "properties": {
+        "@changesetId": 95984642,
+        "@osmId": "node/8236685979",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          92.9416917,
+          26.5554356
+        ]
+      },
+      "properties": {
+        "@changesetId": 9774592,
+        "@osmId": "node/831311257",
+        "@osmType": "node",
+        "@validFrom": "2024-06-30T00:00:00Z",
+        "@validTo": "2024-07-01T00:00:00Z",
+        "@version": 2,
+        "name": "Kuwarital",
+        "place": "village"
+      }
+    }
+  ]
+}

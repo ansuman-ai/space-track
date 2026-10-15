@@ -1,0 +1,3404 @@
+{
+  "metadata": {
+    "event": "Disaster Impact Assessment ([92.85, 26.55, 93.1, 26.75])",
+    "bbox": [
+      92.85,
+      26.55,
+      93.1,
+      26.75
+    ],
+    "crs": "EPSG:32646",
+    "total_settlements": 64,
+    "destinations_count": 102,
+    "rural_roads_drivable": false,
+    "construction_roads_passable": false
+  },
+  "vehicle": {
+    "total_settlements": 64,
+    "no_network_access": 16,
+    "optimistic": {
+      "cut_off_count": 5,
+      "connected_clear_count": 43,
+      "connected_unverified_count": 0,
+      "connected_total_count": 43,
+      "cut_off_settlements": [
+        {
+          "settlement_id": "cluster_14",
+          "name": "Unnamed settlement at 26.5992, 92.9868 (nearest named place: Silghat, 6.1 km)",
+          "building_count": 20,
+          "population": "not available",
+          "pre_route_km": 8.265,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 18.6,
+            "coords": [
+              [
+                498777.8,
+                2941992.4
+              ],
+              [
+                498768.4,
+                2941976.3
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_26",
+          "name": "Unnamed settlement at 26.6054, 92.9921 (nearest named place: Silghat, 6.6 km)",
+          "building_count": 13,
+          "population": "not available",
+          "pre_route_km": 9.181,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_32",
+          "name": "Unnamed settlement at 26.6048, 92.9900 (nearest named place: Silghat, 6.4 km)",
+          "building_count": 10,
+          "population": "not available",
+          "pre_route_km": 8.921,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_51",
+          "name": "Unnamed settlement at 26.5989, 92.9893 (nearest named place: Silghat, 6.3 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 8.364,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 71.1,
+            "coords": [
+              [
+                498819.3,
+                2942082.1
+              ],
+              [
+                498789.5,
+                2942017.5
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_53",
+          "name": "Unnamed settlement at 26.6101, 92.9960 (nearest named place: Silghat, 7.0 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 9.849,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    "pessimistic": {
+      "cut_off_count": 5,
+      "connected_clear_count": 43,
+      "connected_unverified_count": 0,
+      "connected_total_count": 43,
+      "cut_off_settlements": [
+        {
+          "settlement_id": "cluster_14",
+          "name": "Unnamed settlement at 26.5992, 92.9868 (nearest named place: Silghat, 6.1 km)",
+          "building_count": 20,
+          "population": "not available",
+          "pre_route_km": 8.265,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 18.6,
+            "coords": [
+              [
+                498777.8,
+                2941992.4
+              ],
+              [
+                498768.4,
+                2941976.3
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_26",
+          "name": "Unnamed settlement at 26.6054, 92.9921 (nearest named place: Silghat, 6.6 km)",
+          "building_count": 13,
+          "population": "not available",
+          "pre_route_km": 9.181,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_32",
+          "name": "Unnamed settlement at 26.6048, 92.9900 (nearest named place: Silghat, 6.4 km)",
+          "building_count": 10,
+          "population": "not available",
+          "pre_route_km": 8.921,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_51",
+          "name": "Unnamed settlement at 26.5989, 92.9893 (nearest named place: Silghat, 6.3 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 8.364,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 71.1,
+            "coords": [
+              [
+                498819.3,
+                2942082.1
+              ],
+              [
+                498789.5,
+                2942017.5
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_53",
+          "name": "Unnamed settlement at 26.6101, 92.9960 (nearest named place: Silghat, 7.0 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 9.849,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "walking": {
+    "total_settlements": 64,
+    "no_network_access": 16,
+    "optimistic": {
+      "cut_off_count": 5,
+      "connected_clear_count": 43,
+      "connected_unverified_count": 0,
+      "connected_total_count": 43,
+      "cut_off_settlements": [
+        {
+          "settlement_id": "cluster_14",
+          "name": "Unnamed settlement at 26.5992, 92.9868 (nearest named place: Silghat, 6.1 km)",
+          "building_count": 20,
+          "population": "not available",
+          "pre_route_km": 8.265,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 18.6,
+            "coords": [
+              [
+                498777.8,
+                2941992.4
+              ],
+              [
+                498768.4,
+                2941976.3
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_26",
+          "name": "Unnamed settlement at 26.6054, 92.9921 (nearest named place: Silghat, 6.6 km)",
+          "building_count": 13,
+          "population": "not available",
+          "pre_route_km": 9.181,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_32",
+          "name": "Unnamed settlement at 26.6048, 92.9900 (nearest named place: Silghat, 6.4 km)",
+          "building_count": 10,
+          "population": "not available",
+          "pre_route_km": 8.921,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_51",
+          "name": "Unnamed settlement at 26.5989, 92.9893 (nearest named place: Silghat, 6.3 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 8.364,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 71.1,
+            "coords": [
+              [
+                498819.3,
+                2942082.1
+              ],
+              [
+                498789.5,
+                2942017.5
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_53",
+          "name": "Unnamed settlement at 26.6101, 92.9960 (nearest named place: Silghat, 7.0 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 9.849,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    "pessimistic": {
+      "cut_off_count": 5,
+      "connected_clear_count": 43,
+      "connected_unverified_count": 0,
+      "connected_total_count": 43,
+      "cut_off_settlements": [
+        {
+          "settlement_id": "cluster_14",
+          "name": "Unnamed settlement at 26.5992, 92.9868 (nearest named place: Silghat, 6.1 km)",
+          "building_count": 20,
+          "population": "not available",
+          "pre_route_km": 8.265,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 18.6,
+            "coords": [
+              [
+                498777.8,
+                2941992.4
+              ],
+              [
+                498768.4,
+                2941976.3
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_26",
+          "name": "Unnamed settlement at 26.6054, 92.9921 (nearest named place: Silghat, 6.6 km)",
+          "building_count": 13,
+          "population": "not available",
+          "pre_route_km": 9.181,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_32",
+          "name": "Unnamed settlement at 26.6048, 92.9900 (nearest named place: Silghat, 6.4 km)",
+          "building_count": 10,
+          "population": "not available",
+          "pre_route_km": 8.921,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_51",
+          "name": "Unnamed settlement at 26.5989, 92.9893 (nearest named place: Silghat, 6.3 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 8.364,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 71.1,
+            "coords": [
+              [
+                498819.3,
+                2942082.1
+              ],
+              [
+                498789.5,
+                2942017.5
+              ]
+            ]
+          }
+        },
+        {
+          "settlement_id": "cluster_53",
+          "name": "Unnamed settlement at 26.6101, 92.9960 (nearest named place: Silghat, 7.0 km)",
+          "building_count": 5,
+          "population": "not available",
+          "pre_route_km": 9.849,
+          "breaks": [
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 82.4,
+              "coords": [
+                [
+                  498909.5,
+                  2942282.8
+                ],
+                [
+                  498874.4,
+                  2942208.2
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 137.6,
+              "coords": [
+                [
+                  498874.4,
+                  2942208.2
+                ],
+                [
+                  498819.3,
+                  2942082.1
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 71.1,
+              "coords": [
+                [
+                  498819.3,
+                  2942082.1
+                ],
+                [
+                  498789.5,
+                  2942017.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 27.7,
+              "coords": [
+                [
+                  498789.5,
+                  2942017.5
+                ],
+                [
+                  498777.8,
+                  2941992.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 18.6,
+              "coords": [
+                [
+                  498777.8,
+                  2941992.4
+                ],
+                [
+                  498768.4,
+                  2941976.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Destroyed",
+              "length_m": 16.1,
+              "coords": [
+                [
+                  498768.4,
+                  2941976.3
+                ],
+                [
+                  498757.4,
+                  2941964.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 31.1,
+              "coords": [
+                [
+                  498757.4,
+                  2941964.5
+                ],
+                [
+                  498733.3,
+                  2941944.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 38.4,
+              "coords": [
+                [
+                  498733.3,
+                  2941944.8
+                ],
+                [
+                  498703.6,
+                  2941920.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 23.6,
+              "coords": [
+                [
+                  498703.6,
+                  2941920.5
+                ],
+                [
+                  498687.2,
+                  2941903.5
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 18.8,
+              "coords": [
+                [
+                  498687.2,
+                  2941903.5
+                ],
+                [
+                  498674.9,
+                  2941889.3
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 20.1,
+              "coords": [
+                [
+                  498674.9,
+                  2941889.3
+                ],
+                [
+                  498665.1,
+                  2941871.8
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 29.1,
+              "coords": [
+                [
+                  498665.1,
+                  2941871.8
+                ],
+                [
+                  498650.9,
+                  2941846.4
+                ]
+              ]
+            },
+            {
+              "osm_id": "way/1196159793",
+              "highway": "unclassified",
+              "is_bridge": false,
+              "damage_grade": "Possibly damaged",
+              "length_m": 45.3,
+              "coords": [
+                [
+                  498650.9,
+                  2941846.4
+                ],
+                [
+                  498635.8,
+                  2941803.7
+                ]
+              ]
+            }
+          ],
+          "broken_element": {
+            "osm_id": "way/1196159793",
+            "highway": "unclassified",
+            "is_bridge": false,
+            "damage_grade": "Destroyed",
+            "length_m": 82.4,
+            "coords": [
+              [
+                498909.5,
+                2942282.8
+              ],
+              [
+                498874.4,
+                2942208.2
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "construction_scenario": {
+    "construction_roads_passable": true,
+    "vehicle_cut_off_count": 5,
+    "settlements_changed_count": 0,
+    "settlements_changed": []
+  }
+}

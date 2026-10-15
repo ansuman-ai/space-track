@@ -1,0 +1,81 @@
+{
+  "metadata": {
+    "description": "Layer 5 Critical Infrastructure Repair Prioritization",
+    "initial_connected_settlements": 14,
+    "total_cut_off_settlements": 0,
+    "total_destroyed_vehicle_elements": 3
+  },
+  "single_element_repair_ranking": [
+    {
+      "osm_id": "way/683026084",
+      "highway": "service",
+      "is_bridge": false,
+      "segment_count": 1,
+      "total_destroyed_length_m": 22.5,
+      "settlements_regained_if_only_repaired": 0,
+      "buildings_regained_if_only_repaired": 0,
+      "pre_event_routes_dependent": 0,
+      "pre_event_buildings_dependent": 0
+    },
+    {
+      "osm_id": "way/683265976",
+      "highway": "service",
+      "is_bridge": true,
+      "segment_count": 1,
+      "total_destroyed_length_m": 36.3,
+      "settlements_regained_if_only_repaired": 0,
+      "buildings_regained_if_only_repaired": 0,
+      "pre_event_routes_dependent": 0,
+      "pre_event_buildings_dependent": 0
+    },
+    {
+      "osm_id": "way/683265978",
+      "highway": "service",
+      "is_bridge": false,
+      "segment_count": 1,
+      "total_destroyed_length_m": 15.1,
+      "settlements_regained_if_only_repaired": 0,
+      "buildings_regained_if_only_repaired": 0,
+      "pre_event_routes_dependent": 0,
+      "pre_event_buildings_dependent": 0
+    }
+  ],
+  "greedy_repair_top_5": [
+    {
+      "step": 1,
+      "osm_id": "way/683026084",
+      "highway": "service",
+      "is_bridge": false,
+      "length_m": 22.5,
+      "settlements_reconnected_step": 0,
+      "buildings_reconnected_step": 0,
+      "cumulative_settlements_reconnected": 0,
+      "cumulative_buildings_reconnected": 0,
+      "cumulative_total_connected_settlements": 14
+    },
+    {
+      "step": 2,
+      "osm_id": "way/683265976",
+      "highway": "service",
+      "is_bridge": true,
+      "length_m": 36.3,
+      "settlements_reconnected_step": 0,
+      "buildings_reconnected_step": 0,
+      "cumulative_settlements_reconnected": 0,
+      "cumulative_buildings_reconnected": 0,
+      "cumulative_total_connected_settlements": 14
+    },
+    {
+      "step": 3,
+      "osm_id": "way/683265978",
+      "highway": "service",
+      "is_bridge": false,
+      "length_m": 15.1,
+      "settlements_reconnected_step": 0,
+      "buildings_reconnected_step": 0,
+      "cumulative_settlements_reconnected": 0,
+      "cumulative_buildings_reconnected": 0,
+      "cumulative_total_connected_settlements": 14
+    }
+  ]
+}

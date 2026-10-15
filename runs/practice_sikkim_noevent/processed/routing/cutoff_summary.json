@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "event": "Disaster Impact Assessment ([88.58, 27.53, 88.72, 27.67])",
+    "bbox": [
+      88.58,
+      27.53,
+      88.72,
+      27.67
+    ],
+    "crs": "EPSG:32645",
+    "total_settlements": 28,
+    "destinations_count": 31,
+    "rural_roads_drivable": false,
+    "construction_roads_passable": false
+  },
+  "vehicle": {
+    "total_settlements": 28,
+    "no_network_access": 0,
+    "optimistic": {
+      "cut_off_count": 0,
+      "connected_clear_count": 28,
+      "connected_unverified_count": 0,
+      "connected_total_count": 28,
+      "cut_off_settlements": []
+    },
+    "pessimistic": {
+      "cut_off_count": 0,
+      "connected_clear_count": 28,
+      "connected_unverified_count": 0,
+      "connected_total_count": 28,
+      "cut_off_settlements": []
+    }
+  },
+  "walking": {
+    "total_settlements": 28,
+    "no_network_access": 0,
+    "optimistic": {
+      "cut_off_count": 0,
+      "connected_clear_count": 28,
+      "connected_unverified_count": 0,
+      "connected_total_count": 28,
+      "cut_off_settlements": []
+    },
+    "pessimistic": {
+      "cut_off_count": 0,
+      "connected_clear_count": 28,
+      "connected_unverified_count": 0,
+      "connected_total_count": 28,
+      "cut_off_settlements": []
+    }
+  },
+  "construction_scenario": {
+    "construction_roads_passable": true,
+    "vehicle_cut_off_count": 0,
+    "settlements_changed_count": 0,
+    "settlements_changed": []
+  }
+}

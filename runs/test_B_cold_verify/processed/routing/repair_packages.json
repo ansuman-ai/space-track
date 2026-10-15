@@ -1,0 +1,77 @@
+{
+  "metadata": {
+    "description": "Minimal Repair Packages for Cut-Off Settlements",
+    "total_cut_off_settlements": 5,
+    "unique_packages_count": 4
+  },
+  "ranked_packages": [
+    {
+      "elements": [
+        "way/341952352"
+      ],
+      "element_count": 1,
+      "settlements_count": 2,
+      "buildings_count": 17,
+      "settlements": [
+        "Unnamed settlement at 27.9129, 85.5495 (nearest named place: Gyalthum, 3.5 km)",
+        "Unnamed settlement at 27.9115, 85.5477 (nearest named place: Gyalthum, 3.4 km)"
+      ],
+      "rank": 1
+    },
+    {
+      "elements": [
+        "way/311521602",
+        "way/61478675"
+      ],
+      "element_count": 2,
+      "settlements_count": 1,
+      "buildings_count": 150,
+      "settlements": [
+        "Melamchi"
+      ],
+      "rank": 2
+    },
+    {
+      "elements": [
+        "way/340660311"
+      ],
+      "element_count": 1,
+      "settlements_count": 1,
+      "buildings_count": 56,
+      "settlements": [
+        "Place node/3480741438"
+      ],
+      "rank": 3
+    },
+    {
+      "elements": [
+        "way/340819573"
+      ],
+      "element_count": 1,
+      "settlements_count": 1,
+      "buildings_count": 5,
+      "settlements": [
+        "Unnamed settlement at 27.8449, 85.5557 (nearest named place: Talamarang, 0.6 km)"
+      ],
+      "rank": 4
+    }
+  ],
+  "settlement_packages": {
+    "node/3476590102": [
+      "way/311521602",
+      "way/61478675"
+    ],
+    "node/3480741438": [
+      "way/340660311"
+    ],
+    "cluster_221": [
+      "way/341952352"
+    ],
+    "cluster_507": [
+      "way/341952352"
+    ],
+    "cluster_514": [
+      "way/340819573"
+    ]
+  }
+}

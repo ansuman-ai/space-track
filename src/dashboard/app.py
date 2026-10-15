@@ -1529,12 +1529,18 @@ def get_s2_metadata(run_id: str):
 
 @app.get("/api/runs/{run_id}/s2-image")
 def get_s2_image(run_id: str, type: str = Query("post", pattern="^(pre|post)$")):
-    """Generates read-only cloud-masked median composite Sentinel-2 PNG from raw cache."""
+    """Generates or serves cloud-masked median composite Sentinel-2 PNG."""
     run_folder = validate_run_id(run_id)
 
+    # 1. Check for lightweight pre-generated preview composite
+    preview_file = run_folder / "processed" / f"s2_composite_{type}.png"
+    if preview_file.exists():
+        return FileResponse(preview_file, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+    # 2. Generate from raw interim cache if available
     png_bytes = generate_cloud_masked_median_composite(run_folder, type)
     if not png_bytes:
-        raise HTTPException(status_code=404, detail=f"Could not generate {type} S2 composite")
+        raise HTTPException(status_code=404, detail="imagery not included, run the analysis to fetch it")
 
     return Response(content=png_bytes, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 

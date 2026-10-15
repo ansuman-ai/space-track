@@ -1,0 +1,109 @@
+{
+  "status": "COMPLETED",
+  "optical_evidence_note": "optical evidence from 2021-02-10 (3 days after event)",
+  "scenes_used": {
+    "pre": [
+      {
+        "scene_id": "pre_R062_S2A_MSIL2A_20210205T052011_R06",
+        "date": "2021-02-05",
+        "orbit": "R062"
+      },
+      {
+        "scene_id": "pre_R062_S2B_MSIL2A_20210131T052039_R06",
+        "date": "2021-01-31",
+        "orbit": "R062"
+      }
+    ],
+    "post": [
+      {
+        "scene_id": "post_R062_S2A_MSIL2A_20210215T051911_R06",
+        "date": "2021-02-15",
+        "orbit": "R062"
+      },
+      {
+        "scene_id": "post_R062_S2B_MSIL2A_20210210T051939_R06",
+        "date": "2021-02-10",
+        "orbit": "R062"
+      }
+    ],
+    "control_post": [
+      {
+        "scene_id": "ctrl_R062_S2B_MSIL2A_20210121T052119_R06",
+        "date": "2021-01-21",
+        "orbit": "R062"
+      },
+      {
+        "scene_id": "seas_post_R062_S2A_MSIL2A_20200211T051941_R06",
+        "date": "2020-02-11",
+        "orbit": "R062"
+      }
+    ],
+    "seasonal_pre": [
+      {
+        "scene_id": "seas_pre_R062_S2B_MSIL2A_20200206T052009_R06",
+        "date": "2020-02-06",
+        "orbit": "R062"
+      }
+    ]
+  },
+  "grid_shape": [
+    1574,
+    1938
+  ],
+  "pixel_size_m": [
+    10.0,
+    10.0
+  ],
+  "thresholds_used": {
+    "s2_d_ndvi": -0.3,
+    "s2_d_bsi": 0.9265,
+    "s2_in_channel_cvm": 0.55,
+    "s2_builtup_cvm": 0.15,
+    "s1_z_vv_asc": -1.9447,
+    "s1_lr_o19_db": -3.5,
+    "false_alarm_rate_pct": 1.0,
+    "max_hand_corridor_m": 40.0,
+    "stream_proximity_m": 100.0,
+    "min_area_pixels": 20,
+    "cloud_dilation_buffer_m": 60.0,
+    "reach_length_m": 250.0,
+    "inferred_hand_percentile": 90.0,
+    "inferred_min_observed_pixels": 50,
+    "building_buffer_m": 10.0,
+    "intact_min_post_ndvi": 0.4,
+    "intact_max_abs_d_ndvi": 0.2
+  },
+  "areas_km2": {
+    "class_1_permanent_water": 2.6782,
+    "event_total_affected": 0.2744,
+    "event_channel_affected": 0.0627,
+    "event_builtup_affected": 0.0,
+    "event_s2_affected": 0.2556,
+    "event_s1_affected": 0.0188,
+    "event_inferred_affected": 0.1738,
+    "control_total_affected": 0.1595,
+    "control_s2_affected": 0.1263,
+    "control_s1_affected": 0.0332,
+    "control_inferred_affected": 0.1003
+  },
+  "pixel_counts": {
+    "permanent_water": 26782,
+    "event_affected": 2744,
+    "event_s2": 2556,
+    "event_s1": 188,
+    "event_inferred": 1738,
+    "control_affected": 1595,
+    "control_s2": 1263,
+    "control_s1": 332,
+    "control_inferred": 1003
+  },
+  "outputs": {
+    "hazard_raster": "processed/hazard_classes.tif",
+    "source_mask": "processed/source_mask.tif",
+    "hazard_polygons": "processed/hazard_polygons.geojson",
+    "quicklook": "processed/quicklook_layer2.png",
+    "quicklook_zoom": "processed/quicklook_zoom.png",
+    "control_hazard_raster": "control/processed/hazard_classes.tif",
+    "control_quicklook": "control/processed/quicklook_layer2.png"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status": "L5_COMPLETED",
+  "timestamp": "2026-10-15T00:28:19.368156",
+  "elapsed_seconds": 69.76,
+  "duration_s": 13.93,
+  "validation_status": "validated on 1 event (EMSR692 Greece, F1 0.59); weak on EMSR659 Italy (F1 0.35, flood receded before clear optical)",
+  "cut_off_settlements": 0,
+  "outputs": {
+    "settlements_geojson": "processed/routing/settlements.geojson",
+    "repair_priority_json": "processed/routing/repair_priority.json",
+    "repair_packages_json": "processed/routing/repair_packages.json",
+    "l5_quicklook": "processed/routing/quicklook_l5.png"
+  }
+}

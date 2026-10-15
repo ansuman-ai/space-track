@@ -1,0 +1,14 @@
+{
+  "status": "L5_COMPLETED",
+  "timestamp": "2026-10-13T19:46:30.286390",
+  "elapsed_seconds": 336.33,
+  "duration_s": 10.35,
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "cut_off_settlements": 0,
+  "outputs": {
+    "settlements_geojson": "processed/routing/settlements.geojson",
+    "repair_priority_json": "processed/routing/repair_priority.json",
+    "repair_packages_json": "processed/routing/repair_packages.json",
+    "l5_quicklook": "processed/routing/quicklook_l5.png"
+  }
+}

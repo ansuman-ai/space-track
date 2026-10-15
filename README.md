@@ -6,6 +6,12 @@ A dynamic, reproducible geospatial pipeline to detect flood extent, identify deb
 
 ---
 
+## AI Assistance & Attribution
+
+Code was written mainly with the Google Antigravity coding agent (Gemini models) and reviewed with Claude (Anthropic). The team defined the method and data rules, tested and verified all results. The copilot's answer text comes from Groq, Gemini or OpenRouter models at runtime; every number is checked against the run files.
+
+---
+
 ## Quick Start for Judges & Evaluators
 
 ### 1. One-Click Setup

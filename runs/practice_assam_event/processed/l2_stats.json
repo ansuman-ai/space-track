@@ -1,0 +1,137 @@
+{
+  "status": "COMPLETED",
+  "optical_evidence_note": "",
+  "scenes_used": {
+    "pre": [
+      {
+        "scene_id": "pre_R090_S2A_MSIL2A_20240621T041711_R09",
+        "date": "2024-06-21",
+        "orbit": "R090"
+      },
+      {
+        "scene_id": "pre_R090_S2A_MSIL2A_20240701T041551_R09",
+        "date": "2024-07-01",
+        "orbit": "R090"
+      },
+      {
+        "scene_id": "pre_R133_S2A_MSIL2A_20240624T042711_R13",
+        "date": "2024-06-24",
+        "orbit": "R133"
+      },
+      {
+        "scene_id": "pre_R133_S2B_MSIL2A_20240629T042709_R13",
+        "date": "2024-06-29",
+        "orbit": "R133"
+      }
+    ],
+    "post": [
+      {
+        "scene_id": "post_R090_S2A_MSIL2A_20240711T041551_R09",
+        "date": "2024-07-11",
+        "orbit": "R090"
+      },
+      {
+        "scene_id": "post_R090_S2B_MSIL2A_20240706T041549_R09",
+        "date": "2024-07-06",
+        "orbit": "R090"
+      },
+      {
+        "scene_id": "post_R133_S2A_MSIL2A_20240704T042711_R13",
+        "date": "2024-07-04",
+        "orbit": "R133"
+      },
+      {
+        "scene_id": "post_R133_S2B_MSIL2A_20240709T042709_R13",
+        "date": "2024-07-09",
+        "orbit": "R133"
+      }
+    ],
+    "control_post": [
+      {
+        "scene_id": "ctrl_R090_S2B_MSIL2A_20240616T041549_R09",
+        "date": "2024-06-16",
+        "orbit": "R090"
+      },
+      {
+        "scene_id": "ctrl_R133_S2A_MSIL2A_20240614T042711_R13",
+        "date": "2024-06-14",
+        "orbit": "R133"
+      },
+      {
+        "scene_id": "seas_post_R133_S2B_MSIL2A_20230705T042709_R13",
+        "date": "2023-07-05",
+        "orbit": "R133"
+      }
+    ],
+    "seasonal_pre": [
+      {
+        "scene_id": "seas_pre_R133_S2A_MSIL2A_20230630T042711_R13",
+        "date": "2023-06-30",
+        "orbit": "R133"
+      }
+    ]
+  },
+  "grid_shape": [
+    2216,
+    2490
+  ],
+  "pixel_size_m": [
+    10.0,
+    10.0
+  ],
+  "thresholds_used": {
+    "s2_d_ndvi": -0.3,
+    "s2_d_bsi": 0.18,
+    "s2_in_channel_cvm": 0.5182,
+    "s2_builtup_cvm": 0.24,
+    "s1_z_vv_asc": -4.7848,
+    "s1_lr_o19_db": -3.5,
+    "false_alarm_rate_pct": 1.0,
+    "max_hand_corridor_m": 40.0,
+    "stream_proximity_m": 100.0,
+    "min_area_pixels": 20,
+    "cloud_dilation_buffer_m": 60.0,
+    "reach_length_m": 250.0,
+    "inferred_hand_percentile": 90.0,
+    "inferred_min_observed_pixels": 50,
+    "building_buffer_m": 10.0,
+    "intact_min_post_ndvi": 0.4,
+    "intact_max_abs_d_ndvi": 0.2
+  },
+  "areas_km2": {
+    "class_1_permanent_water": 11.8061,
+    "event_total_affected": 17.3577,
+    "event_channel_affected": 0.0,
+    "event_builtup_affected": 0.0,
+    "event_s2_affected": 0.0,
+    "event_s1_affected": 17.3577,
+    "event_inferred_affected": 0.0,
+    "control_total_affected": 14.6267,
+    "control_s2_affected": 0.0,
+    "control_s1_affected": 14.6267,
+    "control_inferred_affected": 0.0
+  },
+  "pixel_counts": {
+    "permanent_water": 118061,
+    "event_affected": 173577,
+    "event_s2": 0,
+    "event_s1": 173577,
+    "event_inferred": 0,
+    "control_affected": 146267,
+    "control_s2": 0,
+    "control_s1": 146267,
+    "control_inferred": 0
+  },
+  "outputs": {
+    "hazard_raster": "processed/hazard_classes.tif",
+    "source_mask": "processed/source_mask.tif",
+    "hazard_polygons": "processed/hazard_polygons.geojson",
+    "quicklook": "processed/quicklook_layer2.png",
+    "quicklook_zoom": "processed/quicklook_zoom.png",
+    "control_hazard_raster": "control/processed/hazard_classes.tif",
+    "control_quicklook": "control/processed/quicklook_layer2.png"
+  },
+  "seasonal_control_available": true,
+  "seasonal_control_note": "seasonal control applied: paddy/seasonal water removed",
+  "validation_status": "validated on 1 event (EMSR692 Greece, F1 0.59); weak on EMSR659 Italy (F1 0.35, flood receded before clear optical)"
+}

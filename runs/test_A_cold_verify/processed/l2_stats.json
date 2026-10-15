@@ -1,0 +1,144 @@
+{
+  "status": "COMPLETED",
+  "optical_evidence_note": "optical evidence from 2026-08-27 (1 days after event)",
+  "scenes_used": {
+    "pre": [
+      {
+        "scene_id": "pre_R076_S2B_MSIL2A_20260824T044659_R07",
+        "date": "2026-08-24",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "pre_R076_S2C_MSIL2A_20260819T044701_R07",
+        "date": "2026-08-19",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "pre_R119_S2A_MSIL2A_20260824T050231_R11",
+        "date": "2026-08-24",
+        "orbit": "R119"
+      },
+      {
+        "scene_id": "pre_R119_S2C_MSIL2A_20260812T045701_R11",
+        "date": "2026-08-12",
+        "orbit": "R119"
+      }
+    ],
+    "post": [
+      {
+        "scene_id": "post_R076_S2A_MSIL2A_20260831T045231_R07",
+        "date": "2026-08-31",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "post_R076_S2C_MSIL2A_20260829T044701_R07",
+        "date": "2026-08-29",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "post_R119_S2B_MSIL2A_20260827T045659_R11",
+        "date": "2026-08-27",
+        "orbit": "R119"
+      },
+      {
+        "scene_id": "post_R119_S2C_MSIL2A_20260901T045701_R11",
+        "date": "2026-09-01",
+        "orbit": "R119"
+      }
+    ],
+    "control_post": [
+      {
+        "scene_id": "ctrl_R076_S2A_MSIL2A_20260811T045241_R07",
+        "date": "2026-08-11",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "ctrl_R119_S2B_MSIL2A_20260807T045659_R11",
+        "date": "2026-08-07",
+        "orbit": "R119"
+      },
+      {
+        "scene_id": "seas_post_R076_S2C_MSIL2A_20250903T044721_R07",
+        "date": "2025-09-03",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "seas_post_R119_S2B_MSIL2A_20250901T045659_R11",
+        "date": "2025-09-01",
+        "orbit": "R119"
+      }
+    ],
+    "seasonal_pre": [
+      {
+        "scene_id": "seas_pre_R076_S2B_MSIL2A_20250819T044659_R07",
+        "date": "2025-08-19",
+        "orbit": "R076"
+      },
+      {
+        "scene_id": "seas_pre_R119_S2B_MSIL2A_20250822T045659_R11",
+        "date": "2025-08-22",
+        "orbit": "R119"
+      }
+    ]
+  },
+  "grid_shape": [
+    1678,
+    1201
+  ],
+  "pixel_size_m": [
+    10.0,
+    10.0
+  ],
+  "thresholds_used": {
+    "s2_d_ndvi": -0.3,
+    "s2_d_bsi": 0.1921,
+    "s2_in_channel_cvm": 0.55,
+    "s2_builtup_cvm": 0.24,
+    "s1_z_vv_asc": -1.8761,
+    "s1_lr_o19_db": -3.5,
+    "false_alarm_rate_pct": 1.0,
+    "max_hand_corridor_m": 40.0,
+    "stream_proximity_m": 100.0,
+    "min_area_pixels": 20,
+    "cloud_dilation_buffer_m": 60.0,
+    "reach_length_m": 250.0,
+    "inferred_hand_percentile": 90.0,
+    "inferred_min_observed_pixels": 50,
+    "building_buffer_m": 10.0,
+    "intact_min_post_ndvi": 0.4,
+    "intact_max_abs_d_ndvi": 0.2
+  },
+  "areas_km2": {
+    "class_1_permanent_water": 1.1528,
+    "event_total_affected": 1.0837,
+    "event_channel_affected": 0.0141,
+    "event_builtup_affected": 0.0519,
+    "event_s2_affected": 1.0781,
+    "event_s1_affected": 0.0056,
+    "event_inferred_affected": 1.0697,
+    "control_total_affected": 0.244,
+    "control_s2_affected": 0.2419,
+    "control_s1_affected": 0.0021,
+    "control_inferred_affected": 0.165
+  },
+  "pixel_counts": {
+    "permanent_water": 11528,
+    "event_affected": 10837,
+    "event_s2": 10781,
+    "event_s1": 56,
+    "event_inferred": 10697,
+    "control_affected": 2440,
+    "control_s2": 2419,
+    "control_s1": 21,
+    "control_inferred": 1650
+  },
+  "outputs": {
+    "hazard_raster": "processed/hazard_classes.tif",
+    "source_mask": "processed/source_mask.tif",
+    "hazard_polygons": "processed/hazard_polygons.geojson",
+    "quicklook": "processed/quicklook_layer2.png",
+    "quicklook_zoom": "processed/quicklook_zoom.png",
+    "control_hazard_raster": "control/processed/hazard_classes.tif",
+    "control_quicklook": "control/processed/quicklook_layer2.png"
+  }
+}

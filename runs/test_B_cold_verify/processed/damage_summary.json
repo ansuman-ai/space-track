@@ -1,0 +1,145 @@
+{
+  "status": "COMPLETED",
+  "osm_coverage": {
+    "buildings_count": 17492,
+    "bridges_count": 39,
+    "hospitals_count": 1,
+    "road_km_total": 434.01,
+    "road_km_by_type": {
+      "pedestrian": 0.1,
+      "residential": 0.69,
+      "road": 0.11,
+      "secondary": 22.26,
+      "service": 1.79,
+      "tertiary": 52.84,
+      "tertiary_link": 0.05,
+      "track": 57.36,
+      "unclassified": 298.81
+    },
+    "road_perimeter_km_total": 434.01,
+    "road_perimeter_km_by_type": {
+      "pedestrian": 0.1,
+      "residential": 0.69,
+      "road": 0.11,
+      "secondary": 22.26,
+      "service": 1.79,
+      "tertiary": 52.84,
+      "tertiary_link": 0.05,
+      "track": 57.36,
+      "unclassified": 298.81
+    },
+    "bbox": [
+      85.53,
+      27.8,
+      85.62,
+      27.95
+    ]
+  },
+  "buildings": {
+    "total_count": 17492,
+    "damage_grade_counts": {
+      "Unknown (cloud)": 9785,
+      "Not affected": 7427,
+      "Possibly damaged": 151,
+      "Destroyed": 72,
+      "Damaged": 57
+    },
+    "evidence_counts": {
+      "cloud-unknown": 9785,
+      "observed": 7616,
+      "inferred": 91
+    },
+    "affected_count": 280,
+    "parameters": {
+      "overlap_destroyed_pct": 50.0,
+      "distance_damaged_m": 10.0,
+      "distance_possibly_damaged_m": 30.0
+    }
+  },
+  "roads": {
+    "total_segments": 4537,
+    "total_km": 423.42,
+    "km_by_damage_grade": {
+      "Destroyed": 4.24,
+      "Not affected": 168.27,
+      "Possibly damaged": 4.39,
+      "Unknown (cloud)": 246.52
+    },
+    "km_by_type_and_grade": {
+      "pedestrian": {
+        "Not affected": 0.1
+      },
+      "residential": {
+        "Destroyed": 0.3,
+        "Not affected": 0.16,
+        "Possibly damaged": 0.1,
+        "Unknown (cloud)": 0.13
+      },
+      "road": {
+        "Unknown (cloud)": 0.11
+      },
+      "secondary": {
+        "Destroyed": 1.07,
+        "Not affected": 11.06,
+        "Possibly damaged": 1.56,
+        "Unknown (cloud)": 7.93
+      },
+      "service": {
+        "Not affected": 1.53,
+        "Unknown (cloud)": 0.26
+      },
+      "tertiary": {
+        "Destroyed": 0.09,
+        "Not affected": 18.01,
+        "Possibly damaged": 0.89,
+        "Unknown (cloud)": 30.65
+      },
+      "tertiary_link": {
+        "Not affected": 0.05
+      },
+      "track": {
+        "Destroyed": 1.88,
+        "Not affected": 24.83,
+        "Possibly damaged": 0.8,
+        "Unknown (cloud)": 29.86
+      },
+      "unclassified": {
+        "Destroyed": 0.9,
+        "Not affected": 112.53,
+        "Possibly damaged": 1.05,
+        "Unknown (cloud)": 177.57
+      }
+    },
+    "segment_length_m": 100.0
+  },
+  "bridges": {
+    "total_count": 39,
+    "damage_grade_counts": {
+      "Unknown (cloud)": 18,
+      "Not affected": 10,
+      "Possibly damaged": 7,
+      "Destroyed": 4
+    },
+    "rule_counts": {
+      "none": 28,
+      "reach": 7,
+      "distance": 4
+    },
+    "evidence_counts": {
+      "cloud-unknown": 18,
+      "observed": 14,
+      "inferred": 7
+    },
+    "affected_count": 11,
+    "parameters": {
+      "bridge_distance_m": 30.0,
+      "bridge_reach_radius_m": 100.0
+    }
+  },
+  "outputs": {
+    "buildings_graded": "processed/buildings_graded.geojson",
+    "roads_graded": "processed/roads_graded.geojson",
+    "bridges_graded": "processed/bridges_graded.geojson",
+    "quicklook": "processed/quicklook_l4.png"
+  }
+}

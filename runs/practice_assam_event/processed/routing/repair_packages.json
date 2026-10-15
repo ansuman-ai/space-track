@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "description": "Minimal Repair Packages for Cut-Off Settlements",
+    "total_cut_off_settlements": 5,
+    "unique_packages_count": 1
+  },
+  "ranked_packages": [
+    {
+      "elements": [
+        "way/1196159793"
+      ],
+      "element_count": 1,
+      "settlements_count": 5,
+      "buildings_count": 53,
+      "settlements": [
+        "Unnamed settlement at 26.5992, 92.9868 (nearest named place: Silghat, 6.1 km)",
+        "Unnamed settlement at 26.6054, 92.9921 (nearest named place: Silghat, 6.6 km)",
+        "Unnamed settlement at 26.6048, 92.9900 (nearest named place: Silghat, 6.4 km)",
+        "Unnamed settlement at 26.5989, 92.9893 (nearest named place: Silghat, 6.3 km)",
+        "Unnamed settlement at 26.6101, 92.9960 (nearest named place: Silghat, 7.0 km)"
+      ],
+      "rank": 1
+    }
+  ],
+  "settlement_packages": {
+    "cluster_14": [
+      "way/1196159793"
+    ],
+    "cluster_26": [
+      "way/1196159793"
+    ],
+    "cluster_32": [
+      "way/1196159793"
+    ],
+    "cluster_51": [
+      "way/1196159793"
+    ],
+    "cluster_53": [
+      "way/1196159793"
+    ]
+  }
+}

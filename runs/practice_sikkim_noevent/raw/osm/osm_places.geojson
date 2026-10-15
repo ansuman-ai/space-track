@@ -1,0 +1,33 @@
+{
+  "attribution": {
+    "url": "https://ohsome.org/copyrights",
+    "text": "\u00a9 OpenStreetMap contributors"
+  },
+  "apiVersion": "1.10.4",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          88.6220462,
+          27.5409131
+        ]
+      },
+      "properties": {
+        "@changesetId": 44653709,
+        "@osmId": "node/4571035579",
+        "@osmType": "node",
+        "@validFrom": "2023-04-13T00:00:00Z",
+        "@validTo": "2023-04-14T00:00:00Z",
+        "@version": 1,
+        "GNS:id": "-2105653",
+        "alt_name": "Nagg Tel",
+        "name": "Nanga",
+        "place": "village",
+        "source": "GNS"
+      }
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "status": "COMPLETED",
+  "event_name": "Chamoli Disaster 2021",
+  "bbox": [
+    79.6,
+    30.42,
+    79.8,
+    30.56
+  ],
+  "event_date": "2021-02-07",
+  "utm_crs": "EPSG:32644",
+  "total_duration_seconds": 336.33,
+  "peak_ram_mb": 3346.4,
+  "swap_used_mb": 6929.97,
+  "sensors_used": [
+    "Sentinel-2 MSI Optical",
+    "Sentinel-1 RTC SAR",
+    "Copernicus DEM-30",
+    "OpenStreetMap"
+  ],
+  "optical_evidence_note": "optical evidence from 2021-02-10 (3 days after event)",
+  "s2_scenes_used": [
+    "post_R062_S2B_MSIL2A_20210210T051939_R06.npz",
+    "post_R062_S2A_MSIL2A_20210215T051911_R06.npz",
+    "pre_R062_S2A_MSIL2A_20210205T052011_R06.npz",
+    "pre_R062_S2B_MSIL2A_20210131T052039_R06.npz",
+    "ctrl_R062_S2B_MSIL2A_20210121T052119_R06.npz",
+    "seas_pre_R062_S2B_MSIL2A_20200206T052009_R06.npz",
+    "seas_post_R062_S2A_MSIL2A_20200211T051941_R06.npz"
+  ],
+  "s2_scenes_skipped": [],
+  "l0_sources": {
+    "dem": {
+      "duration_s": 10.22,
+      "downloaded_mb": 6.49
+    },
+    "osm_buffered": {
+      "duration_s": 165.91,
+      "downloaded_mb": 2.07
+    },
+    "osm_bbox": {
+      "duration_s": 177.47,
+      "downloaded_mb": 0.23
+    },
+    "s1": {
+      "duration_s": 219.82,
+      "downloaded_mb": 93.14
+    },
+    "s2": {
+      "duration_s": 281.69,
+      "downloaded_mb": 194.59,
+      "scenes_used": [
+        "post_R062_S2B_MSIL2A_20210210T051939_R06.npz",
+        "post_R062_S2A_MSIL2A_20210215T051911_R06.npz",
+        "pre_R062_S2A_MSIL2A_20210205T052011_R06.npz",
+        "pre_R062_S2B_MSIL2A_20210131T052039_R06.npz",
+        "ctrl_R062_S2B_MSIL2A_20210121T052119_R06.npz",
+        "seas_pre_R062_S2B_MSIL2A_20200206T052009_R06.npz",
+        "seas_post_R062_S2A_MSIL2A_20200211T051941_R06.npz"
+      ],
+      "scenes_skipped": [],
+      "budget_exceeded": false
+    }
+  },
+  "metrics": {
+    "affected_km2_observed": 0.2744,
+    "affected_km2_s2": 0.2556,
+    "affected_km2_s1": 0.0188,
+    "affected_km2_inferred": 0.1738,
+    "buildings_affected_total": 1,
+    "buildings_destroyed": 0,
+    "buildings_damaged": 0,
+    "buildings_possibly_damaged": 1,
+    "buildings_flooded": 0,
+    "buildings_possibly_flooded": 0,
+    "bridges_affected_total": 1,
+    "bridges_destroyed": 1,
+    "bridges_possibly_damaged": 0,
+    "bridges_flooded": 0,
+    "bridges_possibly_flooded": 0,
+    "cut_off_settlements": 0
+  },
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "layer_performance": {
+    "L1": {
+      "start": "2026-10-13T19:44:33.778437",
+      "end": "2026-10-13T19:44:51.976436",
+      "duration_s": 18.2,
+      "peak_ram_mb": 3346.4,
+      "current_rss_mb": 932.37,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Grid shape: (1574, 1938)"
+    },
+    "L0": {
+      "start": "2026-10-13T19:40:53.962493",
+      "end": "2026-10-13T19:45:35.655991",
+      "duration_s": 281.69,
+      "peak_ram_mb": 3346.4,
+      "current_rss_mb": 1015.57,
+      "downloaded_mb": 296.52,
+      "s1_cloud_fallback": false,
+      "sources": {
+        "dem": {
+          "duration_s": 10.22,
+          "downloaded_mb": 6.49
+        },
+        "osm_buffered": {
+          "duration_s": 165.91,
+          "downloaded_mb": 2.07
+        },
+        "osm_bbox": {
+          "duration_s": 177.47,
+          "downloaded_mb": 0.23
+        },
+        "s1": {
+          "duration_s": 219.82,
+          "downloaded_mb": 93.14
+        },
+        "s2": {
+          "duration_s": 281.69,
+          "downloaded_mb": 194.59,
+          "scenes_used": [
+            "post_R062_S2B_MSIL2A_20210210T051939_R06.npz",
+            "post_R062_S2A_MSIL2A_20210215T051911_R06.npz",
+            "pre_R062_S2A_MSIL2A_20210205T052011_R06.npz",
+            "pre_R062_S2B_MSIL2A_20210131T052039_R06.npz",
+            "ctrl_R062_S2B_MSIL2A_20210121T052119_R06.npz",
+            "seas_pre_R062_S2B_MSIL2A_20200206T052009_R06.npz",
+            "seas_post_R062_S2A_MSIL2A_20200211T051941_R06.npz"
+          ],
+          "scenes_skipped": [],
+          "budget_exceeded": false
+        }
+      },
+      "notes": "OK"
+    },
+    "L2": {
+      "start": "2026-10-13T19:45:35.656305",
+      "end": "2026-10-13T19:46:14.954716",
+      "duration_s": 39.3,
+      "peak_ram_mb": 3346.4,
+      "current_rss_mb": 2614.9,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": true,
+      "notes": "Affected S2: 0.2556 km\u00b2, S1: 0.0188 km\u00b2, Inferred: 0.1738 km\u00b2"
+    },
+    "L4": {
+      "start": "2026-10-13T19:46:14.955255",
+      "end": "2026-10-13T19:46:19.931411",
+      "duration_s": 4.98,
+      "peak_ram_mb": 3346.4,
+      "current_rss_mb": 2624.06,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Buildings: {'Not affected': 83, 'Unknown (cloud)': 10, 'Possibly damaged': 1}, Bridges: {'Not affected': 3, 'Unknown (cloud)': 2, 'Destroyed': 1}"
+    },
+    "L5": {
+      "start": "2026-10-13T19:46:19.932155",
+      "end": "2026-10-13T19:46:30.286230",
+      "duration_s": 10.35,
+      "peak_ram_mb": 3346.4,
+      "current_rss_mb": 2738.41,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Cut-off settlements: 0"
+    }
+  },
+  "outputs": {
+    "hazard_classes_tif": "processed/hazard_classes.tif",
+    "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+    "l2_quicklook": "processed/quicklook_layer2.png",
+    "buildings_graded_geojson": "processed/buildings_graded.geojson",
+    "bridges_graded_geojson": "processed/bridges_graded.geojson",
+    "roads_graded_geojson": "processed/roads_graded.geojson",
+    "l4_quicklook": "processed/quicklook_l4.png",
+    "settlements_geojson": "processed/routing/settlements.geojson",
+    "repair_priority_json": "processed/routing/repair_priority.json",
+    "repair_packages_json": "processed/routing/repair_packages.json",
+    "l5_quicklook": "processed/routing/quicklook_l5.png"
+  }
+}

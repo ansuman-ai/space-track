@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "description": "Layer 5 Critical Infrastructure Repair Prioritization",
+    "initial_connected_settlements": 28,
+    "total_cut_off_settlements": 0,
+    "total_destroyed_vehicle_elements": 0
+  },
+  "single_element_repair_ranking": [],
+  "greedy_repair_top_5": []
+}

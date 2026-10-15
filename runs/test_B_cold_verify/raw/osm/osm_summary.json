@@ -1,0 +1,18 @@
+{
+  "event_date": "2021-06-15",
+  "snapshot_time": "2021-06-14T00:00:00Z",
+  "bbox": [
+    85.53,
+    27.8,
+    85.62,
+    27.95
+  ],
+  "feature_counts": {
+    "waterways": 113,
+    "roads": 592,
+    "bridges": 39,
+    "buildings": 17492,
+    "hospitals": 1,
+    "places": 62
+  }
+}

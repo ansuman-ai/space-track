@@ -1,0 +1,26 @@
+{
+  "status": "L2_COMPLETED",
+  "timestamp": "2026-10-07T20:38:59.192447",
+  "elapsed_seconds": 36.24,
+  "duration_s": 23.4,
+  "areas_km2": {
+    "class_1_permanent_water": 1.1528,
+    "event_total_affected": 1.0837,
+    "event_channel_affected": 0.0141,
+    "event_builtup_affected": 0.0519,
+    "event_s2_affected": 1.0781,
+    "event_s1_affected": 0.0056,
+    "event_inferred_affected": 1.0697,
+    "control_total_affected": 0.244,
+    "control_s2_affected": 0.2419,
+    "control_s1_affected": 0.0021,
+    "control_inferred_affected": 0.165
+  },
+  "optical_evidence_note": "optical evidence from 2026-08-27 (1 days after event)",
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "outputs": {
+    "hazard_classes_tif": "processed/hazard_classes.tif",
+    "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+    "l2_quicklook": "processed/quicklook_layer2.png"
+  }
+}

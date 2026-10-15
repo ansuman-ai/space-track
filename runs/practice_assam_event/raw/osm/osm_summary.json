@@ -1,0 +1,18 @@
+{
+  "event_date": "2024-07-02",
+  "snapshot_time": "2024-07-01T00:00:00Z",
+  "bbox": [
+    92.85,
+    26.55,
+    93.1,
+    26.75
+  ],
+  "feature_counts": {
+    "waterways": 138,
+    "roads": 343,
+    "bridges": 22,
+    "buildings": 2191,
+    "hospitals": 3,
+    "places": 8
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "description": "Minimal Repair Packages for Cut-Off Settlements",
+    "total_cut_off_settlements": 8,
+    "unique_packages_count": 3
+  },
+  "ranked_packages": [
+    {
+      "elements": [
+        "way/410112897",
+        "way/461631709",
+        "way/461631710"
+      ],
+      "element_count": 3,
+      "settlements_count": 4,
+      "buildings_count": 40,
+      "settlements": [
+        "Unnamed settlement at 27.6456, 88.6074 (nearest named place: Nanga, 11.7 km)",
+        "Unnamed settlement at 27.6568, 88.6049 (nearest named place: Nanga, 13.0 km)",
+        "Unnamed settlement at 27.6585, 88.6044 (nearest named place: Nanga, 13.1 km)",
+        "Unnamed settlement at 27.6435, 88.6085 (nearest named place: Nanga, 11.4 km)"
+      ],
+      "rank": 1
+    },
+    {
+      "elements": [
+        "way/117990950",
+        "way/117990952"
+      ],
+      "element_count": 2,
+      "settlements_count": 3,
+      "buildings_count": 95,
+      "settlements": [
+        "Unnamed settlement at 27.6297, 88.6172 (nearest named place: Nanga, 9.8 km)",
+        "Unnamed settlement at 27.6366, 88.6130 (nearest named place: Nanga, 10.6 km)",
+        "Unnamed settlement at 27.6329, 88.6162 (nearest named place: Nanga, 10.2 km)"
+      ],
+      "rank": 2
+    },
+    {
+      "elements": [
+        "way/117990877",
+        "way/117990950",
+        "way/117990952"
+      ],
+      "element_count": 3,
+      "settlements_count": 1,
+      "buildings_count": 29,
+      "settlements": [
+        "Unnamed settlement at 27.6397, 88.6096 (nearest named place: Nanga, 11.0 km)"
+      ],
+      "rank": 3
+    }
+  ],
+  "settlement_packages": {
+    "cluster_2": [
+      "way/117990950",
+      "way/117990952"
+    ],
+    "cluster_3": [
+      "way/117990950",
+      "way/117990952"
+    ],
+    "cluster_6": [
+      "way/117990877",
+      "way/117990950",
+      "way/117990952"
+    ],
+    "cluster_8": [
+      "way/410112897",
+      "way/461631709",
+      "way/461631710"
+    ],
+    "cluster_12": [
+      "way/410112897",
+      "way/461631709",
+      "way/461631710"
+    ],
+    "cluster_14": [
+      "way/410112897",
+      "way/461631709",
+      "way/461631710"
+    ],
+    "cluster_15": [
+      "way/117990950",
+      "way/117990952"
+    ],
+    "cluster_16": [
+      "way/410112897",
+      "way/461631709",
+      "way/461631710"
+    ]
+  }
+}

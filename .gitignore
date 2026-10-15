@@ -19,10 +19,32 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
-*.swp
-runs
-runs/
-scratch/
+# Runs directory: ignore all runs by default
+/runs/*
+
+# Whitelist the 7 verified runs
+!/runs/test_A_cold_verify/
+!/runs/test_B_cold_verify/
+!/runs/practice_assam_event/
+!/runs/practice_assam_noevent/
+!/runs/practice_sikkim_event/
+!/runs/practice_sikkim_noevent/
+!/runs/run_20261013_194053_chamoli_disaster_2021/
+
+# Exclude heavy raw and interim data downloads within verified runs
+/runs/*/interim/
+/runs/*/control/
+/runs/*/seasonal_control/
+/runs/*/processed/dem_tiles/
+/runs/*/*.log
+/runs/*/*.pid
+/runs/*/raw/*
+!/runs/*/raw/osm/
+/runs/*/raw/osm/*
+!/runs/*/raw/osm/osm_waterways.geojson
+!/runs/*/raw/osm/osm_roads.geojson
+!/runs/*/raw/osm/osm_places.geojson
+!/runs/*/raw/osm/osm_summary.json
 validation/emsr659/
 validation/emsr692/
 weights

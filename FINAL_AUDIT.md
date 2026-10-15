@@ -340,3 +340,21 @@ All 7 canonical runs verified pre-event: `snap < ev` is strictly `True` for all 
 ### 10.5 Deliverable Consistency Check
 `scripts/check_dashboard_data.py`: **75 PASSED, 0 FAILED across 75 runs**.
 
+---
+
+## 11. Release v1.2.1-final: Shipped Verified Runs & AI Assistance
+
+### 11.1 Shipped Verified Runs in Repository
+- Resolved blocker where `runs/` was ignored. The 7 verified runs from `runs_manifest.json` are now tracked in Git:
+  - `run_summary.json`, `status.json`, `event_name.txt`
+  - `processed/` (hazard extents, graded buildings/roads/bridges, routing, repair priorities, hillshade, sitrep overviews)
+  - `reports/` (1-page bilingual PDFs, Markdown summaries)
+  - `raw/osm/` (OSM waterways, roads, places basemap vectors)
+  - Pre-generated lightweight before/after composite slider PNG previews (`processed/s2_composite_pre.png` and `post.png`)
+  - Heavy raw/interim scene downloads remain excluded via `.gitignore`.
+- Total tracked files: **312 files**, total size: **163.18 MB** (maximum single file: 14.55 MB, well below GitHub 100 MB limit).
+
+### 11.2 AI Assistance Section
+Added required hackathon AI Assistance & Attribution section near the top of `README.md`.
+
+

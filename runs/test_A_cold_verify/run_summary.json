@@ -1,0 +1,201 @@
+{
+  "status": "COMPLETED",
+  "bbox": [
+    85.3,
+    28.1,
+    85.42,
+    28.25
+  ],
+  "event_date": "2026-08-26",
+  "utm_crs": "EPSG:32645",
+  "total_duration_seconds": 121.03,
+  "peak_ram_mb": 3503.14,
+  "swap_used_mb": 7804.98,
+  "sensors_used": [
+    "Sentinel-2 MSI Optical",
+    "Sentinel-1 RTC SAR",
+    "Copernicus DEM-30",
+    "OpenStreetMap"
+  ],
+  "optical_evidence_note": "optical evidence from 2026-08-27 (1 days after event)",
+  "s2_scenes_used": [
+    "ctrl_R076_S2A_MSIL2A_20260811T045241_R07.npz",
+    "ctrl_R119_S2B_MSIL2A_20260807T045659_R11.npz",
+    "post_R076_S2A_MSIL2A_20260831T045231_R07.npz",
+    "post_R076_S2C_MSIL2A_20260829T044701_R07.npz",
+    "post_R119_S2B_MSIL2A_20260827T045659_R11.npz",
+    "post_R119_S2C_MSIL2A_20260901T045701_R11.npz",
+    "pre_R076_S2B_MSIL2A_20260824T044659_R07.npz",
+    "pre_R076_S2C_MSIL2A_20260819T044701_R07.npz",
+    "pre_R119_S2A_MSIL2A_20260824T050231_R11.npz",
+    "pre_R119_S2C_MSIL2A_20260812T045701_R11.npz",
+    "seas_post_R076_S2C_MSIL2A_20250903T044721_R07.npz",
+    "seas_post_R119_S2B_MSIL2A_20250901T045659_R11.npz",
+    "seas_pre_R076_S2B_MSIL2A_20250819T044659_R07.npz",
+    "seas_pre_R119_S2B_MSIL2A_20250822T045659_R11.npz"
+  ],
+  "s2_scenes_skipped": [],
+  "l0_sources": {
+    "dem": {
+      "duration_s": 0.0,
+      "downloaded_mb": 0.0
+    },
+    "s1": {
+      "duration_s": 0.01,
+      "downloaded_mb": 0.0
+    },
+    "osm_bbox": {
+      "duration_s": 0.01,
+      "downloaded_mb": 0.0
+    },
+    "osm_buffered": {
+      "duration_s": 0.03,
+      "downloaded_mb": 0.0
+    },
+    "s2": {
+      "duration_s": 0.03,
+      "downloaded_mb": 0.0,
+      "scenes_used": [
+        "ctrl_R076_S2A_MSIL2A_20260811T045241_R07.npz",
+        "ctrl_R119_S2B_MSIL2A_20260807T045659_R11.npz",
+        "post_R076_S2A_MSIL2A_20260831T045231_R07.npz",
+        "post_R076_S2C_MSIL2A_20260829T044701_R07.npz",
+        "post_R119_S2B_MSIL2A_20260827T045659_R11.npz",
+        "post_R119_S2C_MSIL2A_20260901T045701_R11.npz",
+        "pre_R076_S2B_MSIL2A_20260824T044659_R07.npz",
+        "pre_R076_S2C_MSIL2A_20260819T044701_R07.npz",
+        "pre_R119_S2A_MSIL2A_20260824T050231_R11.npz",
+        "pre_R119_S2C_MSIL2A_20260812T045701_R11.npz",
+        "seas_post_R076_S2C_MSIL2A_20250903T044721_R07.npz",
+        "seas_post_R119_S2B_MSIL2A_20250901T045659_R11.npz",
+        "seas_pre_R076_S2B_MSIL2A_20250819T044659_R07.npz",
+        "seas_pre_R119_S2B_MSIL2A_20250822T045659_R11.npz"
+      ],
+      "scenes_skipped": [],
+      "budget_exceeded": false
+    }
+  },
+  "metrics": {
+    "affected_km2_observed": 1.0837,
+    "affected_km2_s2": 1.0781,
+    "affected_km2_s1": 0.0056,
+    "affected_km2_inferred": 1.0697,
+    "buildings_affected_total": 225,
+    "buildings_destroyed": 107,
+    "buildings_damaged": 42,
+    "buildings_possibly_damaged": 76,
+    "buildings_flooded": 0,
+    "buildings_possibly_flooded": 0,
+    "bridges_affected_total": 13,
+    "bridges_destroyed": 12,
+    "bridges_possibly_damaged": 1,
+    "cut_off_settlements": 44
+  },
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "layer_performance": {
+    "L1": {
+      "start": "2026-10-07T20:38:22.964888",
+      "end": "2026-10-07T20:38:35.785740",
+      "duration_s": 12.82,
+      "peak_ram_mb": 2657.58,
+      "current_rss_mb": 696.25,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Grid shape: (1678, 1201)"
+    },
+    "L0": {
+      "start": "2026-10-07T20:38:22.951766",
+      "end": "2026-10-07T20:38:35.787054",
+      "duration_s": 12.84,
+      "peak_ram_mb": 2657.58,
+      "current_rss_mb": 696.25,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "sources": {
+        "dem": {
+          "duration_s": 0.0,
+          "downloaded_mb": 0.0
+        },
+        "s1": {
+          "duration_s": 0.01,
+          "downloaded_mb": 0.0
+        },
+        "osm_bbox": {
+          "duration_s": 0.01,
+          "downloaded_mb": 0.0
+        },
+        "osm_buffered": {
+          "duration_s": 0.03,
+          "downloaded_mb": 0.0
+        },
+        "s2": {
+          "duration_s": 0.03,
+          "downloaded_mb": 0.0,
+          "scenes_used": [
+            "ctrl_R076_S2A_MSIL2A_20260811T045241_R07.npz",
+            "ctrl_R119_S2B_MSIL2A_20260807T045659_R11.npz",
+            "post_R076_S2A_MSIL2A_20260831T045231_R07.npz",
+            "post_R076_S2C_MSIL2A_20260829T044701_R07.npz",
+            "post_R119_S2B_MSIL2A_20260827T045659_R11.npz",
+            "post_R119_S2C_MSIL2A_20260901T045701_R11.npz",
+            "pre_R076_S2B_MSIL2A_20260824T044659_R07.npz",
+            "pre_R076_S2C_MSIL2A_20260819T044701_R07.npz",
+            "pre_R119_S2A_MSIL2A_20260824T050231_R11.npz",
+            "pre_R119_S2C_MSIL2A_20260812T045701_R11.npz",
+            "seas_post_R076_S2C_MSIL2A_20250903T044721_R07.npz",
+            "seas_post_R119_S2B_MSIL2A_20250901T045659_R11.npz",
+            "seas_pre_R076_S2B_MSIL2A_20250819T044659_R07.npz",
+            "seas_pre_R119_S2B_MSIL2A_20250822T045659_R11.npz"
+          ],
+          "scenes_skipped": [],
+          "budget_exceeded": false
+        }
+      },
+      "notes": "OK"
+    },
+    "L2": {
+      "start": "2026-10-07T20:38:35.787311",
+      "end": "2026-10-07T20:38:59.192073",
+      "duration_s": 23.4,
+      "peak_ram_mb": 3110.13,
+      "current_rss_mb": 2357.75,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": true,
+      "notes": "Affected S2: 1.0781 km\u00b2, S1: 0.0056 km\u00b2, Inferred: 1.0697 km\u00b2"
+    },
+    "L4": {
+      "start": "2026-10-07T20:38:59.192771",
+      "end": "2026-10-07T20:39:04.970316",
+      "duration_s": 5.78,
+      "peak_ram_mb": 3110.13,
+      "current_rss_mb": 2363.39,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Buildings: {'Not affected': 2317, 'Unknown (cloud)': 1196, 'Destroyed': 107, 'Possibly damaged': 76, 'Damaged': 42}, Bridges: {'Destroyed': 12, 'Not affected': 12, 'Unknown (cloud)': 2, 'Possibly damaged': 1}"
+    },
+    "L5": {
+      "start": "2026-10-07T20:39:04.970911",
+      "end": "2026-10-07T20:40:23.978732",
+      "duration_s": 79.01,
+      "peak_ram_mb": 3503.14,
+      "current_rss_mb": 2693.96,
+      "downloaded_mb": 0.0,
+      "s1_cloud_fallback": false,
+      "notes": "Cut-off settlements: 44"
+    }
+  },
+  "outputs": {
+    "hazard_classes_tif": "processed/hazard_classes.tif",
+    "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+    "l2_quicklook": "processed/quicklook_layer2.png",
+    "buildings_graded_geojson": "processed/buildings_graded.geojson",
+    "bridges_graded_geojson": "processed/bridges_graded.geojson",
+    "roads_graded_geojson": "processed/roads_graded.geojson",
+    "l4_quicklook": "processed/quicklook_l4.png",
+    "settlements_geojson": "processed/routing/settlements.geojson",
+    "repair_priority_json": "processed/routing/repair_priority.json",
+    "repair_packages_json": "processed/routing/repair_packages.json",
+    "l5_quicklook": "processed/routing/quicklook_l5.png"
+  },
+  "event_name": "Trishuli Flash Flood 2026"
+}

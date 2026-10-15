@@ -1,0 +1,1227 @@
+{
+  "attribution": {
+    "url": "https://ohsome.org/copyrights",
+    "text": "\u00a9 OpenStreetMap contributors"
+  },
+  "apiVersion": "1.10.4",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5606828,
+          27.8205209
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476589106",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5572192,
+          27.8278268
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476589167",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.575905,
+          27.829082
+        ]
+      },
+      "properties": {
+        "@changesetId": 45947878,
+        "@osmId": "node/3476590102",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "name": "Melamchi",
+        "place": "village",
+        "wikidata": "Q3415895",
+        "wikipedia": "en:Melamchi"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5680839,
+          27.8300792
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476590203",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.580459,
+          27.8336289
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476590644",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.562098,
+          27.8344349
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476590700",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5830882,
+          27.8350859
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476590747",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5710024,
+          27.8356904
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476636,
+        "@osmId": "node/3476590809",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5692583,
+          27.8422933
+        ]
+      },
+      "properties": {
+        "@changesetId": 96432400,
+        "@osmId": "node/3476591332",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "name": "Dubachaur",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5649814,
+          27.826388
+        ]
+      },
+      "properties": {
+        "@changesetId": 30476776,
+        "@osmId": "node/3476607431",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5457112,
+          27.807059
+        ]
+      },
+      "properties": {
+        "@changesetId": 96396996,
+        "@osmId": "node/3478122415",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 3,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5438342,
+          27.8094654
+        ]
+      },
+      "properties": {
+        "@changesetId": 30644389,
+        "@osmId": "node/3478122416",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5595493,
+          27.8211218
+        ]
+      },
+      "properties": {
+        "@changesetId": 30496081,
+        "@osmId": "node/3478304260",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5528829,
+          27.8200611
+        ]
+      },
+      "properties": {
+        "@changesetId": 30496081,
+        "@osmId": "node/3478304261",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5415062,
+          27.8220706
+        ]
+      },
+      "properties": {
+        "@changesetId": 30496081,
+        "@osmId": "node/3478304264",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5308501,
+          27.8361325
+        ]
+      },
+      "properties": {
+        "@changesetId": 30497111,
+        "@osmId": "node/3478406053",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5374773,
+          27.8347576
+        ]
+      },
+      "properties": {
+        "@changesetId": 30497111,
+        "@osmId": "node/3478406054",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5436348,
+          27.8044082
+        ]
+      },
+      "properties": {
+        "@changesetId": 30498820,
+        "@osmId": "node/3478518232",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5381989,
+          27.8092854
+        ]
+      },
+      "properties": {
+        "@changesetId": 30641398,
+        "@osmId": "node/3478518272",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5434277,
+          27.8133215
+        ]
+      },
+      "properties": {
+        "@changesetId": 30498820,
+        "@osmId": "node/3478518440",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.556992,
+          27.813429
+        ]
+      },
+      "properties": {
+        "@changesetId": 45947878,
+        "@osmId": "node/3478518441",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "name": "Bansbari",
+        "place": "village",
+        "wikidata": "Q3414939",
+        "wikipedia": "en:Bansbari"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5529527,
+          27.8180678
+        ]
+      },
+      "properties": {
+        "@changesetId": 30498820,
+        "@osmId": "node/3478518445",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5718452,
+          27.8019635
+        ]
+      },
+      "properties": {
+        "@changesetId": 30733396,
+        "@osmId": "node/3478531718",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5680445,
+          27.8071709
+        ]
+      },
+      "properties": {
+        "@changesetId": 30499090,
+        "@osmId": "node/3478531728",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5620659,
+          27.8108186
+        ]
+      },
+      "properties": {
+        "@changesetId": 30499090,
+        "@osmId": "node/3478531732",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5831417,
+          27.8154175
+        ]
+      },
+      "properties": {
+        "@changesetId": 81302255,
+        "@osmId": "node/3478531900",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "name": "Sikharpur",
+        "place": "hamlet",
+        "wikidata": "Q3421944",
+        "wikipedia": "en:Sikharpur"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.595457,
+          27.9441465
+        ]
+      },
+      "properties": {
+        "@changesetId": 96432514,
+        "@osmId": "node/3478659304",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 5,
+        "name": "Sermathang",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.581734,
+          27.929163
+        ]
+      },
+      "properties": {
+        "@changesetId": 96432514,
+        "@osmId": "node/3480098886",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 8,
+        "name": "Kiwool",
+        "name:en": "Thalo",
+        "place": "hamlet",
+        "wikidata": "Q3415569",
+        "wikipedia": "en:Kiul"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5383797,
+          27.9439088
+        ]
+      },
+      "properties": {
+        "@changesetId": 30526637,
+        "@osmId": "node/3480468976",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "name": "Dongdhing",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5411752,
+          27.8816967
+        ]
+      },
+      "properties": {
+        "@changesetId": 30526637,
+        "@osmId": "node/3480579571",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "name": "Gyalthum",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5398562,
+          27.8517847
+        ]
+      },
+      "properties": {
+        "@changesetId": 30526637,
+        "@osmId": "node/3480583824",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "name": "Talramarang",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5338382,
+          27.846907
+        ]
+      },
+      "properties": {
+        "@changesetId": 30791883,
+        "@osmId": "node/3480665642",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5427886,
+          27.8498776
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480665662",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.552017,
+          27.849072
+        ]
+      },
+      "properties": {
+        "@changesetId": 45952472,
+        "@osmId": "node/3480665664",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "name": "Talamarang",
+        "place": "hamlet",
+        "wikidata": "Q7456806",
+        "wikipedia": "en:Talamarang"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5907247,
+          27.8353095
+        ]
+      },
+      "properties": {
+        "@changesetId": 30527701,
+        "@osmId": "node/3480678634",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.6104209,
+          27.8472719
+        ]
+      },
+      "properties": {
+        "@changesetId": 56509043,
+        "@osmId": "node/3480678635",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 3,
+        "name": "Jyamire",
+        "place": "hamlet",
+        "wikidata": "Q6319312"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5494054,
+          27.8422761
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480733676",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5404798,
+          27.842742
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480733683",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5424548,
+          27.8431644
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480733688",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5384588,
+          27.8672527
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480740940",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5592293,
+          27.8678531
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480740947",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5486784,
+          27.8394532
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741238",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5377594,
+          27.8408334
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741264",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.534783,
+          27.8408375
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741265",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "isolated_dwelling"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5339213,
+          27.8562194
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741398",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5380149,
+          27.8567849
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741402",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5598355,
+          27.858196
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741424",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5375489,
+          27.8624546
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741428",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5540904,
+          27.866885
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741438",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5399763,
+          27.8763048
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741601",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5438151,
+          27.8771584
+        ]
+      },
+      "properties": {
+        "@changesetId": 30528732,
+        "@osmId": "node/3480741606",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.568508,
+          27.8411953
+        ]
+      },
+      "properties": {
+        "@changesetId": 96432400,
+        "@osmId": "node/3493123996",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 4,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.540009,
+          27.830805
+        ]
+      },
+      "properties": {
+        "@changesetId": 45952472,
+        "@osmId": "node/3494615008",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 3,
+        "name": "Sindhukot",
+        "place": "hamlet",
+        "wikidata": "Q375873",
+        "wikipedia": "en:Sindhukot"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.6082371,
+          27.8698672
+        ]
+      },
+      "properties": {
+        "@changesetId": 105400266,
+        "@osmId": "node/3570636094",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "name": "Aage",
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.6065217,
+          27.8616238
+        ]
+      },
+      "properties": {
+        "@changesetId": 31706149,
+        "@osmId": "node/3570636165",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.6064403,
+          27.8595391
+        ]
+      },
+      "properties": {
+        "@changesetId": 31706149,
+        "@osmId": "node/3570636166",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "hamlet"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5464255,
+          27.8047274
+        ]
+      },
+      "properties": {
+        "@changesetId": 43667808,
+        "@osmId": "node/4502253641",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5827102,
+          27.8849552
+        ]
+      },
+      "properties": {
+        "@changesetId": 69962293,
+        "@osmId": "node/4973280559",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 2,
+        "name": "Duwachaur",
+        "name:ne": "\u0926\u0941\u0935\u093e\u091a\u0948\u093e\u0930",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5411092,
+          27.8680868
+        ]
+      },
+      "properties": {
+        "@changesetId": 50321744,
+        "@osmId": "node/4973323321",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "name": "Talamarang",
+        "name:ne": "\u0924\u093e\u0932\u093e\u092e\u0930\u093e\u0919",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.6128127,
+          27.8701381
+        ]
+      },
+      "properties": {
+        "@changesetId": 105400266,
+        "@osmId": "node/4974953985",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 3,
+        "name": "Langarche",
+        "name:ne": "\u0932\u093e\u0919\u0917\u093e\u0930\u094d\u091a\u0947",
+        "place": "village",
+        "wikidata": "Q3428516"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5982595,
+          27.8224893
+        ]
+      },
+      "properties": {
+        "@changesetId": 50345786,
+        "@osmId": "node/4975003629",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "name": "Sikharpur",
+        "name:ne": "\u0936\u093f\u0916\u0930\u092a\u0941\u0930",
+        "place": "village"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.5980444,
+          27.896145
+        ]
+      },
+      "properties": {
+        "@changesetId": 105467241,
+        "@osmId": "node/8775459240",
+        "@osmType": "node",
+        "@validFrom": "2021-06-13T00:00:00Z",
+        "@validTo": "2021-06-14T00:00:00Z",
+        "@version": 1,
+        "name": "\u0924\u0940\u0928 \u0927\u093e\u0930\u093e",
+        "name:en": "Tin Dhara",
+        "name:ne": "\u0924\u0940\u0928 \u0927\u093e\u0930\u093e",
+        "place": "hamlet"
+      }
+    }
+  ]
+}

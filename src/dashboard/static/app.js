@@ -2181,6 +2181,9 @@ async function toggleS2Slider(activate) {
   };
 
   s2PostOverlay.on("load", applyClip);
+  s2PostOverlay.on("error", () => {
+    showToast("Satellite before/after imagery not included with this run. Run analysis to fetch raw scenes.");
+  });
   range.oninput = applyClip;
   setTimeout(applyClip, 100);
 

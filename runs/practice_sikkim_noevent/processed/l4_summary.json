@@ -1,0 +1,67 @@
+{
+  "status": "L4_COMPLETED",
+  "timestamp": "2026-10-14T19:14:15.938301",
+  "elapsed_seconds": 40.04,
+  "duration_s": 3.33,
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "buildings": {
+    "total_count": 826,
+    "damage_grade_counts": {
+      "Not affected": 826
+    },
+    "evidence_counts": {
+      "observed": 826
+    },
+    "affected_count": 0,
+    "parameters": {
+      "overlap_destroyed_pct": 50.0,
+      "distance_damaged_m": 10.0,
+      "distance_possibly_damaged_m": 30.0
+    }
+  },
+  "bridges": {
+    "total_count": 13,
+    "damage_grade_counts": {
+      "Not affected": 13
+    },
+    "rule_counts": {
+      "none": 13
+    },
+    "evidence_counts": {
+      "observed": 13
+    },
+    "affected_count": 0,
+    "parameters": {
+      "bridge_distance_m": 30.0,
+      "bridge_reach_radius_m": 100.0
+    }
+  },
+  "roads": {
+    "total_segments": 780,
+    "total_km": 75.79,
+    "km_by_damage_grade": {
+      "Not affected": 75.79
+    },
+    "km_by_type_and_grade": {
+      "residential": {
+        "Not affected": 5.48
+      },
+      "service": {
+        "Not affected": 0.16
+      },
+      "tertiary": {
+        "Not affected": 45.34
+      },
+      "unclassified": {
+        "Not affected": 24.82
+      }
+    },
+    "segment_length_m": 100.0
+  },
+  "outputs": {
+    "buildings_graded_geojson": "processed/buildings_graded.geojson",
+    "bridges_graded_geojson": "processed/bridges_graded.geojson",
+    "roads_graded_geojson": "processed/roads_graded.geojson",
+    "l4_quicklook": "processed/quicklook_l4.png"
+  }
+}

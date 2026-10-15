@@ -1,0 +1,88 @@
+{
+  "status": "L4_COMPLETED",
+  "timestamp": "2026-10-14T19:12:29.248370",
+  "elapsed_seconds": 34.11,
+  "duration_s": 4.32,
+  "validation_status": "validated on EMSR927 (F1 0.57, precision 0.94)",
+  "buildings": {
+    "total_count": 826,
+    "damage_grade_counts": {
+      "Unknown (cloud)": 646,
+      "Possibly damaged": 94,
+      "Destroyed": 47,
+      "Damaged": 20,
+      "Not affected": 19
+    },
+    "evidence_counts": {
+      "cloud-unknown": 646,
+      "observed": 113,
+      "inferred": 67
+    },
+    "affected_count": 161,
+    "parameters": {
+      "overlap_destroyed_pct": 50.0,
+      "distance_damaged_m": 10.0,
+      "distance_possibly_damaged_m": 30.0
+    }
+  },
+  "bridges": {
+    "total_count": 13,
+    "damage_grade_counts": {
+      "Unknown (cloud)": 8,
+      "Destroyed": 5
+    },
+    "rule_counts": {
+      "none": 8,
+      "distance": 3,
+      "reach": 2
+    },
+    "evidence_counts": {
+      "cloud-unknown": 8,
+      "observed": 5
+    },
+    "affected_count": 5,
+    "parameters": {
+      "bridge_distance_m": 30.0,
+      "bridge_reach_radius_m": 100.0
+    }
+  },
+  "roads": {
+    "total_segments": 780,
+    "total_km": 75.76,
+    "km_by_damage_grade": {
+      "Destroyed": 2.62,
+      "Not affected": 2.58,
+      "Possibly damaged": 4.74,
+      "Unknown (cloud)": 65.82
+    },
+    "km_by_type_and_grade": {
+      "residential": {
+        "Destroyed": 1.77,
+        "Possibly damaged": 0.39,
+        "Unknown (cloud)": 3.08
+      },
+      "service": {
+        "Unknown (cloud)": 0.16
+      },
+      "tertiary": {
+        "Destroyed": 0.78,
+        "Not affected": 2.09,
+        "Possibly damaged": 3.53,
+        "Unknown (cloud)": 38.93
+      },
+      "unclassified": {
+        "Destroyed": 0.07,
+        "Not affected": 0.5,
+        "Possibly damaged": 0.81,
+        "Unknown (cloud)": 23.65
+      }
+    },
+    "segment_length_m": 100.0
+  },
+  "outputs": {
+    "buildings_graded_geojson": "processed/buildings_graded.geojson",
+    "bridges_graded_geojson": "processed/bridges_graded.geojson",
+    "roads_graded_geojson": "processed/roads_graded.geojson",
+    "l4_quicklook": "processed/quicklook_l4.png"
+  }
+}

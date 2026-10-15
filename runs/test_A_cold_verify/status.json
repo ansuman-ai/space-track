@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-10-07T20:40:23.980474",
+  "stage": "COMPLETED",
+  "progress_pct": 100.0,
+  "elapsed_seconds": 121.03,
+  "current_step": "Pipeline COMPLETED",
+  "outputs": {
+    "hazard_classes_tif": "processed/hazard_classes.tif",
+    "hazard_polygons_geojson": "processed/hazard_polygons.geojson",
+    "l2_quicklook": "processed/quicklook_layer2.png",
+    "buildings_graded_geojson": "processed/buildings_graded.geojson",
+    "bridges_graded_geojson": "processed/bridges_graded.geojson",
+    "roads_graded_geojson": "processed/roads_graded.geojson",
+    "l4_quicklook": "processed/quicklook_l4.png",
+    "settlements_geojson": "processed/routing/settlements.geojson",
+    "repair_priority_json": "processed/routing/repair_priority.json",
+    "repair_packages_json": "processed/routing/repair_packages.json",
+    "l5_quicklook": "processed/routing/quicklook_l5.png"
+  },
+  "metrics": {
+    "affected_km2_observed": 1.0837,
+    "affected_km2_s2": 1.0781,
+    "affected_km2_s1": 0.0056,
+    "affected_km2_inferred": 1.0697,
+    "buildings_affected_total": 225,
+    "buildings_destroyed": 107,
+    "buildings_damaged": 42,
+    "buildings_possibly_damaged": 76,
+    "buildings_flooded": 0,
+    "buildings_possibly_flooded": 0,
+    "bridges_affected_total": 13,
+    "bridges_destroyed": 12,
+    "bridges_possibly_damaged": 1,
+    "cut_off_settlements": 44
+  }
+}

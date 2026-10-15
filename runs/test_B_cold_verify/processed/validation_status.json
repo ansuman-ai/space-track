@@ -1,0 +1,6 @@
+{
+  "validation_status": "not validated against an official map (practice run)",
+  "official_benchmark": "none",
+  "source_file": "processed/validation_status.json",
+  "source_field": "validation_status"
+}
