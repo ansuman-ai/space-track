@@ -13,15 +13,18 @@ Code was written mainly with the Google Antigravity coding agent (Gemini models)
 ---
 
 ## Quick Start for Judges & Evaluators
+**Requirements**: Python 3.11+ required (tested on 3.14).
 
 ### 1. One-Click Setup
 ```bash
 ./setup.sh
+source .venv/bin/activate
 ```
-*(Installs requirements, compiles the C-accelerated HAND library, and verifies environment).*
+*(Creates Python virtual environment `.venv`, installs requirements, compiles the C-accelerated HAND library, and verifies environment).*
 
 ### 2. Launch the Interactive Dashboard & Bilingual Copilot
 ```bash
+source .venv/bin/activate
 python3 -m uvicorn src.dashboard.app:app --host 127.0.0.1 --port 8000
 ```
 Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser:
@@ -31,6 +34,7 @@ Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser:
 
 ### 3. Verify All Shipped Runs (Bit-for-Bit Consistency)
 ```bash
+source .venv/bin/activate
 python3 scripts/check_dashboard_data.py
 ```
 *(Validates all 72 runs and proves that API, Copilot FactStore, SitRep, and raw JSON deliverables match bit-for-bit).*

@@ -357,4 +357,22 @@ All 7 canonical runs verified pre-event: `snap < ev` is strictly `True` for all 
 ### 11.2 AI Assistance Section
 Added required hackathon AI Assistance & Attribution section near the top of `README.md`.
 
+---
+
+## 12. Release v1.2.2-final: Python 3.11+ Virtual Environment & Secret Audit
+
+### 12.1 Python Environment & Setup Script Hardening
+- README explicitly documents: `"Python 3.11+ required (tested on 3.14)"`.
+- `setup.sh` automatically creates and populates Python virtual environment (`.venv`), installs all dependencies, compiles C-accelerated HAND shared module, verifies numerical equivalence, and prints the exact activation command: `source .venv/bin/activate`.
+- Added `.venv/` and `venv/` to `.gitignore`.
+
+### 12.2 Full History Secret Audit
+Full git commit history (`git log --all -S`) scanned for sensitive credential patterns (`gsk_`, `AIzaSy`, `sk-ant-`, `sk-proj-`, `sk-or-v1-`, `ghp_`):
+- **0 secrets leaked** across all 104 commits.
+- Matches correspond exclusively to `.env.example` templates, documentation markdown tables, and explicit mock test strings (`tests/test_key_pool_failover.py`).
+
+### 12.3 10 Largest Tracked Files
+All tracked files remain strictly below GitHub's 100 MB file limit (and below 50 MB warning threshold). The largest tracked file in the entire repository is `14.55 MB` (`runs/test_B_cold_verify/processed/buildings_graded.geojson`).
+
+
 

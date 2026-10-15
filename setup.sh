@@ -6,14 +6,33 @@ set -e
 
 echo "=== Spaceborne Disaster Platform Setup ==="
 echo "Operating System: $(uname -s) $(uname -m)"
-echo "Python Version: $(python3 --version 2>&1)"
+echo "System Python: $(python3 --version 2>&1)"
 
-# 1. Install python dependencies
-echo -e "\n[1/3] Installing Python dependencies from requirements.txt..."
-python3 -m pip install -r requirements.txt
+# Check Python version (3.11+ required)
+python3 -c '
+import sys
+if sys.version_info < (3, 11):
+    sys.exit("Error: Python 3.11+ is required (found %d.%d.%d)" % sys.version_info[:3])
+'
 
-# 2. Compile C-accelerated HAND shared library
-echo -e "\n[2/3] Compiling C-accelerated HAND module (libhand_fast.so)..."
+# 1. Create virtual environment (.venv)
+echo -e "\n[1/4] Setting up Python virtual environment (.venv)..."
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+    echo "✓ Virtual environment created at .venv"
+else
+    echo "✓ Existing virtual environment found at .venv"
+fi
+
+VENV_PYTHON=".venv/bin/python3"
+VENV_PIP=".venv/bin/pip"
+
+# 2. Install python dependencies into virtual environment
+echo -e "\n[2/4] Installing Python dependencies from requirements.txt into .venv..."
+$VENV_PIP install -r requirements.txt
+
+# 3. Compile C-accelerated HAND shared library
+echo -e "\n[3/4] Compiling C-accelerated HAND module (libhand_fast.so)..."
 if command -v gcc >/dev/null 2>&1; then
     gcc -O3 -shared -fPIC src/l1_preprocessing/hand_c.c -o src/l1_preprocessing/libhand_fast.so
     echo "✓ C extension compiled successfully at src/l1_preprocessing/libhand_fast.so"
@@ -21,9 +40,9 @@ else
     echo "⚠ gcc not found; pipeline will automatically use vectorized pure-Python fallback."
 fi
 
-# 3. Verify C library & Python fallback
-echo -e "\n[3/3] Verifying HAND acceleration & Python fallback equivalence..."
-PYTHONPATH=. python3 -c '
+# 4. Verify C library & Python fallback inside virtual environment
+echo -e "\n[4/4] Verifying HAND acceleration & Python fallback equivalence in .venv..."
+PYTHONPATH=. $VENV_PYTHON -c '
 import os
 import src.l1_preprocessing.hand as h
 
@@ -39,14 +58,19 @@ assert h._get_hand_lib() is None
 print("✓ Pure Python fallback verified.")
 '
 
-# 4. Check .env
+# 5. Check .env
 if [ ! -f .env ] && [ -f .env.example ]; then
     echo -e "\nTip: No .env detected. You can copy .env.example to .env to add Copilot API keys:"
     echo "  cp .env.example .env"
 fi
 
 echo -e "\n=== Setup complete! Platform is ready. ==="
+echo "To activate the virtual environment:"
+echo "  source .venv/bin/activate"
+echo ""
 echo "To launch the Interactive Dashboard:"
-echo "  python3 -m uvicorn src.dashboard.app:app --host 127.0.0.1 --port 8000"
+echo "  source .venv/bin/activate && python3 -m uvicorn src.dashboard.app:app --host 127.0.0.1 --port 8000"
+echo ""
 echo "To verify existing runs and deliverables:"
-echo "  python3 scripts/check_dashboard_data.py"
+echo "  source .venv/bin/activate && python3 scripts/check_dashboard_data.py"
+

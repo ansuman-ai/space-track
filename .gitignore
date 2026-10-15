@@ -14,6 +14,8 @@ __pycache__/
 .env
 *.env
 .secrets/
+.venv/
+venv/
 
 # IDE & OS
 .vscode/
